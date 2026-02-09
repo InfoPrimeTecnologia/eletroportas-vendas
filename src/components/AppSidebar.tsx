@@ -1,10 +1,12 @@
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserRole } from "@/hooks/useUserRole";
 import {
   LayoutDashboard,
   Package,
   Users,
+  UserCog,
   Filter,
   FileText,
   ShoppingCart,
@@ -47,6 +49,7 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
+  const { isAdmin, hasModuleAccess } = useUserRole();
 
   const isActive = (path: string) =>
     path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
@@ -131,6 +134,34 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Admin Section - Only visible for admins */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest">
+              Administração
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive("/usuarios")}
+                    tooltip="Usuários"
+                  >
+                    <NavLink
+                      to="/usuarios"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary"
+                    >
+                      <UserCog className="h-4 w-4" />
+                      <span>Usuários</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-4">

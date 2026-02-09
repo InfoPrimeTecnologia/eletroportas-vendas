@@ -13,6 +13,7 @@ import Funil from "./pages/Funil";
 import Orcamentos from "./pages/Orcamentos";
 import Pedidos from "./pages/Pedidos";
 import NotaFiscalPage from "./pages/NotaFiscal";
+import Usuarios from "./pages/Usuarios";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -93,6 +94,16 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <NotaFiscalPage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/usuarios"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Usuarios />
                   </Layout>
                 </ProtectedRoute>
               }
