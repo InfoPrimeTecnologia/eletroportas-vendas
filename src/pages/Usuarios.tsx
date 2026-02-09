@@ -13,6 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -47,8 +49,11 @@ import {
   Eye,
   Edit,
   Trash2,
+  UserPlus,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const getRoleIcon = (role: AppRole | null) => {
   switch (role) {
@@ -85,11 +90,59 @@ export default function Usuarios() {
 
   const [selectedUser, setSelectedUser] = useState<UserWithRole | null>(null);
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
+  const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<AppRole>('user');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [editedPermissions, setEditedPermissions] = useState<Record<AppModule, {
     can_view: boolean;
     can_edit: boolean;
     can_delete: boolean;
   }>>({} as any);
+
+  const handleCreateUser = async () => {
+    if (!newUserEmail || !newUserPassword) {
+      toast.error('Preencha email e senha');
+      return;
+    }
+
+    setIsCreatingUser(true);
+    try {
+      // Create user via Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email: newUserEmail,
+        password: newUserPassword,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        // Assign role to the new user
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .insert({
+            user_id: data.user.id,
+            role: newUserRole,
+          });
+
+        if (roleError) throw roleError;
+
+        toast.success('Usuário criado com sucesso!');
+        setAddUserDialogOpen(false);
+        setNewUserEmail('');
+        setNewUserPassword('');
+        setNewUserRole('user');
+        
+        // Refresh users list
+        window.location.reload();
+      }
+    } catch (error: any) {
+      toast.error('Erro ao criar usuário: ' + error.message);
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
 
   const handleOpenPermissions = (user: UserWithRole) => {
     setSelectedUser(user);
@@ -175,14 +228,22 @@ export default function Usuarios() {
 
   return (
     <div className="space-y-6">
-      <div className="page-header">
-        <h1 className="page-title flex items-center gap-2">
-          <Users className="h-6 w-6" />
-          Gerenciamento de Usuários
-        </h1>
-        <p className="page-description">
-          Gerencie os usuários e suas permissões no sistema
-        </p>
+      <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="page-title flex items-center gap-2">
+            <Users className="h-6 w-6" />
+            Gerenciamento de Usuários
+          </h1>
+          <p className="page-description">
+            Gerencie os usuários e suas permissões no sistema
+          </p>
+        </div>
+        {isSuperAdmin && (
+          <Button onClick={() => setAddUserDialogOpen(true)}>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Adicionar Usuário
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -247,7 +308,7 @@ export default function Usuarios() {
                       {new Date(user.created_at).toLocaleDateString('pt-BR')}
                     </TableCell>
                     <TableCell className="text-right">
-                      {user.role === 'user' && (
+                      {user.role !== 'super_admin' && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -351,6 +412,74 @@ export default function Usuarios() {
                 </>
               ) : (
                 'Salvar Permissões'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add User Dialog */}
+      <Dialog open={addUserDialogOpen} onOpenChange={setAddUserDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Novo Usuário</DialogTitle>
+            <DialogDescription>
+              Crie um novo usuário e defina sua função no sistema
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="usuario@email.com"
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Mínimo 6 caracteres"
+                value={newUserPassword}
+                onChange={(e) => setNewUserPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">Função</Label>
+              <Select value={newUserRole} onValueChange={(v) => setNewUserRole(v as AppRole)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">{ROLE_LABELS.admin}</SelectItem>
+                  <SelectItem value="user">{ROLE_LABELS.user}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddUserDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateUser} disabled={isCreatingUser}>
+              {isCreatingUser ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Criando...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Criar Usuário
+                </>
               )}
             </Button>
           </DialogFooter>
