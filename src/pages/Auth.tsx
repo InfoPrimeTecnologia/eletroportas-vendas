@@ -107,7 +107,7 @@ const Auth = () => {
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          © 2024 Eletroportas. Todos os direitos reservados.
+          © 2025 PrimeSync. Todos os direitos reservados.
         </p>
       </div>
     </div>
