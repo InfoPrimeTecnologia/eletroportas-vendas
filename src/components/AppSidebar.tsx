@@ -14,6 +14,7 @@ import {
   Bot,
   Zap,
   LogOut,
+  BarChart3,
 } from "lucide-react";
 import {
   Sidebar,
@@ -155,6 +156,21 @@ export function AppSidebar() {
                     >
                       <UserCog className="h-4 w-4" />
                       <span>Usuários</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive("/relatorios")}
+                    tooltip="Relatórios"
+                  >
+                    <NavLink
+                      to="/relatorios"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary"
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                      <span>Relatórios</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

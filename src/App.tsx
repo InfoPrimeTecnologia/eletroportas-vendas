@@ -14,6 +14,7 @@ import Orcamentos from "./pages/Orcamentos";
 import Pedidos from "./pages/Pedidos";
 import NotaFiscalPage from "./pages/NotaFiscal";
 import Usuarios from "./pages/Usuarios";
+import Relatorios from "./pages/Relatorios";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -104,6 +105,16 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Usuarios />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/relatorios"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Relatorios />
                   </Layout>
                 </ProtectedRoute>
               }
