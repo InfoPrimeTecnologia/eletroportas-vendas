@@ -25,9 +25,9 @@ export function useClientes() {
     queryFn: async () => {
       let query = supabase.from('Clientes').select('*', { count: 'exact' });
 
-      if (search.trim()) {
+      if (debouncedSearch.trim()) {
         query = query.or(
-          `CLI_NOME.ilike.%${search}%,CLI_EMAIL.ilike.%${search}%,CLI_CNPJ.ilike.%${search}%,CLI_FONE.ilike.%${search}%`
+          `CLI_NOME.ilike.%${debouncedSearch}%,CLI_EMAIL.ilike.%${debouncedSearch}%,CLI_CNPJ.ilike.%${debouncedSearch}%,CLI_FONE.ilike.%${debouncedSearch}%`
         );
       }
 
