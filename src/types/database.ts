@@ -1,5 +1,6 @@
 // Clientes table - matches public."Clientes"
 export interface Cliente {
+  id?: number;
   CLI_CNPJ: string; // Primary key
   CLI_NOME: string | null;
   CLI_ENDERECO: string | null;

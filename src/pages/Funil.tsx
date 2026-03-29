@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package } from "lucide-react";
+import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package, Trash2, GripVertical, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,7 +29,23 @@ interface LeadFunil {
   observacoes?: string;
 }
 
-const etapas = [
+interface Etapa {
+  key: string;
+  label: string;
+  color: string;
+}
+
+const defaultColors = [
+  "bg-[hsl(var(--chart-cold))]",
+  "bg-[hsl(var(--chart-warm))]",
+  "bg-primary",
+  "bg-[hsl(var(--info))]",
+  "bg-[hsl(var(--success))]",
+  "bg-destructive",
+  "bg-[hsl(var(--accent))]",
+];
+
+const defaultEtapas: Etapa[] = [
   { key: "contato_inicial", label: "Contato Inicial", color: "bg-[hsl(var(--chart-cold))]" },
   { key: "orcamento_enviado", label: "Orçamento Enviado", color: "bg-[hsl(var(--chart-warm))]" },
   { key: "orcamento_aceito", label: "Orçamento Aceito", color: "bg-primary" },
@@ -61,6 +77,7 @@ const emptyLead: Omit<LeadFunil, "id"> = {
 };
 
 const Funil = () => {
+  const [etapas, setEtapas] = useState<Etapa[]>(defaultEtapas);
   const [leads, setLeads] = useState<LeadFunil[]>(initialLeads);
   const [editLead, setEditLead] = useState<LeadFunil | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -70,12 +87,28 @@ const Funil = () => {
   const [newItemQty, setNewItemQty] = useState("1");
   const [newItemVal, setNewItemVal] = useState("");
 
-  const handleDragEnd = (result: DropResult) => {
+  // Stage management state
+  const [isStageManagerOpen, setIsStageManagerOpen] = useState(false);
+  const [editingStage, setEditingStage] = useState<Etapa | null>(null);
+  const [isStageFormOpen, setIsStageFormOpen] = useState(false);
+  const [stageForm, setStageForm] = useState({ label: "", color: defaultColors[0] });
+
+  // ---- Drag & Drop for LEADS between stages ----
+  const handleLeadDragEnd = (result: DropResult) => {
     const { draggableId, destination } = result;
     if (!destination) return;
     setLeads((prev) =>
       prev.map((l) => (l.id === draggableId ? { ...l, etapa: destination.droppableId } : l))
     );
+  };
+
+  // ---- Drag & Drop for STAGES reorder ----
+  const handleStageDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    const reordered = [...etapas];
+    const [moved] = reordered.splice(result.source.index, 1);
+    reordered.splice(result.destination.index, 0, moved);
+    setEtapas(reordered);
   };
 
   const moveForward = (e: React.MouseEvent, id: string) => {
@@ -144,6 +177,43 @@ const Funil = () => {
     setNewLead({ ...newLead, itens: newLead.itens.filter((_, i) => i !== idx) });
   };
 
+  // ---- Stage CRUD ----
+  const openCreateStage = () => {
+    setEditingStage(null);
+    setStageForm({ label: "", color: defaultColors[etapas.length % defaultColors.length] });
+    setIsStageFormOpen(true);
+  };
+
+  const openEditStage = (stage: Etapa) => {
+    setEditingStage(stage);
+    setStageForm({ label: stage.label, color: stage.color });
+    setIsStageFormOpen(true);
+  };
+
+  const handleSaveStage = () => {
+    if (!stageForm.label.trim()) return;
+    if (editingStage) {
+      setEtapas((prev) =>
+        prev.map((s) => (s.key === editingStage.key ? { ...s, label: stageForm.label, color: stageForm.color } : s))
+      );
+    } else {
+      const key = stageForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") + "_" + Date.now();
+      setEtapas((prev) => [...prev, { key, label: stageForm.label, color: stageForm.color }]);
+    }
+    setIsStageFormOpen(false);
+  };
+
+  const handleDeleteStage = (key: string) => {
+    const hasLeads = leads.some((l) => l.etapa === key);
+    if (hasLeads) {
+      const firstAvailable = etapas.find((e) => e.key !== key);
+      if (firstAvailable) {
+        setLeads((prev) => prev.map((l) => (l.etapa === key ? { ...l, etapa: firstAvailable.key } : l)));
+      }
+    }
+    setEtapas((prev) => prev.filter((e) => e.key !== key));
+  };
+
   const ItemAddRow = ({ onAdd }: { onAdd: () => void }) => (
     <div className="flex gap-2 items-end">
       <div className="flex-1 space-y-1">
@@ -210,13 +280,18 @@ const Funil = () => {
           <h1 className="page-title">Funil de Vendas</h1>
           <p className="page-description">Acompanhe a jornada dos leads — arraste os cards entre as etapas</p>
         </div>
-        <Button onClick={() => setIsCreateOpen(true)} size="sm">
-          <Plus className="h-4 w-4 mr-1" /> Novo Lead
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setIsStageManagerOpen(true)}>
+            <Settings className="h-4 w-4 mr-1" /> Etapas
+          </Button>
+          <Button onClick={() => setIsCreateOpen(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1" /> Novo Lead
+          </Button>
+        </div>
       </div>
 
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <DragDropContext onDragEnd={handleLeadDragEnd}>
+        <div className={`grid grid-cols-1 gap-4`} style={{ gridTemplateColumns: `repeat(${Math.min(etapas.length, 6)}, minmax(0, 1fr))` }}>
           {etapas.map((etapa) => {
             const etapaLeads = leads.filter((l) => l.etapa === etapa.key);
             const total = etapaLeads.reduce((s, l) => s + l.valor, 0);
@@ -226,7 +301,7 @@ const Funil = () => {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className={`funnel-stage transition-colors ${snapshot.isDraggingOver ? "ring-2 ring-primary/40 bg-primary/5" : ""}`}
+                    className={`funnel-stage transition-colors min-h-[200px] ${snapshot.isDraggingOver ? "ring-2 ring-primary/40 bg-primary/5" : ""}`}
                   >
                     <div className="flex items-center gap-2 mb-3">
                       <div className={`w-2 h-2 rounded-full ${etapa.color}`} />
@@ -255,7 +330,6 @@ const Funil = () => {
                                   {lead.origem === "robo" ? "🤖" : "✋"}
                                 </Badge>
                               </div>
-                              {/* Show items summary */}
                               {lead.itens.length > 0 && (
                                 <div className="mt-1.5 space-y-0.5">
                                   {lead.itens.slice(0, 2).map((item, i) => (
@@ -272,7 +346,7 @@ const Funil = () => {
                                 <span className="text-xs font-mono font-medium">
                                   R$ {lead.valor.toLocaleString("pt-BR")}
                                 </span>
-                                {etapa.key !== "venda_finalizada" && (
+                                {etapa.key !== etapas[etapas.length - 1]?.key && (
                                   <button
                                     onClick={(e) => moveForward(e, lead.id)}
                                     className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
@@ -296,11 +370,95 @@ const Funil = () => {
         </div>
       </DragDropContext>
 
-      {/* Edit dialog */}
+      {/* Stage Manager Dialog */}
+      <Dialog open={isStageManagerOpen} onOpenChange={setIsStageManagerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Settings className="h-4 w-4" /> Gerenciar Etapas</DialogTitle>
+            <DialogDescription>Crie, edite, reordene ou exclua as etapas do funil. Arraste para reordenar.</DialogDescription>
+          </DialogHeader>
+          <DragDropContext onDragEnd={handleStageDragEnd}>
+            <Droppable droppableId="stages-list">
+              {(provided) => (
+                <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2 max-h-[50vh] overflow-y-auto">
+                  {etapas.map((etapa, index) => (
+                    <Draggable draggableId={`stage-${etapa.key}`} index={index} key={etapa.key}>
+                      {(prov, snap) => (
+                        <div
+                          ref={prov.innerRef}
+                          {...prov.draggableProps}
+                          className={`flex items-center gap-2 p-2 rounded-md border bg-background ${snap.isDragging ? "shadow-lg ring-2 ring-primary/30" : ""}`}
+                        >
+                          <div {...prov.dragHandleProps} className="cursor-grab p-1">
+                            <GripVertical className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <div className={`w-3 h-3 rounded-full shrink-0 ${etapa.color}`} />
+                          <span className="text-sm flex-1 truncate">{etapa.label}</span>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditStage(etapa)}>
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive"
+                            onClick={() => handleDeleteStage(etapa.key)}
+                            disabled={etapas.length <= 1}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
+          <Button variant="outline" className="w-full" onClick={openCreateStage}>
+            <Plus className="h-4 w-4 mr-1" /> Nova Etapa
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stage Create/Edit Form */}
+      <Dialog open={isStageFormOpen} onOpenChange={setIsStageFormOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{editingStage ? "Editar Etapa" : "Nova Etapa"}</DialogTitle>
+            <DialogDescription>Defina o nome e a cor da etapa do funil.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label className="text-xs">Nome da Etapa *</Label>
+              <Input value={stageForm.label} onChange={(e) => setStageForm({ ...stageForm, label: e.target.value })} placeholder="Ex: Negociação" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Cor</Label>
+              <div className="flex gap-2 flex-wrap">
+                {defaultColors.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setStageForm({ ...stageForm, color: c })}
+                    className={`w-7 h-7 rounded-full ${c} border-2 transition-all ${stageForm.color === c ? "border-foreground scale-110" : "border-transparent"}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsStageFormOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveStage} disabled={!stageForm.label.trim()}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Lead dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Edit2 className="h-4 w-4" /> Editar Lead</DialogTitle>
+            <DialogDescription>Edite as informações do lead e os itens negociados.</DialogDescription>
           </DialogHeader>
           {editLead && (
             <div className="space-y-4">
@@ -352,11 +510,12 @@ const Funil = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Create dialog */}
+      {/* Create Lead dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Novo Lead</DialogTitle>
+            <DialogDescription>Adicione um novo lead ao funil de vendas.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
