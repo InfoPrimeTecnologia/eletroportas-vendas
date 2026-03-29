@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search, ShoppingCart, Bot, User, Eye } from "lucide-react";
+import { Plus, Search, ShoppingCart, Bot, User, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -7,31 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import EstoqueItemPicker, { ItemSelecionado } from "@/components/EstoqueItemPicker";
-
-interface PedidoItem {
-  produto_nome: string;
-  codigo_sku: string;
-  quantidade: number;
-  preco_unitario: number;
-}
-
-interface Pedido {
-  id: string;
-  numero: string;
-  cliente: string;
-  data: string;
-  valor: number;
-  status: "processando" | "aprovado" | "em_producao" | "entregue";
-  origem: "robo" | "manual";
-  itens: PedidoItem[];
-  observacoes?: string;
-}
-
-const mockPedidos: Pedido[] = [
-  { id: "1", numero: "PV-2025-001", cliente: "Carlos Lima", data: "2025-02-08", valor: 6700, status: "aprovado", origem: "robo", itens: [{ produto_nome: "Motor Deslizante", codigo_sku: "MOT-001", quantidade: 1, preco_unitario: 3200 }, { produto_nome: "Cremalheira", codigo_sku: "CRM-001", quantidade: 3, preco_unitario: 1166.67 }] },
-  { id: "2", numero: "PV-2025-002", cliente: "Construtora ABC", data: "2025-02-07", valor: 18000, status: "em_producao", origem: "robo", itens: [{ produto_nome: "Portão Basculante", codigo_sku: "PRT-002", quantidade: 2, preco_unitario: 7000 }, { produto_nome: "Motor Basculante", codigo_sku: "MOT-002", quantidade: 2, preco_unitario: 2000 }] },
-  { id: "3", numero: "PV-2025-003", cliente: "Fernanda Dias", data: "2025-02-06", valor: 15000, status: "entregue", origem: "manual", itens: [{ produto_nome: "Portão Deslizante personalizado", codigo_sku: "PRT-CUSTOM", quantidade: 1, preco_unitario: 15000 }] },
-];
+import { usePedidos, Pedido } from "@/hooks/usePedidos";
 
 const statusColors: Record<string, string> = {
   processando: "bg-muted text-muted-foreground",
@@ -39,16 +15,12 @@ const statusColors: Record<string, string> = {
   em_producao: "badge-warm",
   entregue: "badge-success",
 };
-
 const statusLabels: Record<string, string> = {
-  processando: "Processando",
-  aprovado: "Aprovado",
-  em_producao: "Em Produção",
-  entregue: "Entregue",
+  processando: "Processando", aprovado: "Aprovado", em_producao: "Em Produção", entregue: "Entregue",
 };
 
 const Pedidos = () => {
-  const [pedidos, setPedidos] = useState<Pedido[]>(mockPedidos);
+  const { pedidos, isLoading, createPedido } = usePedidos();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -57,38 +29,29 @@ const Pedidos = () => {
   const [selectedItems, setSelectedItems] = useState<ItemSelecionado[]>([]);
 
   const filtered = pedidos.filter(
-    (p) => p.cliente.toLowerCase().includes(search.toLowerCase()) || p.numero.toLowerCase().includes(search.toLowerCase())
+    (p) => p.cliente_nome.toLowerCase().includes(search.toLowerCase()) || p.numero.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!form.cliente.trim() || selectedItems.length === 0) return;
     const total = selectedItems.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0);
-    const newPedido: Pedido = {
-      id: Date.now().toString(),
-      numero: `PV-2025-${String(pedidos.length + 1).padStart(3, "0")}`,
-      cliente: form.cliente,
-      data: new Date().toISOString().split("T")[0],
-      valor: total,
-      status: "processando",
-      origem: "manual",
+    await createPedido.mutateAsync({
+      cliente_nome: form.cliente,
+      valor_total: total,
       itens: selectedItems.map((i) => ({
-        produto_nome: i.produto_nome,
-        codigo_sku: i.codigo_sku,
-        quantidade: i.quantidade,
-        preco_unitario: i.preco_unitario,
+        produto_nome: i.produto_nome, codigo_sku: i.codigo_sku,
+        quantidade: i.quantidade, preco_unitario: i.preco_unitario,
       })),
-      observacoes: form.observacoes,
-    };
-    setPedidos((prev) => [newPedido, ...prev]);
+      observacoes: form.observacoes || null,
+    });
     setDialogOpen(false);
     setForm({ cliente: "", observacoes: "" });
     setSelectedItems([]);
   };
 
-  const openDetail = (ped: Pedido) => {
-    setSelectedPed(ped);
-    setDetailOpen(true);
-  };
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
 
   return (
     <div className="space-y-6 animate-slide-in">
@@ -102,9 +65,7 @@ const Pedidos = () => {
             <Button><Plus className="h-4 w-4 mr-2" /> Novo Pedido</Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Novo Pedido de Venda</DialogTitle>
-            </DialogHeader>
+            <DialogHeader><DialogTitle>Novo Pedido de Venda</DialogTitle></DialogHeader>
             <div className="space-y-4 mt-2">
               <div className="space-y-2">
                 <Label>Cliente *</Label>
@@ -118,7 +79,8 @@ const Pedidos = () => {
                 <Label>Observações</Label>
                 <Input value={form.observacoes} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} placeholder="Observações adicionais" />
               </div>
-              <Button onClick={handleCreate} className="w-full" disabled={!form.cliente.trim() || selectedItems.length === 0}>
+              <Button onClick={handleCreate} className="w-full" disabled={!form.cliente.trim() || selectedItems.length === 0 || createPedido.isPending}>
+                {createPedido.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Criar Pedido
               </Button>
             </div>
@@ -146,10 +108,10 @@ const Pedidos = () => {
           </TableHeader>
           <TableBody>
             {filtered.map((p) => (
-              <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openDetail(p)}>
+              <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setSelectedPed(p); setDetailOpen(true); }}>
                 <TableCell className="font-mono text-xs">{p.numero}</TableCell>
-                <TableCell className="font-medium">{p.cliente}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{new Date(p.data).toLocaleDateString("pt-BR")}</TableCell>
+                <TableCell className="font-medium">{p.cliente_nome}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{new Date(p.data_criacao).toLocaleDateString("pt-BR")}</TableCell>
                 <TableCell>
                   {p.origem === "robo" ? (
                     <span className="flex items-center gap-1 text-xs text-primary"><Bot className="h-3 w-3" /> Robô</span>
@@ -158,9 +120,9 @@ const Pedidos = () => {
                   )}
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={`text-[10px] ${statusColors[p.status]}`}>{statusLabels[p.status]}</Badge>
+                  <Badge variant="outline" className={`text-[10px] ${statusColors[p.status] || ""}`}>{statusLabels[p.status] || p.status}</Badge>
                 </TableCell>
-                <TableCell className="text-right font-mono">R$ {p.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
+                <TableCell className="text-right font-mono">R$ {p.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
                 <TableCell><Eye className="h-4 w-4 text-muted-foreground" /></TableCell>
               </TableRow>
             ))}
@@ -176,7 +138,6 @@ const Pedidos = () => {
         </Table>
       </div>
 
-      {/* Detail dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -187,24 +148,11 @@ const Pedidos = () => {
           {selectedPed && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground text-xs">Cliente</p>
-                  <p className="font-medium">{selectedPed.cliente}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Data</p>
-                  <p className="font-medium">{new Date(selectedPed.data).toLocaleDateString("pt-BR")}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Origem</p>
-                  <p className="font-medium">{selectedPed.origem === "robo" ? "🤖 Robô" : "✋ Manual"}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Status</p>
-                  <Badge variant="outline" className={`text-[10px] ${statusColors[selectedPed.status]}`}>{statusLabels[selectedPed.status]}</Badge>
-                </div>
+                <div><p className="text-muted-foreground text-xs">Cliente</p><p className="font-medium">{selectedPed.cliente_nome}</p></div>
+                <div><p className="text-muted-foreground text-xs">Data</p><p className="font-medium">{new Date(selectedPed.data_criacao).toLocaleDateString("pt-BR")}</p></div>
+                <div><p className="text-muted-foreground text-xs">Origem</p><p className="font-medium">{selectedPed.origem === "robo" ? "🤖 Robô" : "✋ Manual"}</p></div>
+                <div><p className="text-muted-foreground text-xs">Status</p><Badge variant="outline" className={`text-[10px] ${statusColors[selectedPed.status] || ""}`}>{statusLabels[selectedPed.status] || selectedPed.status}</Badge></div>
               </div>
-
               <div className="border rounded-md overflow-hidden">
                 <Table>
                   <TableHeader>
@@ -216,31 +164,26 @@ const Pedidos = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedPed.itens.map((item, idx) => (
+                    {(selectedPed.itens as any[])?.map((item: any, idx: number) => (
                       <TableRow key={idx}>
                         <TableCell className="text-xs">
                           <p className="font-medium">{item.produto_nome}</p>
                           <p className="text-[10px] text-muted-foreground font-mono">{item.codigo_sku}</p>
                         </TableCell>
                         <TableCell className="text-xs text-center">{item.quantidade}</TableCell>
-                        <TableCell className="text-xs text-right font-mono">R$ {item.preco_unitario.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
-                        <TableCell className="text-xs text-right font-mono">R$ {(item.preco_unitario * item.quantidade).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
+                        <TableCell className="text-xs text-right font-mono">R$ {Number(item.preco_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
+                        <TableCell className="text-xs text-right font-mono">R$ {(Number(item.preco_unitario) * Number(item.quantidade)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
-
               <div className="flex justify-between items-center pt-2 border-t">
                 <span className="font-semibold">Total</span>
-                <span className="font-mono font-bold text-lg">R$ {selectedPed.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                <span className="font-mono font-bold text-lg">R$ {selectedPed.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
               </div>
-
               {selectedPed.observacoes && (
-                <div>
-                  <p className="text-muted-foreground text-xs">Observações</p>
-                  <p className="text-sm">{selectedPed.observacoes}</p>
-                </div>
+                <div><p className="text-muted-foreground text-xs">Observações</p><p className="text-sm">{selectedPed.observacoes}</p></div>
               )}
             </div>
           )}
