@@ -5,8 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import EstoqueItemPicker, { ItemSelecionado } from "@/components/EstoqueItemPicker";
+import ClientePicker from "@/components/ClientePicker";
 import { usePedidos, Pedido } from "@/hooks/usePedidos";
 
 const statusColors: Record<string, string> = {
@@ -18,14 +20,16 @@ const statusColors: Record<string, string> = {
 const statusLabels: Record<string, string> = {
   processando: "Processando", aprovado: "Aprovado", em_producao: "Em Produção", entregue: "Entregue",
 };
+const allStatuses = ["processando", "aprovado", "em_producao", "entregue"];
 
 const Pedidos = () => {
-  const { pedidos, isLoading, createPedido } = usePedidos();
+  const { pedidos, isLoading, createPedido, updatePedido } = usePedidos();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedPed, setSelectedPed] = useState<Pedido | null>(null);
-  const [form, setForm] = useState({ cliente: "", observacoes: "" });
+  const [cliente, setCliente] = useState<{ cnpj: string; nome: string } | null>(null);
+  const [observacoes, setObservacoes] = useState("");
   const [selectedItems, setSelectedItems] = useState<ItemSelecionado[]>([]);
 
   const filtered = pedidos.filter(
@@ -33,20 +37,28 @@ const Pedidos = () => {
   );
 
   const handleCreate = async () => {
-    if (!form.cliente.trim() || selectedItems.length === 0) return;
+    if (!cliente || selectedItems.length === 0) return;
     const total = selectedItems.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0);
     await createPedido.mutateAsync({
-      cliente_nome: form.cliente,
+      cliente_nome: cliente.nome,
+      cliente_cnpj: cliente.cnpj,
       valor_total: total,
       itens: selectedItems.map((i) => ({
         produto_nome: i.produto_nome, codigo_sku: i.codigo_sku,
         quantidade: i.quantidade, preco_unitario: i.preco_unitario,
       })),
-      observacoes: form.observacoes || null,
+      observacoes: observacoes || null,
     });
     setDialogOpen(false);
-    setForm({ cliente: "", observacoes: "" });
+    setCliente(null);
+    setObservacoes("");
     setSelectedItems([]);
+  };
+
+  const handleStatusChange = async (status: string) => {
+    if (!selectedPed) return;
+    await updatePedido.mutateAsync({ id: selectedPed.id, updates: { status } });
+    setSelectedPed({ ...selectedPed, status });
   };
 
   if (isLoading) {
@@ -69,7 +81,7 @@ const Pedidos = () => {
             <div className="space-y-4 mt-2">
               <div className="space-y-2">
                 <Label>Cliente *</Label>
-                <Input value={form.cliente} onChange={(e) => setForm({ ...form, cliente: e.target.value })} placeholder="Nome do cliente" />
+                <ClientePicker value={cliente} onChange={setCliente} />
               </div>
               <div className="space-y-2">
                 <Label>Itens do Estoque *</Label>
@@ -77,9 +89,9 @@ const Pedidos = () => {
               </div>
               <div className="space-y-2">
                 <Label>Observações</Label>
-                <Input value={form.observacoes} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} placeholder="Observações adicionais" />
+                <Input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Observações adicionais" />
               </div>
-              <Button onClick={handleCreate} className="w-full" disabled={!form.cliente.trim() || selectedItems.length === 0 || createPedido.isPending}>
+              <Button onClick={handleCreate} className="w-full" disabled={!cliente || selectedItems.length === 0 || createPedido.isPending}>
                 {createPedido.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Criar Pedido
               </Button>
@@ -149,10 +161,26 @@ const Pedidos = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><p className="text-muted-foreground text-xs">Cliente</p><p className="font-medium">{selectedPed.cliente_nome}</p></div>
+                <div><p className="text-muted-foreground text-xs">CNPJ</p><p className="font-medium font-mono text-xs">{selectedPed.cliente_cnpj || "—"}</p></div>
                 <div><p className="text-muted-foreground text-xs">Data</p><p className="font-medium">{new Date(selectedPed.data_criacao).toLocaleDateString("pt-BR")}</p></div>
                 <div><p className="text-muted-foreground text-xs">Origem</p><p className="font-medium">{selectedPed.origem === "robo" ? "🤖 Robô" : "✋ Manual"}</p></div>
-                <div><p className="text-muted-foreground text-xs">Status</p><Badge variant="outline" className={`text-[10px] ${statusColors[selectedPed.status] || ""}`}>{statusLabels[selectedPed.status] || selectedPed.status}</Badge></div>
               </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Status</Label>
+                <Select value={selectedPed.status} onValueChange={handleStatusChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allStatuses.map((s) => (
+                      <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {selectedPed.orcamento_id && (
+                <div><p className="text-muted-foreground text-xs">Orçamento de origem</p><p className="text-sm font-mono">#{selectedPed.orcamento_id}</p></div>
+              )}
               <div className="border rounded-md overflow-hidden">
                 <Table>
                   <TableHeader>
