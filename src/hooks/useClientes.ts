@@ -2,22 +2,41 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Cliente, ClienteInsert } from '@/types/database';
 import { toast } from 'sonner';
+import { useState } from 'react';
+
+const PAGE_SIZE = 100;
 
 export function useClientes() {
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
 
-  const { data: clientes = [], isLoading, error } = useQuery({
-    queryKey: ['clientes'],
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['clientes', page, search],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('Clientes')
-        .select('*')
-        .order('CLI_NOME');
-      
+      let query = supabase.from('Clientes').select('*', { count: 'exact' });
+
+      if (search.trim()) {
+        query = query.or(
+          `CLI_NOME.ilike.%${search}%,CLI_EMAIL.ilike.%${search}%,CLI_CNPJ.ilike.%${search}%,CLI_FONE.ilike.%${search}%`
+        );
+      }
+
+      const from = (page - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error, count } = await query
+        .order('CLI_NOME')
+        .range(from, to);
+
       if (error) throw error;
-      return data as Cliente[];
+      return { clientes: data as Cliente[], total: count ?? 0 };
     },
   });
+
+  const clientes = data?.clientes ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const createCliente = useMutation({
     mutationFn: async (cliente: ClienteInsert) => {
@@ -26,7 +45,6 @@ export function useClientes() {
         .insert(cliente)
         .select()
         .single();
-      
       if (error) throw error;
       return data;
     },
@@ -47,7 +65,6 @@ export function useClientes() {
         .eq('CLI_CNPJ', cnpj)
         .select()
         .single();
-      
       if (error) throw error;
       return data;
     },
@@ -66,7 +83,6 @@ export function useClientes() {
         .from('Clientes')
         .delete()
         .eq('CLI_CNPJ', cnpj);
-      
       if (error) throw error;
     },
     onSuccess: () => {
@@ -82,6 +98,12 @@ export function useClientes() {
     clientes,
     isLoading,
     error,
+    total,
+    page,
+    totalPages,
+    setPage,
+    search,
+    setSearch,
     createCliente,
     updateCliente,
     deleteCliente,
