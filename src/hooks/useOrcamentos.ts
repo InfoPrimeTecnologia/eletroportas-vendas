@@ -94,5 +94,22 @@ export function useOrcamentos() {
     },
   });
 
-  return { orcamentos, isLoading, createOrcamento, updateOrcamento };
+  const deleteOrcamento = useMutation({
+    mutationFn: async (id: number) => {
+      const { error } = await supabase
+        .from('orcamentos')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orcamentos'] });
+      toast.success('Orçamento excluído!');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao excluir: ${error.message}`);
+    },
+  });
+
+  return { orcamentos, isLoading, createOrcamento, updateOrcamento, deleteOrcamento };
 }
