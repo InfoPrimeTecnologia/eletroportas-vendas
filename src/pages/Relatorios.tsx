@@ -22,7 +22,7 @@ import autoTable from 'jspdf-autotable';
 interface OrcamentoRow { id: number; numero: string; cliente_nome: string; cliente_cnpj: string | null; status: string; valor_total: number; data_criacao: string; origem: string; }
 interface PedidoRow { id: number; numero: string; cliente_nome: string; cliente_cnpj: string | null; status: string; valor_total: number; data_criacao: string; origem: string; }
 interface ClienteRow { CLI_NOME: string | null; CLI_CNPJ: string; CLI_EMAIL: string | null; CLI_FONE: string | null; CLI_BAIRRO: string | null; CLI_CEP: string | null; }
-interface EstoqueRow { id: number; produto_nome: string; codigo_sku: string; tipo_laminas: string; quantidade_estoque: number; estoque_minimo: number; preco_custo: number; preco_venda: number; }
+interface EstoqueRow { id: number; produto_nome: string; codigo_sku: string; tipo_laminas: string; quantidade: number; quantidade_minima: number; preco_custo: number; preco_venda: number; }
 
 const PIE_COLORS = ["hsl(205,75%,55%)", "hsl(35,90%,55%)", "hsl(152,60%,42%)", "hsl(0,80%,58%)", "hsl(280,60%,50%)", "hsl(215,70%,45%)"];
 
