@@ -47,11 +47,12 @@ const defaultColors = [
 ];
 
 const defaultEtapas: Etapa[] = [
+  { key: "acompanhamento", label: "Acompanhamento", color: "bg-[hsl(var(--chart-warm))]" },
   { key: "contato_inicial", label: "Contato Inicial", color: "bg-[hsl(var(--chart-cold))]" },
-  { key: "orcamento_enviado", label: "Orçamento Enviado", color: "bg-[hsl(var(--chart-warm))]" },
-  { key: "orcamento_aceito", label: "Orçamento Aceito", color: "bg-primary" },
-  { key: "pedido_venda", label: "Pedido de Venda", color: "bg-[hsl(var(--info))]" },
-  { key: "venda_finalizada", label: "Venda Finalizada", color: "bg-[hsl(var(--success))]" },
+  { key: "orcamento_enviado", label: "Orçamento Enviado", color: "bg-primary" },
+  { key: "orcamento_aceito", label: "Orçamento Aceito", color: "bg-[hsl(var(--info))]" },
+  { key: "pedido_venda", label: "Pedido de Venda", color: "bg-[hsl(var(--success))]" },
+  { key: "venda_finalizada", label: "Venda Finalizada", color: "bg-destructive" },
 ];
 
 const initialLeads: LeadFunil[] = [
