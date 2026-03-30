@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package, Trash2, GripVertical, Settings } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package, Trash2, GripVertical, Settings, RefreshCw } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -46,11 +47,12 @@ const defaultColors = [
 ];
 
 const defaultEtapas: Etapa[] = [
+  { key: "acompanhamento", label: "Acompanhamento", color: "bg-[hsl(var(--chart-warm))]" },
   { key: "contato_inicial", label: "Contato Inicial", color: "bg-[hsl(var(--chart-cold))]" },
-  { key: "orcamento_enviado", label: "Orçamento Enviado", color: "bg-[hsl(var(--chart-warm))]" },
-  { key: "orcamento_aceito", label: "Orçamento Aceito", color: "bg-primary" },
-  { key: "pedido_venda", label: "Pedido de Venda", color: "bg-[hsl(var(--info))]" },
-  { key: "venda_finalizada", label: "Venda Finalizada", color: "bg-[hsl(var(--success))]" },
+  { key: "orcamento_enviado", label: "Orçamento Enviado", color: "bg-primary" },
+  { key: "orcamento_aceito", label: "Orçamento Aceito", color: "bg-[hsl(var(--info))]" },
+  { key: "pedido_venda", label: "Pedido de Venda", color: "bg-[hsl(var(--success))]" },
+  { key: "venda_finalizada", label: "Venda Finalizada", color: "bg-destructive" },
 ];
 
 const initialLeads: LeadFunil[] = [
@@ -86,6 +88,58 @@ const Funil = () => {
   const [newItemDesc, setNewItemDesc] = useState("");
   const [newItemQty, setNewItemQty] = useState("1");
   const [newItemVal, setNewItemVal] = useState("");
+
+  // Auto-sync: fetch pending pedidos_venda into "acompanhamento"
+  const [syncedPedidoIds, setSyncedPedidoIds] = useState<Set<number>>(new Set());
+
+  const syncPedidosPendentes = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pedidos_venda')
+        .select('*')
+        .ilike('status', '%pendente%');
+      if (error) throw error;
+      if (!data || data.length === 0) return;
+
+      setLeads((prev) => {
+        const newLeads = [...prev];
+        const newSyncedIds = new Set(syncedPedidoIds);
+        
+        for (const pedido of data) {
+          // Skip if already synced
+          const pedidoLeadId = `pedido-${pedido.id}`;
+          if (newLeads.some((l) => l.id === pedidoLeadId)) continue;
+
+          const itens = Array.isArray(pedido.itens) ? (pedido.itens as any[]).map((i: any) => ({
+            descricao: i.produto_nome || i.descricao || 'Item',
+            quantidade: i.quantidade || 1,
+            valor_unitario: i.preco_unitario || i.valor_unitario || 0,
+          })) : [];
+
+          newLeads.push({
+            id: pedidoLeadId,
+            nome: pedido.cliente_nome || 'Cliente',
+            empresa: pedido.cliente_cnpj || undefined,
+            valor: pedido.valor_total || 0,
+            etapa: "acompanhamento",
+            origem: "robo",
+            itens,
+            observacoes: `Pedido ${pedido.numero} - Status: ${pedido.status}`,
+          });
+          newSyncedIds.add(pedido.id);
+        }
+        
+        setSyncedPedidoIds(newSyncedIds);
+        return newLeads;
+      });
+    } catch (err) {
+      console.error('Erro ao sincronizar pedidos pendentes:', err);
+    }
+  }, [syncedPedidoIds]);
+
+  useEffect(() => {
+    syncPedidosPendentes();
+  }, []);
 
   // Stage management state
   const [isStageManagerOpen, setIsStageManagerOpen] = useState(false);
@@ -281,6 +335,9 @@ const Funil = () => {
           <p className="page-description">Acompanhe a jornada dos leads — arraste os cards entre as etapas</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={syncPedidosPendentes} title="Sincronizar pedidos pendentes">
+            <RefreshCw className="h-4 w-4 mr-1" /> Sincronizar
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setIsStageManagerOpen(true)}>
             <Settings className="h-4 w-4 mr-1" /> Etapas
           </Button>
