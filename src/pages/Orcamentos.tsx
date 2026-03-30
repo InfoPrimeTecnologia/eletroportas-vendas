@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Plus, Search, FileText, Bot, User, Eye, Loader2, ArrowRight } from "lucide-react";
+import { Plus, Search, FileText, Bot, User, Eye, Loader2, ArrowRight, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,6 +12,7 @@ import EstoqueItemPicker, { ItemSelecionado } from "@/components/EstoqueItemPick
 import ClientePicker from "@/components/ClientePicker";
 import { useOrcamentos, Orcamento } from "@/hooks/useOrcamentos";
 import { usePedidos } from "@/hooks/usePedidos";
+import { useUserRole } from "@/hooks/useUserRole";
 import { toast } from "sonner";
 
 const statusColors: Record<string, string> = {
@@ -25,20 +27,34 @@ const statusLabels: Record<string, string> = {
 const allStatuses = ["pendente", "enviado", "aceito", "recusado"];
 
 const Orcamentos = () => {
-  const { orcamentos, isLoading, createOrcamento, updateOrcamento } = useOrcamentos();
+  const { orcamentos, isLoading, createOrcamento, updateOrcamento, deleteOrcamento } = useOrcamentos();
   const { createPedido } = usePedidos();
+  const { canEditModule, canDeleteInModule } = useUserRole();
+  const canEdit = canEditModule('orcamentos');
+  const canDelete = canDeleteInModule('orcamentos');
+
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   const [selectedOrc, setSelectedOrc] = useState<Orcamento | null>(null);
   const [cliente, setCliente] = useState<{ cnpj: string; nome: string } | null>(null);
   const [observacoes, setObservacoes] = useState("");
   const [selectedItems, setSelectedItems] = useState<ItemSelecionado[]>([]);
   const [converting, setConverting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const filtered = orcamentos.filter(
     (o) => o.cliente_nome.toLowerCase().includes(search.toLowerCase()) || o.numero.toLowerCase().includes(search.toLowerCase())
   );
+
+  const resetForm = () => {
+    setCliente(null);
+    setObservacoes("");
+    setSelectedItems([]);
+    setEditMode(false);
+  };
 
   const handleCreate = async () => {
     if (!cliente || selectedItems.length === 0) return;
@@ -54,9 +70,51 @@ const Orcamentos = () => {
       observacoes: observacoes || null,
     });
     setDialogOpen(false);
-    setCliente(null);
-    setObservacoes("");
-    setSelectedItems([]);
+    resetForm();
+  };
+
+  const handleEdit = (orc: Orcamento) => {
+    setSelectedOrc(orc);
+    setCliente({ cnpj: orc.cliente_cnpj || '', nome: orc.cliente_nome });
+    setObservacoes(orc.observacoes || '');
+    setSelectedItems((orc.itens as any[])?.map((i: any) => ({
+      produto_nome: i.produto_nome,
+      codigo_sku: i.codigo_sku,
+      quantidade: i.quantidade,
+      preco_unitario: i.preco_unitario,
+    })) || []);
+    setEditMode(true);
+    setDetailOpen(false);
+    setDialogOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!selectedOrc || !cliente || selectedItems.length === 0) return;
+    const total = selectedItems.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0);
+    await updateOrcamento.mutateAsync({
+      id: selectedOrc.id,
+      updates: {
+        cliente_nome: cliente.nome,
+        cliente_cnpj: cliente.cnpj,
+        valor_total: total,
+        itens: selectedItems.map((i) => ({
+          produto_nome: i.produto_nome, codigo_sku: i.codigo_sku,
+          quantidade: i.quantidade, preco_unitario: i.preco_unitario,
+        })),
+        observacoes: observacoes || null,
+      },
+    });
+    setDialogOpen(false);
+    resetForm();
+    setSelectedOrc(null);
+  };
+
+  const handleDelete = async () => {
+    if (deletingId === null) return;
+    await deleteOrcamento.mutateAsync(deletingId);
+    setDeleteDialogOpen(false);
+    setDeletingId(null);
+    setDetailOpen(false);
   };
 
   const handleStatusChange = async (status: string) => {
@@ -98,32 +156,38 @@ const Orcamentos = () => {
           <h1 className="page-title">Orçamentos</h1>
           <p className="page-description">Orçamentos gerados pelo robô e manualmente</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> Novo Orçamento</Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader><DialogTitle>Novo Orçamento Manual</DialogTitle></DialogHeader>
-            <div className="space-y-4 mt-2">
-              <div className="space-y-2">
-                <Label>Cliente *</Label>
-                <ClientePicker value={cliente} onChange={setCliente} />
+        {canEdit && (
+          <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
+            <DialogTrigger asChild>
+              <Button><Plus className="h-4 w-4 mr-2" /> Novo Orçamento</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader><DialogTitle>{editMode ? 'Editar Orçamento' : 'Novo Orçamento Manual'}</DialogTitle></DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div className="space-y-2">
+                  <Label>Cliente *</Label>
+                  <ClientePicker value={cliente} onChange={setCliente} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Itens do Estoque *</Label>
+                  <EstoqueItemPicker selectedItems={selectedItems} onChange={setSelectedItems} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Observações</Label>
+                  <Input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Observações adicionais" />
+                </div>
+                <Button
+                  onClick={editMode ? handleUpdate : handleCreate}
+                  className="w-full"
+                  disabled={!cliente || selectedItems.length === 0 || createOrcamento.isPending || updateOrcamento.isPending}
+                >
+                  {(createOrcamento.isPending || updateOrcamento.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  {editMode ? 'Salvar Alterações' : 'Criar Orçamento'}
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label>Itens do Estoque *</Label>
-                <EstoqueItemPicker selectedItems={selectedItems} onChange={setSelectedItems} />
-              </div>
-              <div className="space-y-2">
-                <Label>Observações</Label>
-                <Input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Observações adicionais" />
-              </div>
-              <Button onClick={handleCreate} className="w-full" disabled={!cliente || selectedItems.length === 0 || createOrcamento.isPending}>
-                {createOrcamento.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Criar Orçamento
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <div className="relative max-w-sm">
@@ -176,6 +240,7 @@ const Orcamentos = () => {
         </Table>
       </div>
 
+      {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -191,19 +256,25 @@ const Orcamentos = () => {
                 <div><p className="text-muted-foreground text-xs">Data</p><p className="font-medium">{new Date(selectedOrc.data_criacao).toLocaleDateString("pt-BR")}</p></div>
                 <div><p className="text-muted-foreground text-xs">Origem</p><p className="font-medium">{selectedOrc.origem === "robo" ? "🤖 Robô" : "✋ Manual"}</p></div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Status</Label>
-                <Select value={selectedOrc.status} onValueChange={handleStatusChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allStatuses.map((s) => (
-                      <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {canEdit && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Status</Label>
+                  <Select value={selectedOrc.status} onValueChange={handleStatusChange}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {allStatuses.map((s) => (
+                        <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {!canEdit && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Status</p>
+                  <Badge variant="outline" className={statusColors[selectedOrc.status] || ""}>{statusLabels[selectedOrc.status]}</Badge>
+                </div>
+              )}
               <div className="border rounded-md overflow-hidden">
                 <Table>
                   <TableHeader>
@@ -236,7 +307,19 @@ const Orcamentos = () => {
               {selectedOrc.observacoes && (
                 <div><p className="text-muted-foreground text-xs">Observações</p><p className="text-sm">{selectedOrc.observacoes}</p></div>
               )}
-              {selectedOrc.status === "aceito" && (
+              <div className="flex gap-2 pt-2">
+                {canEdit && (
+                  <Button variant="outline" className="flex-1" onClick={() => handleEdit(selectedOrc)}>
+                    <Pencil className="h-4 w-4 mr-2" /> Editar
+                  </Button>
+                )}
+                {canDelete && (
+                  <Button variant="destructive" className="flex-1" onClick={() => { setDeletingId(selectedOrc.id); setDeleteDialogOpen(true); }}>
+                    <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                  </Button>
+                )}
+              </div>
+              {selectedOrc.status === "aceito" && canEdit && (
                 <Button onClick={handleConvertToPedido} className="w-full" disabled={converting}>
                   {converting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-2" />}
                   Converter em Pedido de Venda
@@ -246,6 +329,23 @@ const Orcamentos = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir este orçamento? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleteOrcamento.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
