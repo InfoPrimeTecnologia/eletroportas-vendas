@@ -104,9 +104,9 @@ export default function Relatorios() {
   const valorTotalConversoes = filteredConversoes.reduce((s, p) => s + (p.valor_total || 0), 0);
 
   // Estoque analytics
-  const estoqueBaixo = estoque.filter((e) => e.quantidade_estoque <= e.estoque_minimo);
-  const valorEstoque = estoque.reduce((s, e) => s + (e.preco_custo * e.quantidade_estoque), 0);
-  const valorEstoqueVenda = estoque.reduce((s, e) => s + (e.preco_venda * e.quantidade_estoque), 0);
+  const estoqueBaixo = estoque.filter((e) => e.quantidade <= e.quantidade_minima);
+  const valorEstoque = estoque.reduce((s, e) => s + (e.preco_custo * e.quantidade), 0);
+  const valorEstoqueVenda = estoque.reduce((s, e) => s + (e.preco_venda * e.quantidade), 0);
 
   // Charts data
   const statusDistribution = useMemo(() => {
@@ -117,7 +117,7 @@ export default function Relatorios() {
 
   const estoqueByTipo = useMemo(() => {
     const map: Record<string, number> = {};
-    estoque.forEach((e) => { map[e.tipo_laminas] = (map[e.tipo_laminas] || 0) + e.quantidade_estoque; });
+    estoque.forEach((e) => { map[e.tipo_laminas] = (map[e.tipo_laminas] || 0) + e.quantidade; });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [estoque]);
 
@@ -165,7 +165,7 @@ export default function Relatorios() {
       rows = filteredClientes.map((c) => ({ Nome: c.CLI_NOME || '-', CNPJ: c.CLI_CNPJ, Email: c.CLI_EMAIL || '-', Telefone: c.CLI_FONE || '-', Bairro: c.CLI_BAIRRO || '-', CEP: c.CLI_CEP || '-' }));
       sheetName = 'Clientes';
     } else if (type === 'estoque') {
-      rows = filteredEstoque.map((e) => ({ Produto: e.produto_nome, SKU: e.codigo_sku, Tipo: e.tipo_laminas, Quantidade: e.quantidade_estoque, 'Estoque Mín.': e.estoque_minimo, 'Preço Custo': e.preco_custo, 'Preço Venda': e.preco_venda, 'Valor Total Custo': e.preco_custo * e.quantidade_estoque }));
+      rows = filteredEstoque.map((e) => ({ Produto: e.produto_nome, SKU: e.codigo_sku, Tipo: e.tipo_laminas, Quantidade: e.quantidade, 'Estoque Mín.': e.quantidade_minima, 'Preço Custo': e.preco_custo, 'Preço Venda': e.preco_venda, 'Valor Total Custo': e.preco_custo * e.quantidade }));
       sheetName = 'Estoque';
     } else if (type === 'faturamento') {
       rows = faturamentoMensal.map((f) => ({ Mês: f.mes, 'Faturamento (R$)': f.valor }));
@@ -208,7 +208,7 @@ export default function Relatorios() {
     } else if (type === 'estoque') {
       doc.text(`Total: ${filteredEstoque.length} produtos | Valor Custo: R$ ${valorEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | Valor Venda: R$ ${valorEstoqueVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 14, 35);
       head = [['Produto', 'SKU', 'Tipo', 'Qtd', 'Mín', 'P. Custo', 'P. Venda']];
-      body = filteredEstoque.map((e) => [e.produto_nome, e.codigo_sku, e.tipo_laminas, String(e.quantidade_estoque), String(e.estoque_minimo), `R$ ${e.preco_custo.toFixed(2)}`, `R$ ${e.preco_venda.toFixed(2)}`]);
+      body = filteredEstoque.map((e) => [e.produto_nome, e.codigo_sku, e.tipo_laminas, String(e.quantidade), String(e.quantidade_minima), `R$ ${e.preco_custo.toFixed(2)}`, `R$ ${e.preco_venda.toFixed(2)}`]);
     } else if (type === 'faturamento') {
       const totalFat = faturamentoMensal.reduce((s, f) => s + f.valor, 0);
       doc.text(`Total: R$ ${totalFat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 14, 35);
@@ -569,12 +569,12 @@ export default function Relatorios() {
                       <TableHeader><TableRow><TableHead>Produto</TableHead><TableHead>SKU</TableHead><TableHead>Tipo</TableHead><TableHead className="text-center">Qtd</TableHead><TableHead className="text-center">Mín</TableHead><TableHead className="text-right">P. Venda</TableHead></TableRow></TableHeader>
                       <TableBody>
                         {filteredEstoque.map((e) => (
-                          <TableRow key={e.id} className={e.quantidade_estoque <= e.estoque_minimo ? 'bg-destructive/5' : ''}>
+                          <TableRow key={e.id} className={e.quantidade <= e.quantidade_minima ? 'bg-destructive/5' : ''}>
                             <TableCell className="font-medium text-sm">{e.produto_nome}</TableCell>
                             <TableCell className="font-mono text-xs">{e.codigo_sku}</TableCell>
                             <TableCell className="text-xs">{e.tipo_laminas}</TableCell>
-                            <TableCell className="text-center">{e.quantidade_estoque <= e.estoque_minimo ? <span className="text-destructive font-bold">{e.quantidade_estoque}</span> : e.quantidade_estoque}</TableCell>
-                            <TableCell className="text-center text-muted-foreground">{e.estoque_minimo}</TableCell>
+                            <TableCell className="text-center">{e.quantidade <= e.quantidade_minima ? <span className="text-destructive font-bold">{e.quantidade}</span> : e.quantidade}</TableCell>
+                            <TableCell className="text-center text-muted-foreground">{e.quantidade_minima}</TableCell>
                             <TableCell className="text-right font-mono text-sm">R$ {e.preco_venda.toFixed(2)}</TableCell>
                           </TableRow>
                         ))}
