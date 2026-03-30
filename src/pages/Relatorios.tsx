@@ -179,8 +179,8 @@ export default function Relatorios() {
     } else if (type === 'conversoes') {
       rows = filteredConversoes.map((i) => ({ Número: i.numero, Cliente: i.cliente_nome, CNPJ: i.cliente_cnpj || '-', Status: i.status, 'Valor Total': i.valor_total, Data: new Date(i.data_criacao).toLocaleDateString('pt-BR'), Origem: i.origem }));
     } else if (type === 'clientes') {
-      rows = filteredClientes.map((c) => ({ Nome: c.CLI_NOME || '-', CNPJ: c.CLI_CNPJ, Email: c.CLI_EMAIL || '-', Telefone: c.CLI_FONE || '-', Bairro: c.CLI_BAIRRO || '-', CEP: c.CLI_CEP || '-' }));
-      sheetName = 'Clientes';
+      rows = clientesExibidos.map((c) => ({ Nome: c.CLI_NOME || '-', CNPJ: c.CLI_CNPJ, Email: c.CLI_EMAIL || '-', Telefone: c.CLI_FONE || '-', Bairro: c.CLI_BAIRRO || '-', CEP: c.CLI_CEP || '-' }));
+      sheetName = clienteSubTab === 'novos' ? 'Novos Clientes' : 'Clientes';
     } else if (type === 'estoque') {
       rows = filteredEstoque.map((e) => ({ Produto: e.produto_nome, SKU: e.codigo_sku, Tipo: e.tipo_laminas, Quantidade: e.quantidade, 'Estoque Mín.': e.quantidade_minima, 'Preço Custo': e.preco_custo, 'Preço Venda': e.preco_venda, 'Valor Total Custo': e.preco_custo * e.quantidade }));
       sheetName = 'Estoque';
