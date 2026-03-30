@@ -38,6 +38,7 @@ export default function Relatorios() {
   const [searchEstoque, setSearchEstoque] = useState('');
   const [filterStatus, setFilterStatus] = useState('todos');
   const [filterPeriodo, setFilterPeriodo] = useState('todos');
+  const [clienteSubTab, setClienteSubTab] = useState<'todos' | 'novos'>('todos');
 
   useEffect(() => { fetchData(); }, []);
 
