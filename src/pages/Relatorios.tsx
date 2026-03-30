@@ -521,22 +521,37 @@ export default function Relatorios() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <CardTitle className="text-lg">Relatório de Clientes</CardTitle>
-                  <CardDescription>{filteredClientes.length} clientes cadastrados</CardDescription>
+                  <CardDescription>{clientes.length} clientes cadastrados no total</CardDescription>
                 </div>
                 <ExportButtons type="clientes" />
               </div>
-              <div className="relative max-w-sm mt-3">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input className="pl-8" placeholder="Buscar por nome ou CNPJ..." value={searchClientes} onChange={(e) => setSearchClientes(e.target.value)} />
+              <div className="flex flex-col sm:flex-row gap-3 mt-3">
+                <div className="flex gap-2">
+                  <Button variant={clienteSubTab === 'todos' ? 'default' : 'outline'} size="sm" onClick={() => setClienteSubTab('todos')}>
+                    <Users className="h-4 w-4 mr-1" /> Todos ({filteredClientes.length})
+                  </Button>
+                  <Button variant={clienteSubTab === 'novos' ? 'default' : 'outline'} size="sm" onClick={() => setClienteSubTab('novos')}>
+                    <TrendingUp className="h-4 w-4 mr-1" /> Novos do Mês ({novosClientes.length})
+                  </Button>
+                </div>
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-8" placeholder="Buscar por nome ou CNPJ..." value={searchClientes} onChange={(e) => setSearchClientes(e.target.value)} />
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               {loading ? <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div> : (
                 <div className="overflow-auto">
+                  {clienteSubTab === 'novos' && (
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Clientes que possuem orçamentos ou pedidos criados neste mês ({new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}).
+                    </p>
+                  )}
                   <Table>
                     <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>CNPJ</TableHead><TableHead>Email</TableHead><TableHead>Telefone</TableHead><TableHead>Bairro</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {filteredClientes.slice(0, 100).map((c) => (
+                      {clientesExibidos.slice(0, 100).map((c) => (
                         <TableRow key={c.CLI_CNPJ}>
                           <TableCell className="font-medium">{c.CLI_NOME || '-'}</TableCell>
                           <TableCell className="font-mono text-xs">{c.CLI_CNPJ}</TableCell>
@@ -547,7 +562,8 @@ export default function Relatorios() {
                       ))}
                     </TableBody>
                   </Table>
-                  {filteredClientes.length > 100 && <p className="text-xs text-muted-foreground mt-2 text-center">Mostrando 100 de {filteredClientes.length}. Exporte para ver todos.</p>}
+                  {clientesExibidos.length > 100 && <p className="text-xs text-muted-foreground mt-2 text-center">Mostrando 100 de {clientesExibidos.length}. Exporte para ver todos.</p>}
+                  {clientesExibidos.length === 0 && <p className="text-center text-muted-foreground py-8">Nenhum cliente encontrado</p>}
                 </div>
               )}
             </CardContent>
