@@ -22,7 +22,7 @@ import autoTable from 'jspdf-autotable';
 interface OrcamentoRow { id: number; numero: string; cliente_nome: string; cliente_cnpj: string | null; status: string; valor_total: number; data_criacao: string; origem: string; }
 interface PedidoRow { id: number; numero: string; cliente_nome: string; cliente_cnpj: string | null; status: string; valor_total: number; data_criacao: string; origem: string; }
 interface ClienteRow { CLI_NOME: string | null; CLI_CNPJ: string; CLI_EMAIL: string | null; CLI_FONE: string | null; CLI_BAIRRO: string | null; CLI_CEP: string | null; }
-interface EstoqueRow { id: number; produto_nome: string; codigo_sku: string; tipo_laminas: string; quantidade_estoque: number; estoque_minimo: number; preco_custo: number; preco_venda: number; }
+interface EstoqueRow { id: number; produto_nome: string; codigo_sku: string; tipo_laminas: string; quantidade: number; quantidade_minima: number; preco_custo: number; preco_venda: number; }
 
 const PIE_COLORS = ["hsl(205,75%,55%)", "hsl(35,90%,55%)", "hsl(152,60%,42%)", "hsl(0,80%,58%)", "hsl(280,60%,50%)", "hsl(215,70%,45%)"];
 
@@ -38,21 +38,40 @@ export default function Relatorios() {
   const [searchEstoque, setSearchEstoque] = useState('');
   const [filterStatus, setFilterStatus] = useState('todos');
   const [filterPeriodo, setFilterPeriodo] = useState('todos');
+  const [clienteSubTab, setClienteSubTab] = useState<'todos' | 'novos'>('todos');
 
   useEffect(() => { fetchData(); }, []);
+
+  const fetchAllClientes = async (): Promise<ClienteRow[]> => {
+    const PAGE = 1000;
+    let all: ClienteRow[] = [];
+    let from = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('Clientes')
+        .select('CLI_NOME, CLI_CNPJ, CLI_EMAIL, CLI_FONE, CLI_BAIRRO, CLI_CEP')
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      all = all.concat(data || []);
+      hasMore = (data?.length || 0) === PAGE;
+      from += PAGE;
+    }
+    return all;
+  };
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [orcRes, pedRes, cliRes, estRes] = await Promise.all([
+      const [orcRes, pedRes, allClientes, estRes] = await Promise.all([
         supabase.from('orcamentos').select('id, numero, cliente_nome, cliente_cnpj, status, valor_total, data_criacao, origem').order('data_criacao', { ascending: false }),
         supabase.from('pedidos_venda').select('id, numero, cliente_nome, cliente_cnpj, status, valor_total, data_criacao, origem').order('data_criacao', { ascending: false }),
-        supabase.from('Clientes').select('CLI_NOME, CLI_CNPJ, CLI_EMAIL, CLI_FONE, CLI_BAIRRO, CLI_CEP'),
-        supabase.from('estoque').select('id, produto_nome, codigo_sku, tipo_laminas, quantidade_estoque, estoque_minimo, preco_custo, preco_venda'),
+        fetchAllClientes(),
+        supabase.from('estoque').select('id, produto_nome, codigo_sku, tipo_laminas, quantidade, quantidade_minima, preco_custo, preco_venda'),
       ]);
       setOrcamentos(orcRes.data || []);
       setPedidos(pedRes.data || []);
-      setClientes(cliRes.data || []);
+      setClientes(allClientes);
       setEstoque(estRes.data || []);
     } catch (err: any) {
       toast.error('Erro ao carregar dados: ' + err.message);
@@ -79,15 +98,32 @@ export default function Relatorios() {
   const filteredClientes = clientes.filter((c) => !searchClientes || (c.CLI_NOME || '').toLowerCase().includes(searchClientes.toLowerCase()) || c.CLI_CNPJ.includes(searchClientes));
   const filteredEstoque = estoque.filter((e) => !searchEstoque || e.produto_nome.toLowerCase().includes(searchEstoque.toLowerCase()) || e.codigo_sku.toLowerCase().includes(searchEstoque.toLowerCase()));
 
+  // Novos clientes: clientes que aparecem em orçamentos/pedidos criados no mês atual
+  const novosClientes = useMemo(() => {
+    const now = new Date();
+    const mesAtual = now.getMonth();
+    const anoAtual = now.getFullYear();
+    const cnpjsNoMes = new Set<string>();
+    [...orcamentos, ...pedidos].forEach((item) => {
+      const d = new Date(item.data_criacao);
+      if (d.getMonth() === mesAtual && d.getFullYear() === anoAtual && item.cliente_cnpj) {
+        cnpjsNoMes.add(item.cliente_cnpj);
+      }
+    });
+    return clientes.filter((c) => cnpjsNoMes.has(c.CLI_CNPJ));
+  }, [clientes, orcamentos, pedidos]);
+
+  const clientesExibidos = clienteSubTab === 'novos' ? novosClientes.filter((c) => !searchClientes || (c.CLI_NOME || '').toLowerCase().includes(searchClientes.toLowerCase()) || c.CLI_CNPJ.includes(searchClientes)) : filteredClientes;
+
   const leadsQuentes = filteredLeads.filter((o) => ['aceito', 'enviado'].includes(o.status?.toLowerCase()));
   const leadsFrios = filteredLeads.filter((o) => ['pendente', 'recusado'].includes(o.status?.toLowerCase()));
   const valorTotalLeads = filteredLeads.reduce((s, o) => s + (o.valor_total || 0), 0);
   const valorTotalConversoes = filteredConversoes.reduce((s, p) => s + (p.valor_total || 0), 0);
 
   // Estoque analytics
-  const estoqueBaixo = estoque.filter((e) => e.quantidade_estoque <= e.estoque_minimo);
-  const valorEstoque = estoque.reduce((s, e) => s + (e.preco_custo * e.quantidade_estoque), 0);
-  const valorEstoqueVenda = estoque.reduce((s, e) => s + (e.preco_venda * e.quantidade_estoque), 0);
+  const estoqueBaixo = estoque.filter((e) => e.quantidade <= e.quantidade_minima);
+  const valorEstoque = estoque.reduce((s, e) => s + (e.preco_custo * e.quantidade), 0);
+  const valorEstoqueVenda = estoque.reduce((s, e) => s + (e.preco_venda * e.quantidade), 0);
 
   // Charts data
   const statusDistribution = useMemo(() => {
@@ -98,7 +134,7 @@ export default function Relatorios() {
 
   const estoqueByTipo = useMemo(() => {
     const map: Record<string, number> = {};
-    estoque.forEach((e) => { map[e.tipo_laminas] = (map[e.tipo_laminas] || 0) + e.quantidade_estoque; });
+    estoque.forEach((e) => { map[e.tipo_laminas] = (map[e.tipo_laminas] || 0) + e.quantidade; });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [estoque]);
 
@@ -143,10 +179,10 @@ export default function Relatorios() {
     } else if (type === 'conversoes') {
       rows = filteredConversoes.map((i) => ({ Número: i.numero, Cliente: i.cliente_nome, CNPJ: i.cliente_cnpj || '-', Status: i.status, 'Valor Total': i.valor_total, Data: new Date(i.data_criacao).toLocaleDateString('pt-BR'), Origem: i.origem }));
     } else if (type === 'clientes') {
-      rows = filteredClientes.map((c) => ({ Nome: c.CLI_NOME || '-', CNPJ: c.CLI_CNPJ, Email: c.CLI_EMAIL || '-', Telefone: c.CLI_FONE || '-', Bairro: c.CLI_BAIRRO || '-', CEP: c.CLI_CEP || '-' }));
-      sheetName = 'Clientes';
+      rows = clientesExibidos.map((c) => ({ Nome: c.CLI_NOME || '-', CNPJ: c.CLI_CNPJ, Email: c.CLI_EMAIL || '-', Telefone: c.CLI_FONE || '-', Bairro: c.CLI_BAIRRO || '-', CEP: c.CLI_CEP || '-' }));
+      sheetName = clienteSubTab === 'novos' ? 'Novos Clientes' : 'Clientes';
     } else if (type === 'estoque') {
-      rows = filteredEstoque.map((e) => ({ Produto: e.produto_nome, SKU: e.codigo_sku, Tipo: e.tipo_laminas, Quantidade: e.quantidade_estoque, 'Estoque Mín.': e.estoque_minimo, 'Preço Custo': e.preco_custo, 'Preço Venda': e.preco_venda, 'Valor Total Custo': e.preco_custo * e.quantidade_estoque }));
+      rows = filteredEstoque.map((e) => ({ Produto: e.produto_nome, SKU: e.codigo_sku, Tipo: e.tipo_laminas, Quantidade: e.quantidade, 'Estoque Mín.': e.quantidade_minima, 'Preço Custo': e.preco_custo, 'Preço Venda': e.preco_venda, 'Valor Total Custo': e.preco_custo * e.quantidade }));
       sheetName = 'Estoque';
     } else if (type === 'faturamento') {
       rows = faturamentoMensal.map((f) => ({ Mês: f.mes, 'Faturamento (R$)': f.valor }));
@@ -183,13 +219,13 @@ export default function Relatorios() {
       head = [['Número', 'Cliente', 'CNPJ', 'Status', 'Valor', 'Data']];
       body = filteredConversoes.map((i) => [i.numero, i.cliente_nome, i.cliente_cnpj || '-', i.status, `R$ ${i.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, new Date(i.data_criacao).toLocaleDateString('pt-BR')]);
     } else if (type === 'clientes') {
-      doc.text(`Total: ${filteredClientes.length} clientes`, 14, 35);
+      doc.text(`Total: ${clientesExibidos.length} clientes${clienteSubTab === 'novos' ? ' (novos do mês)' : ''}`, 14, 35);
       head = [['Nome', 'CNPJ', 'Email', 'Telefone', 'Bairro']];
-      body = filteredClientes.map((c) => [c.CLI_NOME || '-', c.CLI_CNPJ, c.CLI_EMAIL || '-', c.CLI_FONE || '-', c.CLI_BAIRRO || '-']);
+      body = clientesExibidos.map((c) => [c.CLI_NOME || '-', c.CLI_CNPJ, c.CLI_EMAIL || '-', c.CLI_FONE || '-', c.CLI_BAIRRO || '-']);
     } else if (type === 'estoque') {
       doc.text(`Total: ${filteredEstoque.length} produtos | Valor Custo: R$ ${valorEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | Valor Venda: R$ ${valorEstoqueVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 14, 35);
       head = [['Produto', 'SKU', 'Tipo', 'Qtd', 'Mín', 'P. Custo', 'P. Venda']];
-      body = filteredEstoque.map((e) => [e.produto_nome, e.codigo_sku, e.tipo_laminas, String(e.quantidade_estoque), String(e.estoque_minimo), `R$ ${e.preco_custo.toFixed(2)}`, `R$ ${e.preco_venda.toFixed(2)}`]);
+      body = filteredEstoque.map((e) => [e.produto_nome, e.codigo_sku, e.tipo_laminas, String(e.quantidade), String(e.quantidade_minima), `R$ ${e.preco_custo.toFixed(2)}`, `R$ ${e.preco_venda.toFixed(2)}`]);
     } else if (type === 'faturamento') {
       const totalFat = faturamentoMensal.reduce((s, f) => s + f.valor, 0);
       doc.text(`Total: R$ ${totalFat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 14, 35);
@@ -485,22 +521,37 @@ export default function Relatorios() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <CardTitle className="text-lg">Relatório de Clientes</CardTitle>
-                  <CardDescription>{filteredClientes.length} clientes cadastrados</CardDescription>
+                  <CardDescription>{clientes.length} clientes cadastrados no total</CardDescription>
                 </div>
                 <ExportButtons type="clientes" />
               </div>
-              <div className="relative max-w-sm mt-3">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input className="pl-8" placeholder="Buscar por nome ou CNPJ..." value={searchClientes} onChange={(e) => setSearchClientes(e.target.value)} />
+              <div className="flex flex-col sm:flex-row gap-3 mt-3">
+                <div className="flex gap-2">
+                  <Button variant={clienteSubTab === 'todos' ? 'default' : 'outline'} size="sm" onClick={() => setClienteSubTab('todos')}>
+                    <Users className="h-4 w-4 mr-1" /> Todos ({filteredClientes.length})
+                  </Button>
+                  <Button variant={clienteSubTab === 'novos' ? 'default' : 'outline'} size="sm" onClick={() => setClienteSubTab('novos')}>
+                    <TrendingUp className="h-4 w-4 mr-1" /> Novos do Mês ({novosClientes.length})
+                  </Button>
+                </div>
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-8" placeholder="Buscar por nome ou CNPJ..." value={searchClientes} onChange={(e) => setSearchClientes(e.target.value)} />
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               {loading ? <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div> : (
                 <div className="overflow-auto">
+                  {clienteSubTab === 'novos' && (
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Clientes que possuem orçamentos ou pedidos criados neste mês ({new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}).
+                    </p>
+                  )}
                   <Table>
                     <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>CNPJ</TableHead><TableHead>Email</TableHead><TableHead>Telefone</TableHead><TableHead>Bairro</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {filteredClientes.slice(0, 100).map((c) => (
+                      {clientesExibidos.slice(0, 100).map((c) => (
                         <TableRow key={c.CLI_CNPJ}>
                           <TableCell className="font-medium">{c.CLI_NOME || '-'}</TableCell>
                           <TableCell className="font-mono text-xs">{c.CLI_CNPJ}</TableCell>
@@ -511,7 +562,8 @@ export default function Relatorios() {
                       ))}
                     </TableBody>
                   </Table>
-                  {filteredClientes.length > 100 && <p className="text-xs text-muted-foreground mt-2 text-center">Mostrando 100 de {filteredClientes.length}. Exporte para ver todos.</p>}
+                  {clientesExibidos.length > 100 && <p className="text-xs text-muted-foreground mt-2 text-center">Mostrando 100 de {clientesExibidos.length}. Exporte para ver todos.</p>}
+                  {clientesExibidos.length === 0 && <p className="text-center text-muted-foreground py-8">Nenhum cliente encontrado</p>}
                 </div>
               )}
             </CardContent>
@@ -550,12 +602,12 @@ export default function Relatorios() {
                       <TableHeader><TableRow><TableHead>Produto</TableHead><TableHead>SKU</TableHead><TableHead>Tipo</TableHead><TableHead className="text-center">Qtd</TableHead><TableHead className="text-center">Mín</TableHead><TableHead className="text-right">P. Venda</TableHead></TableRow></TableHeader>
                       <TableBody>
                         {filteredEstoque.map((e) => (
-                          <TableRow key={e.id} className={e.quantidade_estoque <= e.estoque_minimo ? 'bg-destructive/5' : ''}>
+                          <TableRow key={e.id} className={e.quantidade <= e.quantidade_minima ? 'bg-destructive/5' : ''}>
                             <TableCell className="font-medium text-sm">{e.produto_nome}</TableCell>
                             <TableCell className="font-mono text-xs">{e.codigo_sku}</TableCell>
                             <TableCell className="text-xs">{e.tipo_laminas}</TableCell>
-                            <TableCell className="text-center">{e.quantidade_estoque <= e.estoque_minimo ? <span className="text-destructive font-bold">{e.quantidade_estoque}</span> : e.quantidade_estoque}</TableCell>
-                            <TableCell className="text-center text-muted-foreground">{e.estoque_minimo}</TableCell>
+                            <TableCell className="text-center">{e.quantidade <= e.quantidade_minima ? <span className="text-destructive font-bold">{e.quantidade}</span> : e.quantidade}</TableCell>
+                            <TableCell className="text-center text-muted-foreground">{e.quantidade_minima}</TableCell>
                             <TableCell className="text-right font-mono text-sm">R$ {e.preco_venda.toFixed(2)}</TableCell>
                           </TableRow>
                         ))}
