@@ -219,9 +219,9 @@ export default function Relatorios() {
       head = [['Número', 'Cliente', 'CNPJ', 'Status', 'Valor', 'Data']];
       body = filteredConversoes.map((i) => [i.numero, i.cliente_nome, i.cliente_cnpj || '-', i.status, `R$ ${i.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, new Date(i.data_criacao).toLocaleDateString('pt-BR')]);
     } else if (type === 'clientes') {
-      doc.text(`Total: ${filteredClientes.length} clientes`, 14, 35);
+      doc.text(`Total: ${clientesExibidos.length} clientes${clienteSubTab === 'novos' ? ' (novos do mês)' : ''}`, 14, 35);
       head = [['Nome', 'CNPJ', 'Email', 'Telefone', 'Bairro']];
-      body = filteredClientes.map((c) => [c.CLI_NOME || '-', c.CLI_CNPJ, c.CLI_EMAIL || '-', c.CLI_FONE || '-', c.CLI_BAIRRO || '-']);
+      body = clientesExibidos.map((c) => [c.CLI_NOME || '-', c.CLI_CNPJ, c.CLI_EMAIL || '-', c.CLI_FONE || '-', c.CLI_BAIRRO || '-']);
     } else if (type === 'estoque') {
       doc.text(`Total: ${filteredEstoque.length} produtos | Valor Custo: R$ ${valorEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | Valor Venda: R$ ${valorEstoqueVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 14, 35);
       head = [['Produto', 'SKU', 'Tipo', 'Qtd', 'Mín', 'P. Custo', 'P. Venda']];
