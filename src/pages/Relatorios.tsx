@@ -42,18 +42,36 @@ export default function Relatorios() {
 
   useEffect(() => { fetchData(); }, []);
 
+  const fetchAllClientes = async (): Promise<ClienteRow[]> => {
+    const PAGE = 1000;
+    let all: ClienteRow[] = [];
+    let from = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('Clientes')
+        .select('CLI_NOME, CLI_CNPJ, CLI_EMAIL, CLI_FONE, CLI_BAIRRO, CLI_CEP')
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      all = all.concat(data || []);
+      hasMore = (data?.length || 0) === PAGE;
+      from += PAGE;
+    }
+    return all;
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [orcRes, pedRes, cliRes, estRes] = await Promise.all([
+      const [orcRes, pedRes, allClientes, estRes] = await Promise.all([
         supabase.from('orcamentos').select('id, numero, cliente_nome, cliente_cnpj, status, valor_total, data_criacao, origem').order('data_criacao', { ascending: false }),
         supabase.from('pedidos_venda').select('id, numero, cliente_nome, cliente_cnpj, status, valor_total, data_criacao, origem').order('data_criacao', { ascending: false }),
-        supabase.from('Clientes').select('CLI_NOME, CLI_CNPJ, CLI_EMAIL, CLI_FONE, CLI_BAIRRO, CLI_CEP'),
-        supabase.from('estoque').select('id, produto_nome, codigo_sku, tipo_laminas, quantidade_estoque, estoque_minimo, preco_custo, preco_venda'),
+        fetchAllClientes(),
+        supabase.from('estoque').select('id, produto_nome, codigo_sku, tipo_laminas, quantidade, quantidade_minima, preco_custo, preco_venda'),
       ]);
       setOrcamentos(orcRes.data || []);
       setPedidos(pedRes.data || []);
-      setClientes(cliRes.data || []);
+      setClientes(allClientes);
       setEstoque(estRes.data || []);
     } catch (err: any) {
       toast.error('Erro ao carregar dados: ' + err.message);
