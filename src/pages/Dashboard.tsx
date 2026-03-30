@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
-import { Bot, Flame, Snowflake, TrendingUp, Activity, X } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { Bot, Flame, Snowflake, TrendingUp, Activity, X, CalendarIcon, FilterX } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
@@ -8,6 +10,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface OrcRow { id: number; numero: string; cliente_nome: string; cliente_cnpj: string | null; status: string; valor_total: number; data_criacao: string; }
 interface PedRow { id: number; numero: string; cliente_nome: string; cliente_cnpj: string | null; status: string; valor_total: number; data_criacao: string; }
@@ -46,68 +52,30 @@ const statusColor = (s: string) => {
 };
 
 const Dashboard = () => {
-  const [metrics, setMetrics] = useState<DashboardMetrics>({ leadsQuentes: 0, leadsFrios: 0, conversoes: 0, funnelData: [], recentActivity: [] });
-  const [weeklyData, setWeeklyData] = useState<{ name: string; quentes: number; frios: number }[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Detail dialog state
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailTitle, setDetailTitle] = useState("");
   const [detailOrcamentos, setDetailOrcamentos] = useState<OrcRow[]>([]);
   const [detailPedidos, setDetailPedidos] = useState<PedRow[]>([]);
   const [detailType, setDetailType] = useState<"orcamentos" | "pedidos">("orcamentos");
 
-  // Raw data for drill-down
   const [rawOrcamentos, setRawOrcamentos] = useState<OrcRow[]>([]);
   const [rawPedidos, setRawPedidos] = useState<PedRow[]>([]);
 
-  useEffect(() => { fetchMetrics(); }, []);
+  // Date filter
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
 
-  const fetchMetrics = async () => {
+  useEffect(() => { fetchData(); }, []);
+
+  const fetchData = async () => {
     try {
       const [{ data: orcamentos }, { data: pedidos }] = await Promise.all([
         supabase.from("orcamentos").select("id, numero, cliente_nome, cliente_cnpj, status, data_criacao, valor_total"),
         supabase.from("pedidos_venda").select("id, numero, cliente_nome, cliente_cnpj, status, data_criacao, valor_total"),
       ]);
-
       setRawOrcamentos(orcamentos || []);
       setRawPedidos(pedidos || []);
-
-      const quentes = (orcamentos || []).filter((o) => ["aceito", "enviado"].includes(o.status?.toLowerCase())).length;
-      const frios = (orcamentos || []).filter((o) => ["pendente", "recusado"].includes(o.status?.toLowerCase())).length;
-      const conversoes = (pedidos || []).length;
-
-      const statusMap: Record<string, number> = {};
-      (orcamentos || []).forEach((o) => { const s = o.status || "pendente"; statusMap[s] = (statusMap[s] || 0) + 1; });
-      if (conversoes > 0) statusMap["Pedido de Venda"] = conversoes;
-
-      const statusLabels: Record<string, string> = {
-        pendente: "Pendente", enviado: "Orçamento Enviado", aceito: "Orçamento Aceito",
-        recusado: "Recusado", "Pedido de Venda": "Pedido de Venda",
-      };
-      const funnelData = Object.entries(statusMap).map(([key, value]) => ({ name: statusLabels[key] || key, value }));
-
-      const allItems = [
-        ...(orcamentos || []).map((o) => ({ id: o.id, action: `Orçamento ${o.status}`, client: o.cliente_nome, time: timeAgo(o.data_criacao), date: new Date(o.data_criacao).getTime(), type: "orcamento" })),
-        ...(pedidos || []).map((p) => ({ id: p.id + 10000, action: `Pedido de Venda - ${p.status}`, client: p.cliente_nome, time: timeAgo(p.data_criacao), date: new Date(p.data_criacao).getTime(), type: "venda" })),
-      ].sort((a, b) => b.date - a.date).slice(0, 8);
-
-      const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-      const now = new Date();
-      const weekly = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(now); d.setDate(d.getDate() - (6 - i));
-        const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-        const dayEnd = new Date(dayStart.getTime() + 86400000);
-        const dayOrcs = (orcamentos || []).filter((o) => { const t = new Date(o.data_criacao).getTime(); return t >= dayStart.getTime() && t < dayEnd.getTime(); });
-        return {
-          name: days[d.getDay()],
-          quentes: dayOrcs.filter((o) => ["aceito", "enviado"].includes(o.status?.toLowerCase())).length,
-          frios: dayOrcs.filter((o) => ["pendente", "recusado"].includes(o.status?.toLowerCase())).length,
-        };
-      });
-
-      setWeeklyData(weekly);
-      setMetrics({ leadsQuentes: quentes, leadsFrios: frios, conversoes, funnelData, recentActivity: allItems });
     } catch (err) {
       console.error("Erro ao carregar métricas:", err);
     } finally {
@@ -115,22 +83,80 @@ const Dashboard = () => {
     }
   };
 
+  const filterByDate = <T extends { data_criacao: string }>(items: T[]): T[] => {
+    if (!dateFrom && !dateTo) return items;
+    return items.filter((item) => {
+      const d = new Date(item.data_criacao);
+      if (dateFrom && d < new Date(dateFrom.getFullYear(), dateFrom.getMonth(), dateFrom.getDate())) return false;
+      if (dateTo) {
+        const end = new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate() + 1);
+        if (d >= end) return false;
+      }
+      return true;
+    });
+  };
+
+  const filteredOrcamentos = useMemo(() => filterByDate(rawOrcamentos), [rawOrcamentos, dateFrom, dateTo]);
+  const filteredPedidos = useMemo(() => filterByDate(rawPedidos), [rawPedidos, dateFrom, dateTo]);
+
+  const metrics = useMemo<DashboardMetrics>(() => {
+    const quentes = filteredOrcamentos.filter((o) => ["aceito", "enviado"].includes(o.status?.toLowerCase())).length;
+    const frios = filteredOrcamentos.filter((o) => ["pendente", "recusado"].includes(o.status?.toLowerCase())).length;
+    const conversoes = filteredPedidos.length;
+
+    const statusMap: Record<string, number> = {};
+    filteredOrcamentos.forEach((o) => { const s = o.status || "pendente"; statusMap[s] = (statusMap[s] || 0) + 1; });
+    if (conversoes > 0) statusMap["Pedido de Venda"] = conversoes;
+
+    const statusLabels: Record<string, string> = {
+      pendente: "Pendente", enviado: "Orçamento Enviado", aceito: "Orçamento Aceito",
+      recusado: "Recusado", "Pedido de Venda": "Pedido de Venda",
+    };
+    const funnelData = Object.entries(statusMap).map(([key, value]) => ({ name: statusLabels[key] || key, value }));
+
+    const allItems = [
+      ...filteredOrcamentos.map((o) => ({ id: o.id, action: `Orçamento ${o.status}`, client: o.cliente_nome, time: timeAgo(o.data_criacao), date: new Date(o.data_criacao).getTime(), type: "orcamento" })),
+      ...filteredPedidos.map((p) => ({ id: p.id + 10000, action: `Pedido de Venda - ${p.status}`, client: p.cliente_nome, time: timeAgo(p.data_criacao), date: new Date(p.data_criacao).getTime(), type: "venda" })),
+    ].sort((a, b) => b.date - a.date).slice(0, 8);
+
+    return { leadsQuentes: quentes, leadsFrios: frios, conversoes, funnelData, recentActivity: allItems };
+  }, [filteredOrcamentos, filteredPedidos]);
+
+  const weeklyData = useMemo(() => {
+    const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+    const now = new Date();
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(now); d.setDate(d.getDate() - (6 - i));
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const dayEnd = new Date(dayStart.getTime() + 86400000);
+      const dayOrcs = filteredOrcamentos.filter((o) => { const t = new Date(o.data_criacao).getTime(); return t >= dayStart.getTime() && t < dayEnd.getTime(); });
+      return {
+        name: days[d.getDay()],
+        quentes: dayOrcs.filter((o) => ["aceito", "enviado"].includes(o.status?.toLowerCase())).length,
+        frios: dayOrcs.filter((o) => ["pendente", "recusado"].includes(o.status?.toLowerCase())).length,
+      };
+    });
+  }, [filteredOrcamentos]);
+
   const openDetail = (type: "quentes" | "frios" | "conversoes") => {
     if (type === "quentes") {
       setDetailTitle("Leads Quentes (Orçamentos Aceitos/Enviados)");
-      setDetailOrcamentos(rawOrcamentos.filter((o) => ["aceito", "enviado"].includes(o.status?.toLowerCase())));
+      setDetailOrcamentos(filteredOrcamentos.filter((o) => ["aceito", "enviado"].includes(o.status?.toLowerCase())));
       setDetailType("orcamentos");
     } else if (type === "frios") {
       setDetailTitle("Leads Frios (Orçamentos Pendentes/Recusados)");
-      setDetailOrcamentos(rawOrcamentos.filter((o) => ["pendente", "recusado"].includes(o.status?.toLowerCase())));
+      setDetailOrcamentos(filteredOrcamentos.filter((o) => ["pendente", "recusado"].includes(o.status?.toLowerCase())));
       setDetailType("orcamentos");
     } else {
       setDetailTitle("Conversões (Pedidos de Venda)");
-      setDetailPedidos(rawPedidos);
+      setDetailPedidos(filteredPedidos);
       setDetailType("pedidos");
     }
     setDetailOpen(true);
   };
+
+  const clearFilter = () => { setDateFrom(undefined); setDateTo(undefined); };
+  const hasFilter = dateFrom || dateTo;
 
   const detailData = detailType === "orcamentos" ? detailOrcamentos : detailPedidos;
   const detailTotal = detailData.reduce((s, d) => s + (d.valor_total || 0), 0);
@@ -147,6 +173,44 @@ const Dashboard = () => {
       <div className="page-header">
         <h1 className="page-title">Dashboard</h1>
         <p className="page-description">Visão geral da operação do agente de vendas IA</p>
+      </div>
+
+      {/* Date Filter */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm font-medium text-muted-foreground">Filtrar por período:</span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className={cn("w-[160px] justify-start text-left font-normal", !dateFrom && "text-muted-foreground")}>
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dateFrom ? format(dateFrom, "dd/MM/yyyy") : "Data início"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus className={cn("p-3 pointer-events-auto")} locale={ptBR} />
+          </PopoverContent>
+        </Popover>
+        <span className="text-sm text-muted-foreground">até</span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className={cn("w-[160px] justify-start text-left font-normal", !dateTo && "text-muted-foreground")}>
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dateTo ? format(dateTo, "dd/MM/yyyy") : "Data fim"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus className={cn("p-3 pointer-events-auto")} locale={ptBR} />
+          </PopoverContent>
+        </Popover>
+        {hasFilter && (
+          <Button variant="ghost" size="sm" onClick={clearFilter} className="text-muted-foreground">
+            <FilterX className="h-4 w-4 mr-1" /> Limpar filtro
+          </Button>
+        )}
+        {hasFilter && (
+          <Badge variant="secondary" className="text-xs">
+            Filtrando: {dateFrom ? format(dateFrom, "dd/MM/yy") : "..."} → {dateTo ? format(dateTo, "dd/MM/yy") : "..."}
+          </Badge>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
