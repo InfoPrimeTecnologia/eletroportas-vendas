@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
-import { Bot, Flame, Snowflake, TrendingUp, Activity } from "lucide-react";
+import { Bot, Flame, Snowflake, TrendingUp, Activity, X } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+interface OrcRow { id: number; numero: string; cliente_nome: string; cliente_cnpj: string | null; status: string; valor_total: number; data_criacao: string; }
+interface PedRow { id: number; numero: string; cliente_nome: string; cliente_cnpj: string | null; status: string; valor_total: number; data_criacao: string; }
 
 interface DashboardMetrics {
   leadsQuentes: number;
@@ -15,13 +21,8 @@ interface DashboardMetrics {
 }
 
 const FUNNEL_COLORS = [
-  "hsl(205, 75%, 55%)",
-  "hsl(215, 70%, 45%)",
-  "hsl(35, 90%, 55%)",
-  "hsl(152, 60%, 42%)",
-  "hsl(152, 60%, 35%)",
-  "hsl(0, 80%, 58%)",
-  "hsl(280, 60%, 50%)",
+  "hsl(205, 75%, 55%)", "hsl(215, 70%, 45%)", "hsl(35, 90%, 55%)",
+  "hsl(152, 60%, 42%)", "hsl(152, 60%, 35%)", "hsl(0, 80%, 58%)", "hsl(280, 60%, 50%)",
 ];
 
 function timeAgo(dateStr: string) {
@@ -31,106 +32,73 @@ function timeAgo(dateStr: string) {
   if (mins < 60) return `${mins} min atrás`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h atrás`;
-  const days = Math.floor(hours / 24);
-  return `${days}d atrás`;
+  return `${Math.floor(hours / 24)}d atrás`;
 }
 
+const statusColor = (s: string) => {
+  switch (s?.toLowerCase()) {
+    case 'aceito': case 'concluido': return 'bg-emerald-100 text-emerald-800';
+    case 'enviado': case 'processando': return 'bg-blue-100 text-blue-800';
+    case 'pendente': return 'bg-yellow-100 text-yellow-800';
+    case 'recusado': return 'bg-red-100 text-red-800';
+    default: return 'bg-muted text-muted-foreground';
+  }
+};
+
 const Dashboard = () => {
-  const [metrics, setMetrics] = useState<DashboardMetrics>({
-    leadsQuentes: 0,
-    leadsFrios: 0,
-    conversoes: 0,
-    funnelData: [],
-    recentActivity: [],
-  });
+  const [metrics, setMetrics] = useState<DashboardMetrics>({ leadsQuentes: 0, leadsFrios: 0, conversoes: 0, funnelData: [], recentActivity: [] });
   const [weeklyData, setWeeklyData] = useState<{ name: string; quentes: number; frios: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchMetrics();
-  }, []);
+  // Detail dialog state
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailTitle, setDetailTitle] = useState("");
+  const [detailOrcamentos, setDetailOrcamentos] = useState<OrcRow[]>([]);
+  const [detailPedidos, setDetailPedidos] = useState<PedRow[]>([]);
+  const [detailType, setDetailType] = useState<"orcamentos" | "pedidos">("orcamentos");
+
+  // Raw data for drill-down
+  const [rawOrcamentos, setRawOrcamentos] = useState<OrcRow[]>([]);
+  const [rawPedidos, setRawPedidos] = useState<PedRow[]>([]);
+
+  useEffect(() => { fetchMetrics(); }, []);
 
   const fetchMetrics = async () => {
     try {
-      // Fetch orcamentos (leads quentes = aceito/enviado, frios = pendente/recusado)
-      const { data: orcamentos } = await supabase
-        .from("orcamentos")
-        .select("id, numero, cliente_nome, status, data_criacao, valor_total");
+      const [{ data: orcamentos }, { data: pedidos }] = await Promise.all([
+        supabase.from("orcamentos").select("id, numero, cliente_nome, cliente_cnpj, status, data_criacao, valor_total"),
+        supabase.from("pedidos_venda").select("id, numero, cliente_nome, cliente_cnpj, status, data_criacao, valor_total"),
+      ]);
 
-      const quentes = (orcamentos || []).filter((o) =>
-        ["aceito", "enviado"].includes(o.status?.toLowerCase())
-      ).length;
-      const frios = (orcamentos || []).filter((o) =>
-        ["pendente", "recusado"].includes(o.status?.toLowerCase())
-      ).length;
+      setRawOrcamentos(orcamentos || []);
+      setRawPedidos(pedidos || []);
 
-      // Fetch pedidos_venda (conversões)
-      const { data: pedidos } = await supabase
-        .from("pedidos_venda")
-        .select("id, numero, cliente_nome, status, data_criacao, valor_total");
-
+      const quentes = (orcamentos || []).filter((o) => ["aceito", "enviado"].includes(o.status?.toLowerCase())).length;
+      const frios = (orcamentos || []).filter((o) => ["pendente", "recusado"].includes(o.status?.toLowerCase())).length;
       const conversoes = (pedidos || []).length;
 
-      // Build funnel data from orcamento statuses + pedidos
       const statusMap: Record<string, number> = {};
-      (orcamentos || []).forEach((o) => {
-        const s = o.status || "pendente";
-        statusMap[s] = (statusMap[s] || 0) + 1;
-      });
-      // Add pedidos as "Pedido de Venda"
-      if (conversoes > 0) {
-        statusMap["Pedido de Venda"] = conversoes;
-      }
+      (orcamentos || []).forEach((o) => { const s = o.status || "pendente"; statusMap[s] = (statusMap[s] || 0) + 1; });
+      if (conversoes > 0) statusMap["Pedido de Venda"] = conversoes;
 
       const statusLabels: Record<string, string> = {
-        pendente: "Pendente",
-        enviado: "Orçamento Enviado",
-        aceito: "Orçamento Aceito",
-        recusado: "Recusado",
-        "Pedido de Venda": "Pedido de Venda",
+        pendente: "Pendente", enviado: "Orçamento Enviado", aceito: "Orçamento Aceito",
+        recusado: "Recusado", "Pedido de Venda": "Pedido de Venda",
       };
+      const funnelData = Object.entries(statusMap).map(([key, value]) => ({ name: statusLabels[key] || key, value }));
 
-      const funnelData = Object.entries(statusMap).map(([key, value]) => ({
-        name: statusLabels[key] || key,
-        value,
-      }));
-
-      // Recent activity from orcamentos + pedidos
       const allItems = [
-        ...(orcamentos || []).map((o) => ({
-          id: o.id,
-          action: `Orçamento ${o.status}`,
-          client: o.cliente_nome,
-          time: timeAgo(o.data_criacao),
-          date: new Date(o.data_criacao).getTime(),
-          type: "orcamento",
-        })),
-        ...(pedidos || []).map((p) => ({
-          id: p.id + 10000,
-          action: `Pedido de Venda - ${p.status}`,
-          client: p.cliente_nome,
-          time: timeAgo(p.data_criacao),
-          date: new Date(p.data_criacao).getTime(),
-          type: "venda",
-        })),
-      ]
-        .sort((a, b) => b.date - a.date)
-        .slice(0, 8);
+        ...(orcamentos || []).map((o) => ({ id: o.id, action: `Orçamento ${o.status}`, client: o.cliente_nome, time: timeAgo(o.data_criacao), date: new Date(o.data_criacao).getTime(), type: "orcamento" })),
+        ...(pedidos || []).map((p) => ({ id: p.id + 10000, action: `Pedido de Venda - ${p.status}`, client: p.cliente_nome, time: timeAgo(p.data_criacao), date: new Date(p.data_criacao).getTime(), type: "venda" })),
+      ].sort((a, b) => b.date - a.date).slice(0, 8);
 
-      // Weekly data - last 7 days
       const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
       const now = new Date();
       const weekly = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(now);
-        d.setDate(d.getDate() - (6 - i));
+        const d = new Date(now); d.setDate(d.getDate() - (6 - i));
         const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
         const dayEnd = new Date(dayStart.getTime() + 86400000);
-
-        const dayOrcs = (orcamentos || []).filter((o) => {
-          const t = new Date(o.data_criacao).getTime();
-          return t >= dayStart.getTime() && t < dayEnd.getTime();
-        });
-
+        const dayOrcs = (orcamentos || []).filter((o) => { const t = new Date(o.data_criacao).getTime(); return t >= dayStart.getTime() && t < dayEnd.getTime(); });
         return {
           name: days[d.getDay()],
           quentes: dayOrcs.filter((o) => ["aceito", "enviado"].includes(o.status?.toLowerCase())).length,
@@ -139,13 +107,7 @@ const Dashboard = () => {
       });
 
       setWeeklyData(weekly);
-      setMetrics({
-        leadsQuentes: quentes,
-        leadsFrios: frios,
-        conversoes,
-        funnelData,
-        recentActivity: allItems,
-      });
+      setMetrics({ leadsQuentes: quentes, leadsFrios: frios, conversoes, funnelData, recentActivity: allItems });
     } catch (err) {
       console.error("Erro ao carregar métricas:", err);
     } finally {
@@ -153,11 +115,31 @@ const Dashboard = () => {
     }
   };
 
+  const openDetail = (type: "quentes" | "frios" | "conversoes") => {
+    if (type === "quentes") {
+      setDetailTitle("Leads Quentes (Orçamentos Aceitos/Enviados)");
+      setDetailOrcamentos(rawOrcamentos.filter((o) => ["aceito", "enviado"].includes(o.status?.toLowerCase())));
+      setDetailType("orcamentos");
+    } else if (type === "frios") {
+      setDetailTitle("Leads Frios (Orçamentos Pendentes/Recusados)");
+      setDetailOrcamentos(rawOrcamentos.filter((o) => ["pendente", "recusado"].includes(o.status?.toLowerCase())));
+      setDetailType("orcamentos");
+    } else {
+      setDetailTitle("Conversões (Pedidos de Venda)");
+      setDetailPedidos(rawPedidos);
+      setDetailType("pedidos");
+    }
+    setDetailOpen(true);
+  };
+
+  const detailData = detailType === "orcamentos" ? detailOrcamentos : detailPedidos;
+  const detailTotal = detailData.reduce((s, d) => s + (d.valor_total || 0), 0);
+
   const stats = [
-    { label: "Leads Quentes", value: metrics.leadsQuentes.toString(), icon: Flame, colorClass: "text-chart-hot" },
-    { label: "Leads Frios", value: metrics.leadsFrios.toString(), icon: Snowflake, colorClass: "text-chart-cold" },
-    { label: "Conversões", value: metrics.conversoes.toString(), icon: TrendingUp, colorClass: "text-success" },
-    { label: "Robô Ativo", value: "Online", icon: Bot, colorClass: "text-primary" },
+    { label: "Leads Quentes", value: metrics.leadsQuentes.toString(), icon: Flame, colorClass: "text-chart-hot", click: () => openDetail("quentes") },
+    { label: "Leads Frios", value: metrics.leadsFrios.toString(), icon: Snowflake, colorClass: "text-chart-cold", click: () => openDetail("frios") },
+    { label: "Conversões", value: metrics.conversoes.toString(), icon: TrendingUp, colorClass: "text-success", click: () => openDetail("conversoes") },
+    { label: "Robô Ativo", value: "Online", icon: Bot, colorClass: "text-primary", click: undefined },
   ];
 
   return (
@@ -167,13 +149,17 @@ const Dashboard = () => {
         <p className="page-description">Visão geral da operação do agente de vendas IA</p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
-          <div key={stat.label} className="stat-card flex items-start justify-between">
+          <div
+            key={stat.label}
+            className={`stat-card flex items-start justify-between ${stat.click ? 'cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all' : ''}`}
+            onClick={stat.click}
+          >
             <div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
               <p className="text-2xl font-bold mt-1">{loading ? "..." : stat.value}</p>
+              {stat.click && <p className="text-[10px] text-muted-foreground mt-1">Clique para detalhes</p>}
             </div>
             <div className={`p-2.5 rounded-lg bg-muted ${stat.colorClass}`}>
               <stat.icon className="h-5 w-5" />
@@ -271,6 +257,47 @@ const Dashboard = () => {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Detail Dialog */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>{detailTitle}</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
+            <span>{detailData.length} registros</span>
+            <span>Total: R$ {detailTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+          </div>
+          {detailData.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">Nenhum registro encontrado</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Número</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>CNPJ</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead>Data</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {detailData.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell className="font-mono text-xs">{d.numero}</TableCell>
+                    <TableCell className="font-medium">{d.cliente_nome}</TableCell>
+                    <TableCell className="text-xs">{d.cliente_cnpj || '-'}</TableCell>
+                    <TableCell><Badge className={`text-xs ${statusColor(d.status)}`}>{d.status}</Badge></TableCell>
+                    <TableCell className="text-right font-mono">R$ {d.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-xs">{new Date(d.data_criacao).toLocaleDateString('pt-BR')}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
