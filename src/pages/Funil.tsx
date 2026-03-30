@@ -89,57 +89,73 @@ const Funil = () => {
   const [newItemQty, setNewItemQty] = useState("1");
   const [newItemVal, setNewItemVal] = useState("");
 
-  // Auto-sync: fetch pending pedidos_venda into "acompanhamento"
-  const [syncedPedidoIds, setSyncedPedidoIds] = useState<Set<number>>(new Set());
-
-  const syncPedidosPendentes = useCallback(async () => {
+  // Auto-sync: fetch pending orcamentos AND pedidos into "acompanhamento"
+  const syncPendentes = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('pedidos_venda')
-        .select('*')
-        .ilike('status', '%pendente%');
-      if (error) throw error;
-      if (!data || data.length === 0) return;
+      const [orcRes, pedRes] = await Promise.all([
+        supabase.from('orcamentos').select('*').ilike('status', '%pendente%'),
+        supabase.from('pedidos_venda').select('*').ilike('status', '%pendente%'),
+      ]);
 
       setLeads((prev) => {
         const newLeads = [...prev];
-        const newSyncedIds = new Set(syncedPedidoIds);
-        
-        for (const pedido of data) {
-          // Skip if already synced
-          const pedidoLeadId = `pedido-${pedido.id}`;
-          if (newLeads.some((l) => l.id === pedidoLeadId)) continue;
 
-          const itens = Array.isArray(pedido.itens) ? (pedido.itens as any[]).map((i: any) => ({
-            descricao: i.produto_nome || i.descricao || 'Item',
-            quantidade: i.quantidade || 1,
-            valor_unitario: i.preco_unitario || i.valor_unitario || 0,
-          })) : [];
-
-          newLeads.push({
-            id: pedidoLeadId,
-            nome: pedido.cliente_nome || 'Cliente',
-            empresa: pedido.cliente_cnpj || undefined,
-            valor: pedido.valor_total || 0,
-            etapa: "acompanhamento",
-            origem: "robo",
-            itens,
-            observacoes: `Pedido ${pedido.numero} - Status: ${pedido.status}`,
-          });
-          newSyncedIds.add(pedido.id);
+        // Sync orçamentos pendentes
+        if (orcRes.data) {
+          for (const orc of orcRes.data) {
+            const leadId = `orc-${orc.id}`;
+            if (newLeads.some((l) => l.id === leadId)) continue;
+            const itens = Array.isArray(orc.itens) ? (orc.itens as any[]).map((i: any) => ({
+              descricao: i.produto_nome || i.descricao || 'Item',
+              quantidade: i.quantidade || 1,
+              valor_unitario: i.preco_unitario || i.valor_unitario || 0,
+            })) : [];
+            newLeads.push({
+              id: leadId,
+              nome: orc.cliente_nome || 'Cliente',
+              empresa: orc.cliente_cnpj || undefined,
+              valor: orc.valor_total || 0,
+              etapa: "acompanhamento",
+              origem: "robo",
+              itens,
+              observacoes: `Orçamento ${orc.numero} - Status: ${orc.status}`,
+            });
+          }
         }
-        
-        setSyncedPedidoIds(newSyncedIds);
+
+        // Sync pedidos pendentes
+        if (pedRes.data) {
+          for (const pedido of pedRes.data) {
+            const leadId = `pedido-${pedido.id}`;
+            if (newLeads.some((l) => l.id === leadId)) continue;
+            const itens = Array.isArray(pedido.itens) ? (pedido.itens as any[]).map((i: any) => ({
+              descricao: i.produto_nome || i.descricao || 'Item',
+              quantidade: i.quantidade || 1,
+              valor_unitario: i.preco_unitario || i.valor_unitario || 0,
+            })) : [];
+            newLeads.push({
+              id: leadId,
+              nome: pedido.cliente_nome || 'Cliente',
+              empresa: pedido.cliente_cnpj || undefined,
+              valor: pedido.valor_total || 0,
+              etapa: "acompanhamento",
+              origem: "robo",
+              itens,
+              observacoes: `Pedido ${pedido.numero} - Status: ${pedido.status}`,
+            });
+          }
+        }
+
         return newLeads;
       });
     } catch (err) {
-      console.error('Erro ao sincronizar pedidos pendentes:', err);
+      console.error('Erro ao sincronizar pendentes:', err);
     }
-  }, [syncedPedidoIds]);
+  }, []);
 
   useEffect(() => {
-    syncPedidosPendentes();
-  }, []);
+    syncPendentes();
+  }, [syncPendentes]);
 
   // Stage management state
   const [isStageManagerOpen, setIsStageManagerOpen] = useState(false);
