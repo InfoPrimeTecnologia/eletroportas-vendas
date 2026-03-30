@@ -89,6 +89,58 @@ const Funil = () => {
   const [newItemQty, setNewItemQty] = useState("1");
   const [newItemVal, setNewItemVal] = useState("");
 
+  // Auto-sync: fetch pending pedidos_venda into "acompanhamento"
+  const [syncedPedidoIds, setSyncedPedidoIds] = useState<Set<number>>(new Set());
+
+  const syncPedidosPendentes = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pedidos_venda')
+        .select('*')
+        .ilike('status', '%pendente%');
+      if (error) throw error;
+      if (!data || data.length === 0) return;
+
+      setLeads((prev) => {
+        const newLeads = [...prev];
+        const newSyncedIds = new Set(syncedPedidoIds);
+        
+        for (const pedido of data) {
+          // Skip if already synced
+          const pedidoLeadId = `pedido-${pedido.id}`;
+          if (newLeads.some((l) => l.id === pedidoLeadId)) continue;
+
+          const itens = Array.isArray(pedido.itens) ? (pedido.itens as any[]).map((i: any) => ({
+            descricao: i.produto_nome || i.descricao || 'Item',
+            quantidade: i.quantidade || 1,
+            valor_unitario: i.preco_unitario || i.valor_unitario || 0,
+          })) : [];
+
+          newLeads.push({
+            id: pedidoLeadId,
+            nome: pedido.cliente_nome || 'Cliente',
+            empresa: pedido.cliente_cnpj || undefined,
+            valor: pedido.valor_total || 0,
+            etapa: "acompanhamento",
+            origem: "robo",
+            itens,
+            observacoes: `Pedido ${pedido.numero} - Status: ${pedido.status}`,
+          });
+          newSyncedIds.add(pedido.id);
+        }
+        
+        setSyncedPedidoIds(newSyncedIds);
+        return newLeads;
+      });
+    } catch (err) {
+      console.error('Erro ao sincronizar pedidos pendentes:', err);
+    }
+  }, [syncedPedidoIds]);
+
+  useEffect(() => {
+    syncPedidosPendentes();
+  }, []);
+
   // Stage management state
   const [isStageManagerOpen, setIsStageManagerOpen] = useState(false);
   const [editingStage, setEditingStage] = useState<Etapa | null>(null);
