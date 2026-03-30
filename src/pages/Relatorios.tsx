@@ -98,6 +98,23 @@ export default function Relatorios() {
   const filteredClientes = clientes.filter((c) => !searchClientes || (c.CLI_NOME || '').toLowerCase().includes(searchClientes.toLowerCase()) || c.CLI_CNPJ.includes(searchClientes));
   const filteredEstoque = estoque.filter((e) => !searchEstoque || e.produto_nome.toLowerCase().includes(searchEstoque.toLowerCase()) || e.codigo_sku.toLowerCase().includes(searchEstoque.toLowerCase()));
 
+  // Novos clientes: clientes que aparecem em orçamentos/pedidos criados no mês atual
+  const novosClientes = useMemo(() => {
+    const now = new Date();
+    const mesAtual = now.getMonth();
+    const anoAtual = now.getFullYear();
+    const cnpjsNoMes = new Set<string>();
+    [...orcamentos, ...pedidos].forEach((item) => {
+      const d = new Date(item.data_criacao);
+      if (d.getMonth() === mesAtual && d.getFullYear() === anoAtual && item.cliente_cnpj) {
+        cnpjsNoMes.add(item.cliente_cnpj);
+      }
+    });
+    return clientes.filter((c) => cnpjsNoMes.has(c.CLI_CNPJ));
+  }, [clientes, orcamentos, pedidos]);
+
+  const clientesExibidos = clienteSubTab === 'novos' ? novosClientes.filter((c) => !searchClientes || (c.CLI_NOME || '').toLowerCase().includes(searchClientes.toLowerCase()) || c.CLI_CNPJ.includes(searchClientes)) : filteredClientes;
+
   const leadsQuentes = filteredLeads.filter((o) => ['aceito', 'enviado'].includes(o.status?.toLowerCase()));
   const leadsFrios = filteredLeads.filter((o) => ['pendente', 'recusado'].includes(o.status?.toLowerCase()));
   const valorTotalLeads = filteredLeads.reduce((s, o) => s + (o.valor_total || 0), 0);
