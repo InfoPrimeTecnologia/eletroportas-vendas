@@ -335,6 +335,9 @@ const Funil = () => {
           <p className="page-description">Acompanhe a jornada dos leads — arraste os cards entre as etapas</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={syncPedidosPendentes} title="Sincronizar pedidos pendentes">
+            <RefreshCw className="h-4 w-4 mr-1" /> Sincronizar
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setIsStageManagerOpen(true)}>
             <Settings className="h-4 w-4 mr-1" /> Etapas
           </Button>
