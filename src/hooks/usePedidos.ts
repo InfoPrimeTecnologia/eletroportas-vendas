@@ -97,5 +97,22 @@ export function usePedidos() {
     },
   });
 
-  return { pedidos, isLoading, createPedido, updatePedido };
+  const deletePedido = useMutation({
+    mutationFn: async (id: number) => {
+      const { error } = await supabase
+        .from('pedidos_venda')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pedidos'] });
+      toast.success('Pedido excluído!');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao excluir: ${error.message}`);
+    },
+  });
+
+  return { pedidos, isLoading, createPedido, updatePedido, deletePedido };
 }
