@@ -77,7 +77,8 @@ const Orcamentos = () => {
     setSelectedOrc(orc);
     setCliente({ cnpj: orc.cliente_cnpj || '', nome: orc.cliente_nome });
     setObservacoes(orc.observacoes || '');
-    setSelectedItems((orc.itens as any[])?.map((i: any) => ({
+    setSelectedItems((orc.itens as any[])?.map((i: any, idx: number) => ({
+      id: idx,
       produto_nome: i.produto_nome,
       codigo_sku: i.codigo_sku,
       quantidade: i.quantidade,

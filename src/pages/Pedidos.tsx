@@ -73,7 +73,8 @@ const Pedidos = () => {
     setSelectedPed(ped);
     setCliente({ cnpj: ped.cliente_cnpj || '', nome: ped.cliente_nome });
     setObservacoes(ped.observacoes || '');
-    setSelectedItems((ped.itens as any[])?.map((i: any) => ({
+    setSelectedItems((ped.itens as any[])?.map((i: any, idx: number) => ({
+      id: idx,
       produto_nome: i.produto_nome,
       codigo_sku: i.codigo_sku,
       quantidade: i.quantidade,
