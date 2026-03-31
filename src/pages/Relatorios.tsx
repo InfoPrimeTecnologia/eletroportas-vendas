@@ -103,14 +103,14 @@ export default function Relatorios() {
     const now = new Date();
     const mesAtual = now.getMonth();
     const anoAtual = now.getFullYear();
-    const cnpjsNoMes = new Set<string>();
+    const telefonesNoMes = new Set<string>();
     [...orcamentos, ...pedidos].forEach((item) => {
       const d = new Date(item.data_criacao);
       if (d.getMonth() === mesAtual && d.getFullYear() === anoAtual && item.cliente_telefone) {
-        cnpjsNoMes.add(item.cliente_telefone);
+        telefonesNoMes.add(item.cliente_telefone);
       }
     });
-    return clientes.filter((c) => cnpjsNoMes.has(c.CLI_CNPJ));
+    return clientes.filter((c) => telefonesNoMes.has(c.CLI_CNPJ));
   }, [clientes, orcamentos, pedidos]);
 
   const clientesExibidos = clienteSubTab === 'novos' ? novosClientes.filter((c) => !searchClientes || (c.CLI_NOME || '').toLowerCase().includes(searchClientes.toLowerCase()) || c.CLI_CNPJ.includes(searchClientes)) : filteredClientes;
@@ -175,9 +175,9 @@ export default function Relatorios() {
     let sheetName = type;
 
     if (type === 'leads') {
-      rows = filteredLeads.map((i) => ({ Número: i.numero, Cliente: i.cliente_nome, CNPJ: i.cliente_telefone || '-', Status: i.status, 'Valor Total': i.valor_total, Data: new Date(i.data_criacao).toLocaleDateString('pt-BR'), Origem: i.origem }));
+      rows = filteredLeads.map((i) => ({ Número: i.numero, Cliente: i.cliente_nome, Telefone: i.cliente_telefone || '-', Status: i.status, 'Valor Total': i.valor_total, Data: new Date(i.data_criacao).toLocaleDateString('pt-BR'), Origem: i.origem }));
     } else if (type === 'conversoes') {
-      rows = filteredConversoes.map((i) => ({ Número: i.numero, Cliente: i.cliente_nome, CNPJ: i.cliente_telefone || '-', Status: i.status, 'Valor Total': i.valor_total, Data: new Date(i.data_criacao).toLocaleDateString('pt-BR'), Origem: i.origem }));
+      rows = filteredConversoes.map((i) => ({ Número: i.numero, Cliente: i.cliente_nome, Telefone: i.cliente_telefone || '-', Status: i.status, 'Valor Total': i.valor_total, Data: new Date(i.data_criacao).toLocaleDateString('pt-BR'), Origem: i.origem }));
     } else if (type === 'clientes') {
       rows = clientesExibidos.map((c) => ({ Nome: c.CLI_NOME || '-', CNPJ: c.CLI_CNPJ, Email: c.CLI_EMAIL || '-', Telefone: c.CLI_FONE || '-', Bairro: c.CLI_BAIRRO || '-', CEP: c.CLI_CEP || '-' }));
       sheetName = clienteSubTab === 'novos' ? 'Novos Clientes' : 'Clientes';
@@ -212,11 +212,11 @@ export default function Relatorios() {
 
     if (type === 'leads') {
       doc.text(`Total: ${filteredLeads.length} | Quentes: ${leadsQuentes.length} | Frios: ${leadsFrios.length} | Valor: R$ ${valorTotalLeads.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 14, 35);
-      head = [['Número', 'Cliente', 'CNPJ', 'Status', 'Valor', 'Data']];
+      head = [['Número', 'Cliente', 'Telefone', 'Status', 'Valor', 'Data']];
       body = filteredLeads.map((i) => [i.numero, i.cliente_nome, i.cliente_telefone || '-', i.status, `R$ ${i.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, new Date(i.data_criacao).toLocaleDateString('pt-BR')]);
     } else if (type === 'conversoes') {
       doc.text(`Total: ${filteredConversoes.length} | Valor: R$ ${valorTotalConversoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 14, 35);
-      head = [['Número', 'Cliente', 'CNPJ', 'Status', 'Valor', 'Data']];
+      head = [['Número', 'Cliente', 'Telefone', 'Status', 'Valor', 'Data']];
       body = filteredConversoes.map((i) => [i.numero, i.cliente_nome, i.cliente_telefone || '-', i.status, `R$ ${i.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, new Date(i.data_criacao).toLocaleDateString('pt-BR')]);
     } else if (type === 'clientes') {
       doc.text(`Total: ${clientesExibidos.length} clientes${clienteSubTab === 'novos' ? ' (novos do mês)' : ''}`, 14, 35);
@@ -395,7 +395,7 @@ export default function Relatorios() {
               {loading ? <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div> : (
                 <div className="overflow-auto">
                   <Table>
-                    <TableHeader><TableRow><TableHead>Número</TableHead><TableHead>Cliente</TableHead><TableHead>CNPJ</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Data</TableHead><TableHead>Origem</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Número</TableHead><TableHead>Cliente</TableHead><TableHead>Telefone</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Data</TableHead><TableHead>Origem</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {filteredConversoes.map((p) => (
                         <TableRow key={p.id}>
@@ -536,7 +536,7 @@ export default function Relatorios() {
                 </div>
                 <div className="relative flex-1 max-w-sm">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-8" placeholder="Buscar por nome ou CNPJ..." value={searchClientes} onChange={(e) => setSearchClientes(e.target.value)} />
+                  <Input className="pl-8" placeholder="Buscar por nome ou telefone..." value={searchClientes} onChange={(e) => setSearchClientes(e.target.value)} />
                 </div>
               </div>
             </CardHeader>
@@ -549,7 +549,7 @@ export default function Relatorios() {
                     </p>
                   )}
                   <Table>
-                    <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>CNPJ</TableHead><TableHead>Email</TableHead><TableHead>Telefone</TableHead><TableHead>Bairro</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Telefone</TableHead><TableHead>Email</TableHead><TableHead>Telefone</TableHead><TableHead>Bairro</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {clientesExibidos.slice(0, 100).map((c) => (
                         <TableRow key={c.CLI_CNPJ}>
