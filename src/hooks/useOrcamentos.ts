@@ -12,7 +12,7 @@ export interface OrcamentoItem {
 export interface Orcamento {
   id: number;
   numero: string;
-  cliente_cnpj: string | null;
+  cliente_telefone: string | null;
   cliente_nome: string;
   data_criacao: string;
   valor_total: number;
@@ -23,7 +23,7 @@ export interface Orcamento {
 }
 
 export interface OrcamentoInsert {
-  cliente_cnpj?: string | null;
+  cliente_telefone?: string | null;
   cliente_nome: string;
   valor_total: number;
   status?: string;
@@ -52,7 +52,7 @@ export function useOrcamentos() {
       const { data, error } = await supabase
         .from('orcamentos')
         .insert({
-          cliente_cnpj: orc.cliente_cnpj,
+          cliente_telefone: orc.cliente_telefone,
           cliente_nome: orc.cliente_nome,
           valor_total: orc.valor_total,
           status: orc.status || 'pendente',
