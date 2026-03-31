@@ -5,8 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Cliente } from "@/types/database";
 
 interface ClientePickerProps {
-  value: { cnpj: string; nome: string } | null;
-  onChange: (cliente: { cnpj: string; nome: string } | null) => void;
+  value: { telefone: string; nome: string } | null;
+  onChange: (cliente: { telefone: string; nome: string } | null) => void;
 }
 
 export default function ClientePicker({ value, onChange }: ClientePickerProps) {
@@ -29,7 +29,7 @@ export default function ClientePicker({ value, onChange }: ClientePickerProps) {
       const { data } = await supabase
         .from("Clientes")
         .select("*")
-        .or(`CLI_NOME.ilike.%${query}%,CLI_CNPJ.ilike.%${query}%,CLI_EMAIL.ilike.%${query}%`)
+        .or(`CLI_NOME.ilike.%${query}%,CLI_CNPJ.ilike.%${query}%,CLI_EMAIL.ilike.%${query}%,CLI_FONE.ilike.%${query}%`)
         .limit(10);
       setResults((data as Cliente[]) || []);
       setOpen(true);
@@ -52,7 +52,7 @@ export default function ClientePicker({ value, onChange }: ClientePickerProps) {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           className="pl-10"
-          placeholder="Buscar cliente por nome, CNPJ ou email..."
+          placeholder="Buscar cliente por nome, CNPJ, telefone ou email..."
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -63,7 +63,7 @@ export default function ClientePicker({ value, onChange }: ClientePickerProps) {
       </div>
       {value && (
         <p className="text-xs text-muted-foreground mt-1">
-          CNPJ: {value.cnpj}
+          Telefone: {value.telefone}
         </p>
       )}
       {open && results.length > 0 && (
@@ -74,13 +74,13 @@ export default function ClientePicker({ value, onChange }: ClientePickerProps) {
               type="button"
               className="w-full text-left px-3 py-2 hover:bg-accent text-sm flex justify-between items-center"
               onClick={() => {
-                onChange({ cnpj: c.CLI_CNPJ, nome: c.CLI_NOME || c.CLI_CNPJ });
+                onChange({ telefone: c.CLI_FONE || '', nome: c.CLI_NOME || c.CLI_CNPJ });
                 setQuery(c.CLI_NOME || c.CLI_CNPJ);
                 setOpen(false);
               }}
             >
               <span className="font-medium truncate">{c.CLI_NOME || "Sem nome"}</span>
-              <span className="text-xs text-muted-foreground ml-2 shrink-0">{c.CLI_CNPJ}</span>
+              <span className="text-xs text-muted-foreground ml-2 shrink-0">{c.CLI_FONE || c.CLI_CNPJ}</span>
             </button>
           ))}
         </div>

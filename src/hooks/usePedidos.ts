@@ -12,7 +12,7 @@ export interface PedidoItem {
 export interface Pedido {
   id: number;
   numero: string;
-  cliente_cnpj: string | null;
+  cliente_telefone: string | null;
   cliente_nome: string;
   data_criacao: string;
   valor_total: number;
@@ -24,7 +24,7 @@ export interface Pedido {
 }
 
 export interface PedidoInsert {
-  cliente_cnpj?: string | null;
+  cliente_telefone?: string | null;
   cliente_nome: string;
   valor_total: number;
   status?: string;
@@ -54,7 +54,7 @@ export function usePedidos() {
       const { data, error } = await supabase
         .from('pedidos_venda')
         .insert({
-          cliente_cnpj: ped.cliente_cnpj,
+          cliente_telefone: ped.cliente_telefone,
           cliente_nome: ped.cliente_nome,
           valor_total: ped.valor_total,
           status: ped.status || 'processando',

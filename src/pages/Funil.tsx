@@ -113,7 +113,7 @@ const Funil = () => {
             newLeads.push({
               id: leadId,
               nome: orc.cliente_nome || 'Cliente',
-              empresa: orc.cliente_cnpj || undefined,
+              empresa: orc.cliente_telefone || undefined,
               valor: orc.valor_total || 0,
               etapa: "acompanhamento",
               origem: "robo",
@@ -136,7 +136,7 @@ const Funil = () => {
             newLeads.push({
               id: leadId,
               nome: pedido.cliente_nome || 'Cliente',
-              empresa: pedido.cliente_cnpj || undefined,
+              empresa: pedido.cliente_telefone || undefined,
               valor: pedido.valor_total || 0,
               etapa: "acompanhamento",
               origem: "robo",
