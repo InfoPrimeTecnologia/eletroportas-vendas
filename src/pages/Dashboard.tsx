@@ -340,7 +340,7 @@ const Dashboard = () => {
                 <TableRow>
                   <TableHead>Número</TableHead>
                   <TableHead>Cliente</TableHead>
-                  <TableHead>CNPJ</TableHead>
+                  <TableHead>Telefone</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
                   <TableHead>Data</TableHead>

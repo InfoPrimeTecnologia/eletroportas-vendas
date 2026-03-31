@@ -75,7 +75,7 @@ const Orcamentos = () => {
 
   const handleEdit = (orc: Orcamento) => {
     setSelectedOrc(orc);
-    setCliente({ cnpj: orc.cliente_telefone || '', nome: orc.cliente_nome });
+    setCliente({ telefone: orc.cliente_telefone || '', nome: orc.cliente_nome });
     setObservacoes(orc.observacoes || '');
     setSelectedItems((orc.itens as any[])?.map((i: any, idx: number) => ({
       id: idx,
@@ -253,7 +253,7 @@ const Orcamentos = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><p className="text-muted-foreground text-xs">Cliente</p><p className="font-medium">{selectedOrc.cliente_nome}</p></div>
-                <div><p className="text-muted-foreground text-xs">CNPJ</p><p className="font-medium font-mono text-xs">{selectedOrc.cliente_telefone || "—"}</p></div>
+                <div><p className="text-muted-foreground text-xs">Telefone</p><p className="font-medium font-mono text-xs">{selectedOrc.cliente_telefone || "—"}</p></div>
                 <div><p className="text-muted-foreground text-xs">Data</p><p className="font-medium">{new Date(selectedOrc.data_criacao).toLocaleDateString("pt-BR")}</p></div>
                 <div><p className="text-muted-foreground text-xs">Origem</p><p className="font-medium">{selectedOrc.origem === "robo" ? "🤖 Robô" : "✋ Manual"}</p></div>
               </div>
