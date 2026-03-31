@@ -35,7 +35,7 @@ const Pedidos = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedPed, setSelectedPed] = useState<Pedido | null>(null);
-  const [cliente, setCliente] = useState<{ cnpj: string; nome: string } | null>(null);
+  const [cliente, setCliente] = useState<{ telefone: string; nome: string } | null>(null);
   const [observacoes, setObservacoes] = useState("");
   const [selectedItems, setSelectedItems] = useState<ItemSelecionado[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -57,7 +57,7 @@ const Pedidos = () => {
     const total = selectedItems.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0);
     await createPedido.mutateAsync({
       cliente_nome: cliente.nome,
-      cliente_cnpj: cliente.cnpj,
+      cliente_telefone: cliente.telefone,
       valor_total: total,
       itens: selectedItems.map((i) => ({
         produto_nome: i.produto_nome, codigo_sku: i.codigo_sku,
@@ -71,7 +71,7 @@ const Pedidos = () => {
 
   const handleEdit = (ped: Pedido) => {
     setSelectedPed(ped);
-    setCliente({ cnpj: ped.cliente_cnpj || '', nome: ped.cliente_nome });
+    setCliente({ cnpj: ped.cliente_telefone || '', nome: ped.cliente_nome });
     setObservacoes(ped.observacoes || '');
     setSelectedItems((ped.itens as any[])?.map((i: any, idx: number) => ({
       id: idx,
@@ -92,7 +92,7 @@ const Pedidos = () => {
       id: selectedPed.id,
       updates: {
         cliente_nome: cliente.nome,
-        cliente_cnpj: cliente.cnpj,
+        cliente_telefone: cliente.telefone,
         valor_total: total,
         itens: selectedItems.map((i) => ({
           produto_nome: i.produto_nome, codigo_sku: i.codigo_sku,
@@ -227,7 +227,7 @@ const Pedidos = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><p className="text-muted-foreground text-xs">Cliente</p><p className="font-medium">{selectedPed.cliente_nome}</p></div>
-                <div><p className="text-muted-foreground text-xs">CNPJ</p><p className="font-medium font-mono text-xs">{selectedPed.cliente_cnpj || "—"}</p></div>
+                <div><p className="text-muted-foreground text-xs">CNPJ</p><p className="font-medium font-mono text-xs">{selectedPed.cliente_telefone || "—"}</p></div>
                 <div><p className="text-muted-foreground text-xs">Data</p><p className="font-medium">{new Date(selectedPed.data_criacao).toLocaleDateString("pt-BR")}</p></div>
                 <div><p className="text-muted-foreground text-xs">Origem</p><p className="font-medium">{selectedPed.origem === "robo" ? "🤖 Robô" : "✋ Manual"}</p></div>
               </div>

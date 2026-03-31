@@ -15,8 +15,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-interface OrcRow { id: number; numero: string; cliente_nome: string; cliente_cnpj: string | null; status: string; valor_total: number; data_criacao: string; }
-interface PedRow { id: number; numero: string; cliente_nome: string; cliente_cnpj: string | null; status: string; valor_total: number; data_criacao: string; }
+interface OrcRow { id: number; numero: string; cliente_nome: string; cliente_telefone: string | null; status: string; valor_total: number; data_criacao: string; }
+interface PedRow { id: number; numero: string; cliente_nome: string; cliente_telefone: string | null; status: string; valor_total: number; data_criacao: string; }
 
 interface DashboardMetrics {
   leadsQuentes: number;
@@ -71,8 +71,8 @@ const Dashboard = () => {
   const fetchData = async () => {
     try {
       const [{ data: orcamentos }, { data: pedidos }] = await Promise.all([
-        supabase.from("orcamentos").select("id, numero, cliente_nome, cliente_cnpj, status, data_criacao, valor_total"),
-        supabase.from("pedidos_venda").select("id, numero, cliente_nome, cliente_cnpj, status, data_criacao, valor_total"),
+        supabase.from("orcamentos").select("id, numero, cliente_nome, cliente_telefone, status, data_criacao, valor_total"),
+        supabase.from("pedidos_venda").select("id, numero, cliente_nome, cliente_telefone, status, data_criacao, valor_total"),
       ]);
       setRawOrcamentos(orcamentos || []);
       setRawPedidos(pedidos || []);
@@ -351,7 +351,7 @@ const Dashboard = () => {
                   <TableRow key={d.id}>
                     <TableCell className="font-mono text-xs">{d.numero}</TableCell>
                     <TableCell className="font-medium">{d.cliente_nome}</TableCell>
-                    <TableCell className="text-xs">{d.cliente_cnpj || '-'}</TableCell>
+                    <TableCell className="text-xs">{d.cliente_telefone || '-'}</TableCell>
                     <TableCell><Badge className={`text-xs ${statusColor(d.status)}`}>{d.status}</Badge></TableCell>
                     <TableCell className="text-right font-mono">R$ {d.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-xs">{new Date(d.data_criacao).toLocaleDateString('pt-BR')}</TableCell>

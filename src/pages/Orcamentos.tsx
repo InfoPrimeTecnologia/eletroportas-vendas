@@ -38,7 +38,7 @@ const Orcamentos = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedOrc, setSelectedOrc] = useState<Orcamento | null>(null);
-  const [cliente, setCliente] = useState<{ cnpj: string; nome: string } | null>(null);
+  const [cliente, setCliente] = useState<{ telefone: string; nome: string } | null>(null);
   const [observacoes, setObservacoes] = useState("");
   const [selectedItems, setSelectedItems] = useState<ItemSelecionado[]>([]);
   const [converting, setConverting] = useState(false);
@@ -61,7 +61,7 @@ const Orcamentos = () => {
     const total = selectedItems.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0);
     await createOrcamento.mutateAsync({
       cliente_nome: cliente.nome,
-      cliente_cnpj: cliente.cnpj,
+      cliente_telefone: cliente.telefone,
       valor_total: total,
       itens: selectedItems.map((i) => ({
         produto_nome: i.produto_nome, codigo_sku: i.codigo_sku,
@@ -75,7 +75,7 @@ const Orcamentos = () => {
 
   const handleEdit = (orc: Orcamento) => {
     setSelectedOrc(orc);
-    setCliente({ cnpj: orc.cliente_cnpj || '', nome: orc.cliente_nome });
+    setCliente({ cnpj: orc.cliente_telefone || '', nome: orc.cliente_nome });
     setObservacoes(orc.observacoes || '');
     setSelectedItems((orc.itens as any[])?.map((i: any, idx: number) => ({
       id: idx,
@@ -96,7 +96,7 @@ const Orcamentos = () => {
       id: selectedOrc.id,
       updates: {
         cliente_nome: cliente.nome,
-        cliente_cnpj: cliente.cnpj,
+        cliente_telefone: cliente.telefone,
         valor_total: total,
         itens: selectedItems.map((i) => ({
           produto_nome: i.produto_nome, codigo_sku: i.codigo_sku,
@@ -130,7 +130,7 @@ const Orcamentos = () => {
     try {
       await createPedido.mutateAsync({
         cliente_nome: selectedOrc.cliente_nome,
-        cliente_cnpj: selectedOrc.cliente_cnpj,
+        cliente_telefone: selectedOrc.cliente_telefone,
         valor_total: selectedOrc.valor_total,
         itens: selectedOrc.itens,
         observacoes: selectedOrc.observacoes,
@@ -253,7 +253,7 @@ const Orcamentos = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><p className="text-muted-foreground text-xs">Cliente</p><p className="font-medium">{selectedOrc.cliente_nome}</p></div>
-                <div><p className="text-muted-foreground text-xs">CNPJ</p><p className="font-medium font-mono text-xs">{selectedOrc.cliente_cnpj || "—"}</p></div>
+                <div><p className="text-muted-foreground text-xs">CNPJ</p><p className="font-medium font-mono text-xs">{selectedOrc.cliente_telefone || "—"}</p></div>
                 <div><p className="text-muted-foreground text-xs">Data</p><p className="font-medium">{new Date(selectedOrc.data_criacao).toLocaleDateString("pt-BR")}</p></div>
                 <div><p className="text-muted-foreground text-xs">Origem</p><p className="font-medium">{selectedOrc.origem === "robo" ? "🤖 Robô" : "✋ Manual"}</p></div>
               </div>
