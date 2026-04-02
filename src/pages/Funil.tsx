@@ -205,10 +205,27 @@ const Funil = () => {
             quantidade: i.quantidade || 1,
             valor_unitario: i.preco_unitario || i.valor_unitario || 0,
           })) : [];
+
+          let clienteNome = pedido.cliente_nome || 'Cliente';
+          let clienteEmail: string | null = null;
+          if (pedido.cliente_telefone) {
+            const { data: cliData } = await supabase
+              .from('Clientes')
+              .select('CLI_NOME, CLI_EMAIL')
+              .eq('CLI_FONE', pedido.cliente_telefone)
+              .maybeSingle();
+            if (cliData) {
+              clienteNome = cliData.CLI_NOME || clienteNome;
+              clienteEmail = cliData.CLI_EMAIL || null;
+            }
+          }
+
           newLeadsToInsert.push({
             id: leadId,
-            nome: pedido.cliente_nome || 'Cliente',
+            nome: clienteNome,
             empresa: pedido.cliente_telefone || null,
+            telefone: pedido.cliente_telefone || null,
+            email: clienteEmail,
             valor: pedido.valor_total || 0,
             etapa_key: "acompanhamento",
             origem: "robo",
