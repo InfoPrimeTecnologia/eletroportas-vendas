@@ -59,6 +59,7 @@ const emptyLead: Omit<LeadFunil, "id"> = {
   origem: "manual",
   itens: [],
   observacoes: "",
+  anexo_pdf: "",
 };
 
 const Funil = () => {
