@@ -79,8 +79,19 @@ const emptyLead: Omit<LeadFunil, "id"> = {
 };
 
 const Funil = () => {
-  const [etapas, setEtapas] = useState<Etapa[]>(defaultEtapas);
+  const [etapas, setEtapas] = useState<Etapa[]>(() => {
+    try {
+      const saved = localStorage.getItem('funil_etapas');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return defaultEtapas;
+  });
   const [leads, setLeads] = useState<LeadFunil[]>(initialLeads);
+
+  // Persist etapas to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('funil_etapas', JSON.stringify(etapas));
+  }, [etapas]);
   const [editLead, setEditLead] = useState<LeadFunil | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
