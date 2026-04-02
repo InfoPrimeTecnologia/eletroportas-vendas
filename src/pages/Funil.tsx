@@ -326,6 +326,7 @@ const Funil = () => {
       origem: newLead.origem,
       itens: newLead.itens,
       observacoes: newLead.observacoes || null,
+      anexo_pdf: newLead.anexo_pdf || null,
     };
     const { error } = await (supabase as any).from('funil_leads').insert(leadData);
     if (error) {
