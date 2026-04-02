@@ -74,6 +74,51 @@ const Funil = () => {
   const [newItemQty, setNewItemQty] = useState("1");
   const [newItemVal, setNewItemVal] = useState("");
 
+  // PDF viewer state
+  const [pdfViewerData, setPdfViewerData] = useState<string | null>(null);
+  const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
+
+  const handleDownloadPdf = (base64Data: string, filename: string) => {
+    try {
+      const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+      const byteCharacters = atob(base64Content);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Erro ao baixar PDF");
+    }
+  };
+
+  const handleViewPdf = (base64Data: string) => {
+    try {
+      const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+      const byteCharacters = atob(base64Content);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      setPdfViewerData(url);
+      setIsPdfViewerOpen(true);
+    } catch {
+      toast.error("Erro ao visualizar PDF");
+    }
+  };
+
   // Stage management state
   const [isStageManagerOpen, setIsStageManagerOpen] = useState(false);
   const [editingStage, setEditingStage] = useState<Etapa | null>(null);
