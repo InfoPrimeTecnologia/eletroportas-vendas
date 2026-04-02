@@ -796,7 +796,7 @@ const Funil = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreate} disabled={!newLead.nome.trim()}>Adicionar</Button>
+            <Button onClick={handleCreate}>Adicionar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
