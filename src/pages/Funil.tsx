@@ -29,6 +29,7 @@ interface LeadFunil {
   origem: string;
   itens: LeadItem[];
   observacoes?: string;
+  anexo_pdf?: string;
 }
 
 interface Etapa {
