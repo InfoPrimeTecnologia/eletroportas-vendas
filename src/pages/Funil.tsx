@@ -920,6 +920,30 @@ const Funil = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* PDF Viewer Dialog */}
+      <Dialog open={isPdfViewerOpen} onOpenChange={(open) => {
+        setIsPdfViewerOpen(open);
+        if (!open && pdfViewerData) {
+          URL.revokeObjectURL(pdfViewerData);
+          setPdfViewerData(null);
+        }
+      }}>
+        <DialogContent className="max-w-4xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Visualizar PDF</DialogTitle>
+            <DialogDescription>Pré-visualização do documento anexado</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
+            {pdfViewerData && (
+              <iframe
+                src={pdfViewerData}
+                className="w-full h-full rounded-md border"
+                title="PDF Viewer"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
