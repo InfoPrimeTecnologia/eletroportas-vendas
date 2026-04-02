@@ -78,16 +78,36 @@ const Funil = () => {
   const [pdfViewerData, setPdfViewerData] = useState<string | null>(null);
   const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
 
+  const cleanBase64 = (base64Data: string): string => {
+    let cleaned = base64Data.trim();
+    // Remove data URI prefix if present
+    if (cleaned.startsWith("data:") && cleaned.includes(",")) {
+      cleaned = cleaned.split(",")[1];
+    }
+    // Remove all whitespace/newlines
+    cleaned = cleaned.replace(/\s/g, "");
+    return cleaned;
+  };
+
+  const base64ToBlob = (base64Data: string): Blob => {
+    const cleaned = cleanBase64(base64Data);
+    const byteCharacters = atob(cleaned);
+    const byteArrays: Uint8Array[] = [];
+    // Process in chunks to avoid call stack issues with large files
+    for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+      const slice = byteCharacters.slice(offset, offset + 512);
+      const byteNumbers = new Array(slice.length);
+      for (let i = 0; i < slice.length; i++) {
+        byteNumbers[i] = slice.charCodeAt(i);
+      }
+      byteArrays.push(new Uint8Array(byteNumbers));
+    }
+    return new Blob(byteArrays as BlobPart[], { type: 'application/pdf' });
+  };
+
   const handleDownloadPdf = (base64Data: string, filename: string) => {
     try {
-      const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
-      const byteCharacters = atob(base64Content);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const blob = base64ToBlob(base64Data);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -95,26 +115,21 @@ const Funil = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch {
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      console.error("Erro ao baixar PDF:", e);
       toast.error("Erro ao baixar PDF");
     }
   };
 
   const handleViewPdf = (base64Data: string) => {
     try {
-      const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
-      const byteCharacters = atob(base64Content);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const blob = base64ToBlob(base64Data);
       const url = URL.createObjectURL(blob);
       setPdfViewerData(url);
       setIsPdfViewerOpen(true);
-    } catch {
+    } catch (e) {
+      console.error("Erro ao visualizar PDF:", e);
       toast.error("Erro ao visualizar PDF");
     }
   };
