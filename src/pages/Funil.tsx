@@ -789,13 +789,11 @@ const Funil = () => {
                   <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
                     <FileText className="h-4 w-4 text-primary" />
                     <span className="text-xs flex-1 truncate">PDF anexado</span>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
-                      const link = document.createElement('a');
-                      link.href = editLead.anexo_pdf!;
-                      link.download = `lead-${editLead.id}.pdf`;
-                      link.click();
-                    }}>
-                      <FileText className="h-3 w-3" />
+                    <Button variant="ghost" size="icon" className="h-6 w-6" title="Visualizar" onClick={() => handleViewPdf(editLead.anexo_pdf!)}>
+                      <Eye className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" title="Baixar" onClick={() => handleDownloadPdf(editLead.anexo_pdf!, `lead-${editLead.id}.pdf`)}>
+                      <Download className="h-3 w-3" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setEditLead({ ...editLead, anexo_pdf: undefined })}>
                       <X className="h-3 w-3" />
