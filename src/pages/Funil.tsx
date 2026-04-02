@@ -108,6 +108,7 @@ const Funil = () => {
       origem: l.origem || 'manual',
       itens: Array.isArray(l.itens) ? l.itens : [],
       observacoes: l.observacoes || undefined,
+      anexo_pdf: l.anexo_pdf || undefined,
     }));
 
     // Enrich leads with Clientes data using telefone
