@@ -307,6 +307,7 @@ const Funil = () => {
       etapa_key: updatedLead.etapa,
       itens: updatedLead.itens,
       observacoes: updatedLead.observacoes || null,
+      anexo_pdf: updatedLead.anexo_pdf || null,
       updated_at: new Date().toISOString(),
     }).eq('id', editLead.id);
     setIsEditOpen(false);
