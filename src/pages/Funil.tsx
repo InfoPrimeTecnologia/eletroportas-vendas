@@ -165,10 +165,28 @@ const Funil = () => {
             quantidade: i.quantidade || 1,
             valor_unitario: i.preco_unitario || i.valor_unitario || 0,
           })) : [];
+
+          // Fetch client data from Clientes table by phone
+          let clienteNome = orc.cliente_nome || 'Cliente';
+          let clienteEmail: string | null = null;
+          if (orc.cliente_telefone) {
+            const { data: cliData } = await supabase
+              .from('Clientes')
+              .select('CLI_NOME, CLI_EMAIL')
+              .eq('CLI_FONE', orc.cliente_telefone)
+              .maybeSingle();
+            if (cliData) {
+              clienteNome = cliData.CLI_NOME || clienteNome;
+              clienteEmail = cliData.CLI_EMAIL || null;
+            }
+          }
+
           newLeadsToInsert.push({
             id: leadId,
-            nome: orc.cliente_nome || 'Cliente',
+            nome: clienteNome,
             empresa: orc.cliente_telefone || null,
+            telefone: orc.cliente_telefone || null,
+            email: clienteEmail,
             valor: orc.valor_total || 0,
             etapa_key: "acompanhamento",
             origem: "robo",
