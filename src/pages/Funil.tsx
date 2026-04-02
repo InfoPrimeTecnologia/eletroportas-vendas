@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package, Trash2, GripVertical, Settings, RefreshCw, Loader2 } from "lucide-react";
+import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package, Trash2, GripVertical, Settings, RefreshCw, Loader2, Paperclip, FileText, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ interface LeadFunil {
   origem: string;
   itens: LeadItem[];
   observacoes?: string;
+  anexo_pdf?: string;
 }
 
 interface Etapa {
@@ -58,6 +59,7 @@ const emptyLead: Omit<LeadFunil, "id"> = {
   origem: "manual",
   itens: [],
   observacoes: "",
+  anexo_pdf: "",
 };
 
 const Funil = () => {
@@ -106,6 +108,7 @@ const Funil = () => {
       origem: l.origem || 'manual',
       itens: Array.isArray(l.itens) ? l.itens : [],
       observacoes: l.observacoes || undefined,
+      anexo_pdf: l.anexo_pdf || undefined,
     }));
 
     // Enrich leads with Clientes data using telefone
@@ -304,6 +307,7 @@ const Funil = () => {
       etapa_key: updatedLead.etapa,
       itens: updatedLead.itens,
       observacoes: updatedLead.observacoes || null,
+      anexo_pdf: updatedLead.anexo_pdf || null,
       updated_at: new Date().toISOString(),
     }).eq('id', editLead.id);
     setIsEditOpen(false);
@@ -322,6 +326,7 @@ const Funil = () => {
       origem: newLead.origem,
       itens: newLead.itens,
       observacoes: newLead.observacoes || null,
+      anexo_pdf: newLead.anexo_pdf || null,
     };
     const { error } = await (supabase as any).from('funil_leads').insert(leadData);
     if (error) {
@@ -732,6 +737,46 @@ const Funil = () => {
                 <Label className="text-xs">Observações</Label>
                 <Textarea className="text-sm" rows={2} value={editLead.observacoes || ""} onChange={(e) => setEditLead({ ...editLead, observacoes: e.target.value })} />
               </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1"><Paperclip className="h-3 w-3" /> Anexo PDF</Label>
+                {editLead.anexo_pdf ? (
+                  <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
+                    <FileText className="h-4 w-4 text-primary" />
+                    <span className="text-xs flex-1 truncate">PDF anexado</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = editLead.anexo_pdf!;
+                      link.download = `lead-${editLead.id}.pdf`;
+                      link.click();
+                    }}>
+                      <FileText className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setEditLead({ ...editLead, anexo_pdf: undefined })}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Input
+                    type="file"
+                    accept=".pdf"
+                    className="h-8 text-xs"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 5 * 1024 * 1024) {
+                        toast.error("Arquivo muito grande (máx 5MB)");
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        setEditLead({ ...editLead, anexo_pdf: reader.result as string });
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                )}
+              </div>
             </div>
           )}
           <DialogFooter className="flex justify-between">
@@ -792,6 +837,38 @@ const Funil = () => {
             <div className="space-y-1">
               <Label className="text-xs">Observações</Label>
               <Textarea className="text-sm" rows={2} value={newLead.observacoes || ""} onChange={(e) => setNewLead({ ...newLead, observacoes: e.target.value })} />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs flex items-center gap-1"><Paperclip className="h-3 w-3" /> Anexo PDF</Label>
+              {newLead.anexo_pdf ? (
+                <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="text-xs flex-1 truncate">PDF anexado</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setNewLead({ ...newLead, anexo_pdf: "" })}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <Input
+                  type="file"
+                  accept=".pdf"
+                  className="h-8 text-xs"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) {
+                      toast.error("Arquivo muito grande (máx 5MB)");
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      setNewLead({ ...newLead, anexo_pdf: reader.result as string });
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              )}
             </div>
           </div>
           <DialogFooter>
