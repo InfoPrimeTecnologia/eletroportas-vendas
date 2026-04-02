@@ -88,14 +88,14 @@ const Funil = () => {
     setEtapas((data || []).map((e: any) => ({ key: e.key, label: e.label, color: e.color, ordem: e.ordem })));
   }, []);
 
-  // ---- Fetch leads from Supabase ----
+  // ---- Fetch leads from Supabase (enriched with Clientes data) ----
   const fetchLeads = useCallback(async () => {
     const { data, error } = await (supabase as any).from('funil_leads').select('*').order('created_at', { ascending: true });
     if (error) {
       console.error('Erro ao buscar leads:', error);
       return;
     }
-    setLeads((data || []).map((l: any) => ({
+    const rawLeads = (data || []).map((l: any) => ({
       id: l.id,
       nome: l.nome,
       empresa: l.empresa || undefined,
@@ -106,7 +106,31 @@ const Funil = () => {
       origem: l.origem || 'manual',
       itens: Array.isArray(l.itens) ? l.itens : [],
       observacoes: l.observacoes || undefined,
-    })));
+    }));
+
+    // Enrich leads with Clientes data using telefone
+    const phones = rawLeads.map((l: LeadFunil) => l.telefone).filter(Boolean) as string[];
+    if (phones.length > 0) {
+      const uniquePhones = [...new Set(phones)];
+      const { data: clientes } = await supabase
+        .from('Clientes')
+        .select('CLI_FONE, CLI_NOME, CLI_EMAIL, CLI_CNPJ')
+        .in('CLI_FONE', uniquePhones);
+      
+      if (clientes && clientes.length > 0) {
+        const clienteMap = new Map(clientes.map((c: any) => [c.CLI_FONE, c]));
+        for (const lead of rawLeads) {
+          if (lead.telefone && clienteMap.has(lead.telefone)) {
+            const cliente = clienteMap.get(lead.telefone)!;
+            lead.nome = cliente.CLI_NOME || lead.nome;
+            lead.email = cliente.CLI_EMAIL || lead.email;
+            lead.empresa = cliente.CLI_CNPJ || lead.empresa;
+          }
+        }
+      }
+    }
+
+    setLeads(rawLeads);
   }, []);
 
   // ---- Initial load ----
