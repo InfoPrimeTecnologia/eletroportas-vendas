@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package, Trash2, GripVertical, Settings, RefreshCw, Loader2 } from "lucide-react";
+import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package, Trash2, GripVertical, Settings, RefreshCw, Loader2, Paperclip, FileText, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
