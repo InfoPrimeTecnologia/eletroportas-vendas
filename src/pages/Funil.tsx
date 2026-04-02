@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package, Trash2, GripVertical, Settings, RefreshCw } from "lucide-react";
+import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package, Trash2, GripVertical, Settings, RefreshCw, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
+import { toast } from "sonner";
 
 interface LeadItem {
   descricao: string;
@@ -25,7 +26,7 @@ interface LeadFunil {
   email?: string;
   valor: number;
   etapa: string;
-  origem: "robo" | "manual";
+  origem: string;
   itens: LeadItem[];
   observacoes?: string;
 }
@@ -34,6 +35,7 @@ interface Etapa {
   key: string;
   label: string;
   color: string;
+  ordem: number;
 }
 
 const defaultColors = [
@@ -46,52 +48,22 @@ const defaultColors = [
   "bg-[hsl(var(--accent))]",
 ];
 
-const defaultEtapas: Etapa[] = [
-  { key: "acompanhamento", label: "Acompanhamento", color: "bg-[hsl(var(--chart-warm))]" },
-  { key: "contato_inicial", label: "Contato Inicial", color: "bg-[hsl(var(--chart-cold))]" },
-  { key: "orcamento_enviado", label: "Orçamento Enviado", color: "bg-primary" },
-  { key: "orcamento_aceito", label: "Orçamento Aceito", color: "bg-[hsl(var(--info))]" },
-  { key: "pedido_venda", label: "Pedido de Venda", color: "bg-[hsl(var(--success))]" },
-  { key: "venda_finalizada", label: "Venda Finalizada", color: "bg-destructive" },
-];
-
-const initialLeads: LeadFunil[] = [
-  { id: "1", nome: "João Silva", valor: 4500, etapa: "contato_inicial", origem: "robo", itens: [{ descricao: "Motor Deslizante 1/3 HP", quantidade: 1, valor_unitario: 3200 }, { descricao: "Instalação", quantidade: 1, valor_unitario: 1300 }] },
-  { id: "2", nome: "Maria Santos", empresa: "Construtora XYZ", valor: 12000, etapa: "contato_inicial", origem: "robo", itens: [{ descricao: "Portão Deslizante 4m", quantidade: 2, valor_unitario: 5000 }, { descricao: "Motor", quantidade: 2, valor_unitario: 1000 }] },
-  { id: "3", nome: "Pedro Costa", valor: 3200, etapa: "orcamento_enviado", origem: "robo", itens: [{ descricao: "Controle Remoto", quantidade: 5, valor_unitario: 120 }, { descricao: "Sensor Anti-Esmagamento", quantidade: 2, valor_unitario: 1300 }] },
-  { id: "4", nome: "Ana Oliveira", empresa: "Imobiliária ABC", valor: 8900, etapa: "orcamento_enviado", origem: "manual", itens: [{ descricao: "Portão Basculante 3x2.5m", quantidade: 1, valor_unitario: 7000 }, { descricao: "Motor Basculante", quantidade: 1, valor_unitario: 1900 }] },
-  { id: "5", nome: "Carlos Lima", valor: 6700, etapa: "orcamento_aceito", origem: "robo", itens: [{ descricao: "Motor Deslizante", quantidade: 1, valor_unitario: 3200 }, { descricao: "Cremalheira", quantidade: 3, valor_unitario: 1166.67 }] },
-  { id: "6", nome: "Fernanda Dias", valor: 15000, etapa: "pedido_venda", origem: "robo", itens: [{ descricao: "Portão Deslizante personalizado", quantidade: 1, valor_unitario: 15000 }] },
-  { id: "7", nome: "Roberto Alves", empresa: "Engenharia RS", valor: 22000, etapa: "pedido_venda", origem: "manual", itens: [{ descricao: "Portão Industrial 6m", quantidade: 1, valor_unitario: 18000 }, { descricao: "Automatização completa", quantidade: 1, valor_unitario: 4000 }] },
-  { id: "8", nome: "Luciana Souza", valor: 5500, etapa: "venda_finalizada", origem: "robo", itens: [{ descricao: "Motor Deslizante", quantidade: 1, valor_unitario: 3500 }, { descricao: "Instalação + Acabamento", quantidade: 1, valor_unitario: 2000 }] },
-];
-
 const emptyLead: Omit<LeadFunil, "id"> = {
   nome: "",
   empresa: "",
   telefone: "",
   email: "",
   valor: 0,
-  etapa: "contato_inicial",
+  etapa: "",
   origem: "manual",
   itens: [],
   observacoes: "",
 };
 
 const Funil = () => {
-  const [etapas, setEtapas] = useState<Etapa[]>(() => {
-    try {
-      const saved = localStorage.getItem('funil_etapas');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return defaultEtapas;
-  });
-  const [leads, setLeads] = useState<LeadFunil[]>(initialLeads);
-
-  // Persist etapas to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('funil_etapas', JSON.stringify(etapas));
-  }, [etapas]);
+  const [etapas, setEtapas] = useState<Etapa[]>([]);
+  const [leads, setLeads] = useState<LeadFunil[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editLead, setEditLead] = useState<LeadFunil | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -100,7 +72,54 @@ const Funil = () => {
   const [newItemQty, setNewItemQty] = useState("1");
   const [newItemVal, setNewItemVal] = useState("");
 
-  // Auto-sync: fetch pending orcamentos AND pedidos into "acompanhamento"
+  // Stage management state
+  const [isStageManagerOpen, setIsStageManagerOpen] = useState(false);
+  const [editingStage, setEditingStage] = useState<Etapa | null>(null);
+  const [isStageFormOpen, setIsStageFormOpen] = useState(false);
+  const [stageForm, setStageForm] = useState({ label: "", color: defaultColors[0] });
+
+  // ---- Fetch etapas from Supabase ----
+  const fetchEtapas = useCallback(async () => {
+    const { data, error } = await (supabase as any).from('funil_etapas').select('*').order('ordem', { ascending: true });
+    if (error) {
+      console.error('Erro ao buscar etapas:', error);
+      return;
+    }
+    setEtapas((data || []).map((e: any) => ({ key: e.key, label: e.label, color: e.color, ordem: e.ordem })));
+  }, []);
+
+  // ---- Fetch leads from Supabase ----
+  const fetchLeads = useCallback(async () => {
+    const { data, error } = await (supabase as any).from('funil_leads').select('*').order('created_at', { ascending: true });
+    if (error) {
+      console.error('Erro ao buscar leads:', error);
+      return;
+    }
+    setLeads((data || []).map((l: any) => ({
+      id: l.id,
+      nome: l.nome,
+      empresa: l.empresa || undefined,
+      telefone: l.telefone || undefined,
+      email: l.email || undefined,
+      valor: Number(l.valor) || 0,
+      etapa: l.etapa_key || '',
+      origem: l.origem || 'manual',
+      itens: Array.isArray(l.itens) ? l.itens : [],
+      observacoes: l.observacoes || undefined,
+    })));
+  }, []);
+
+  // ---- Initial load ----
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      await Promise.all([fetchEtapas(), fetchLeads()]);
+      setLoading(false);
+    };
+    load();
+  }, [fetchEtapas, fetchLeads]);
+
+  // ---- Auto-sync pendentes ----
   const syncPendentes = useCallback(async () => {
     try {
       const [orcRes, pedRes] = await Promise.all([
@@ -108,100 +127,103 @@ const Funil = () => {
         supabase.from('pedidos_venda').select('*').ilike('status', '%pendente%'),
       ]);
 
-      setLeads((prev) => {
-        const newLeads = [...prev];
+      const existingLeads = await (supabase as any).from('funil_leads').select('id');
+      const existingIds = new Set((existingLeads.data || []).map((l: any) => l.id));
 
-        // Sync orçamentos pendentes
-        if (orcRes.data) {
-          for (const orc of orcRes.data) {
-            const leadId = `orc-${orc.id}`;
-            if (newLeads.some((l) => l.id === leadId)) continue;
-            const itens = Array.isArray(orc.itens) ? (orc.itens as any[]).map((i: any) => ({
-              descricao: i.produto_nome || i.descricao || 'Item',
-              quantidade: i.quantidade || 1,
-              valor_unitario: i.preco_unitario || i.valor_unitario || 0,
-            })) : [];
-            newLeads.push({
-              id: leadId,
-              nome: orc.cliente_nome || 'Cliente',
-              empresa: orc.cliente_telefone || undefined,
-              valor: orc.valor_total || 0,
-              etapa: "acompanhamento",
-              origem: "robo",
-              itens,
-              observacoes: `Orçamento ${orc.numero} - Status: ${orc.status}`,
-            });
-          }
+      const newLeadsToInsert: any[] = [];
+
+      if (orcRes.data) {
+        for (const orc of orcRes.data) {
+          const leadId = `orc-${orc.id}`;
+          if (existingIds.has(leadId)) continue;
+          const itens = Array.isArray(orc.itens) ? (orc.itens as any[]).map((i: any) => ({
+            descricao: i.produto_nome || i.descricao || 'Item',
+            quantidade: i.quantidade || 1,
+            valor_unitario: i.preco_unitario || i.valor_unitario || 0,
+          })) : [];
+          newLeadsToInsert.push({
+            id: leadId,
+            nome: orc.cliente_nome || 'Cliente',
+            empresa: orc.cliente_telefone || null,
+            valor: orc.valor_total || 0,
+            etapa_key: "acompanhamento",
+            origem: "robo",
+            itens,
+            observacoes: `Orçamento ${orc.numero} - Status: ${orc.status}`,
+          });
         }
+      }
 
-        // Sync pedidos pendentes
-        if (pedRes.data) {
-          for (const pedido of pedRes.data) {
-            const leadId = `pedido-${pedido.id}`;
-            if (newLeads.some((l) => l.id === leadId)) continue;
-            const itens = Array.isArray(pedido.itens) ? (pedido.itens as any[]).map((i: any) => ({
-              descricao: i.produto_nome || i.descricao || 'Item',
-              quantidade: i.quantidade || 1,
-              valor_unitario: i.preco_unitario || i.valor_unitario || 0,
-            })) : [];
-            newLeads.push({
-              id: leadId,
-              nome: pedido.cliente_nome || 'Cliente',
-              empresa: pedido.cliente_telefone || undefined,
-              valor: pedido.valor_total || 0,
-              etapa: "acompanhamento",
-              origem: "robo",
-              itens,
-              observacoes: `Pedido ${pedido.numero} - Status: ${pedido.status}`,
-            });
-          }
+      if (pedRes.data) {
+        for (const pedido of pedRes.data) {
+          const leadId = `pedido-${pedido.id}`;
+          if (existingIds.has(leadId)) continue;
+          const itens = Array.isArray(pedido.itens) ? (pedido.itens as any[]).map((i: any) => ({
+            descricao: i.produto_nome || i.descricao || 'Item',
+            quantidade: i.quantidade || 1,
+            valor_unitario: i.preco_unitario || i.valor_unitario || 0,
+          })) : [];
+          newLeadsToInsert.push({
+            id: leadId,
+            nome: pedido.cliente_nome || 'Cliente',
+            empresa: pedido.cliente_telefone || null,
+            valor: pedido.valor_total || 0,
+            etapa_key: "acompanhamento",
+            origem: "robo",
+            itens,
+            observacoes: `Pedido ${pedido.numero} - Status: ${pedido.status}`,
+          });
         }
+      }
 
-        return newLeads;
-      });
+      if (newLeadsToInsert.length > 0) {
+        await (supabase as any).from('funil_leads').upsert(newLeadsToInsert, { onConflict: 'id' });
+        toast.success(`${newLeadsToInsert.length} lead(s) sincronizado(s)`);
+      } else {
+        toast.info("Nenhum novo pendente encontrado");
+      }
+
+      await fetchLeads();
     } catch (err) {
       console.error('Erro ao sincronizar pendentes:', err);
+      toast.error("Erro ao sincronizar");
     }
-  }, []);
+  }, [fetchLeads]);
 
-  useEffect(() => {
-    syncPendentes();
-  }, [syncPendentes]);
-
-  // Stage management state
-  const [isStageManagerOpen, setIsStageManagerOpen] = useState(false);
-  const [editingStage, setEditingStage] = useState<Etapa | null>(null);
-  const [isStageFormOpen, setIsStageFormOpen] = useState(false);
-  const [stageForm, setStageForm] = useState({ label: "", color: defaultColors[0] });
-
-  // ---- Drag & Drop for LEADS between stages ----
-  const handleLeadDragEnd = (result: DropResult) => {
+  // ---- Lead Drag & Drop ----
+  const handleLeadDragEnd = async (result: DropResult) => {
     const { draggableId, destination } = result;
     if (!destination) return;
     setLeads((prev) =>
       prev.map((l) => (l.id === draggableId ? { ...l, etapa: destination.droppableId } : l))
     );
+    await (supabase as any).from('funil_leads').update({ etapa_key: destination.droppableId }).eq('id', draggableId);
   };
 
-  // ---- Drag & Drop for STAGES reorder ----
-  const handleStageDragEnd = (result: DropResult) => {
+  // ---- Stage Drag & Drop (reorder) ----
+  const handleStageDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
     const reordered = [...etapas];
     const [moved] = reordered.splice(result.source.index, 1);
     reordered.splice(result.destination.index, 0, moved);
-    setEtapas(reordered);
+    const updated = reordered.map((e, i) => ({ ...e, ordem: i }));
+    setEtapas(updated);
+    // Update ordem in DB
+    for (const e of updated) {
+      await (supabase as any).from('funil_etapas').update({ ordem: e.ordem }).eq('key', e.key);
+    }
   };
 
-  const moveForward = (e: React.MouseEvent, id: string) => {
+  const moveForward = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    setLeads((prev) =>
-      prev.map((l) => {
-        if (l.id !== id) return l;
-        const idx = etapas.findIndex((et) => et.key === l.etapa);
-        if (idx < etapas.length - 1) return { ...l, etapa: etapas[idx + 1].key };
-        return l;
-      })
-    );
+    const lead = leads.find((l) => l.id === id);
+    if (!lead) return;
+    const idx = etapas.findIndex((et) => et.key === lead.etapa);
+    if (idx < etapas.length - 1) {
+      const newEtapa = etapas[idx + 1].key;
+      setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, etapa: newEtapa } : l)));
+      await (supabase as any).from('funil_leads').update({ etapa_key: newEtapa }).eq('id', id);
+    }
   };
 
   const openEdit = (lead: LeadFunil) => {
@@ -209,22 +231,57 @@ const Funil = () => {
     setIsEditOpen(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editLead) return;
     const totalItens = editLead.itens.reduce((s, i) => s + i.valor_unitario * i.quantidade, 0);
-    setLeads((prev) =>
-      prev.map((l) => (l.id === editLead.id ? { ...editLead, valor: totalItens > 0 ? totalItens : editLead.valor } : l))
-    );
+    const updatedLead = { ...editLead, valor: totalItens > 0 ? totalItens : editLead.valor };
+    setLeads((prev) => prev.map((l) => (l.id === editLead.id ? updatedLead : l)));
+    await (supabase as any).from('funil_leads').update({
+      nome: updatedLead.nome,
+      empresa: updatedLead.empresa || null,
+      telefone: updatedLead.telefone || null,
+      email: updatedLead.email || null,
+      valor: updatedLead.valor,
+      etapa_key: updatedLead.etapa,
+      itens: updatedLead.itens,
+      observacoes: updatedLead.observacoes || null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', editLead.id);
     setIsEditOpen(false);
+    toast.success("Lead atualizado");
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!newLead.nome.trim()) return;
     const totalItens = newLead.itens.reduce((s, i) => s + i.valor_unitario * i.quantidade, 0);
-    const id = Date.now().toString();
-    setLeads((prev) => [...prev, { ...newLead, id, valor: totalItens > 0 ? totalItens : newLead.valor }]);
-    setNewLead(emptyLead);
+    const leadData = {
+      nome: newLead.nome,
+      empresa: newLead.empresa || null,
+      telefone: newLead.telefone || null,
+      email: newLead.email || null,
+      valor: totalItens > 0 ? totalItens : newLead.valor,
+      etapa_key: newLead.etapa || etapas[0]?.key || 'contato_inicial',
+      origem: newLead.origem,
+      itens: newLead.itens,
+      observacoes: newLead.observacoes || null,
+    };
+    const { error } = await (supabase as any).from('funil_leads').insert(leadData);
+    if (error) {
+      toast.error("Erro ao criar lead");
+      console.error(error);
+      return;
+    }
+    toast.success("Lead adicionado");
+    setNewLead({ ...emptyLead, etapa: etapas[0]?.key || '' });
     setIsCreateOpen(false);
+    await fetchLeads();
+  };
+
+  const handleDeleteLead = async (id: string) => {
+    setLeads((prev) => prev.filter((l) => l.id !== id));
+    await (supabase as any).from('funil_leads').delete().eq('id', id);
+    setIsEditOpen(false);
+    toast.success("Lead removido");
   };
 
   const addItemToEdit = () => {
@@ -258,7 +315,7 @@ const Funil = () => {
     setNewLead({ ...newLead, itens: newLead.itens.filter((_, i) => i !== idx) });
   };
 
-  // ---- Stage CRUD ----
+  // ---- Stage CRUD (Supabase) ----
   const openCreateStage = () => {
     setEditingStage(null);
     setStageForm({ label: "", color: defaultColors[etapas.length % defaultColors.length] });
@@ -271,28 +328,47 @@ const Funil = () => {
     setIsStageFormOpen(true);
   };
 
-  const handleSaveStage = () => {
+  const handleSaveStage = async () => {
     if (!stageForm.label.trim()) return;
     if (editingStage) {
+      await (supabase as any).from('funil_etapas').update({ label: stageForm.label, color: stageForm.color }).eq('key', editingStage.key);
       setEtapas((prev) =>
         prev.map((s) => (s.key === editingStage.key ? { ...s, label: stageForm.label, color: stageForm.color } : s))
       );
+      toast.success("Etapa atualizada");
     } else {
       const key = stageForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") + "_" + Date.now();
-      setEtapas((prev) => [...prev, { key, label: stageForm.label, color: stageForm.color }]);
+      const ordem = etapas.length;
+      const { error } = await (supabase as any).from('funil_etapas').insert({ key, label: stageForm.label, color: stageForm.color, ordem });
+      if (error) {
+        toast.error("Erro ao criar etapa");
+        console.error(error);
+        return;
+      }
+      setEtapas((prev) => [...prev, { key, label: stageForm.label, color: stageForm.color, ordem }]);
+      toast.success("Etapa criada");
     }
     setIsStageFormOpen(false);
   };
 
-  const handleDeleteStage = (key: string) => {
+  const handleDeleteStage = async (key: string) => {
     const hasLeads = leads.some((l) => l.etapa === key);
     if (hasLeads) {
       const firstAvailable = etapas.find((e) => e.key !== key);
       if (firstAvailable) {
+        // Move leads to first available stage in DB
+        await (supabase as any).from('funil_leads').update({ etapa_key: firstAvailable.key }).eq('etapa_key', key);
         setLeads((prev) => prev.map((l) => (l.etapa === key ? { ...l, etapa: firstAvailable.key } : l)));
       }
     }
+    const { error } = await (supabase as any).from('funil_etapas').delete().eq('key', key);
+    if (error) {
+      toast.error("Erro ao excluir etapa");
+      console.error(error);
+      return;
+    }
     setEtapas((prev) => prev.filter((e) => e.key !== key));
+    toast.success("Etapa excluída");
   };
 
   const ItemAddRow = ({ onAdd }: { onAdd: () => void }) => (
@@ -354,6 +430,10 @@ const Funil = () => {
     )
   );
 
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
   return (
     <div className="space-y-6 animate-slide-in">
       <div className="page-header flex items-center justify-between">
@@ -368,91 +448,100 @@ const Funil = () => {
           <Button variant="outline" size="sm" onClick={() => setIsStageManagerOpen(true)}>
             <Settings className="h-4 w-4 mr-1" /> Etapas
           </Button>
-          <Button onClick={() => setIsCreateOpen(true)} size="sm">
+          <Button onClick={() => { setNewLead({ ...emptyLead, etapa: etapas[0]?.key || '' }); setIsCreateOpen(true); }} size="sm">
             <Plus className="h-4 w-4 mr-1" /> Novo Lead
           </Button>
         </div>
       </div>
 
-      <DragDropContext onDragEnd={handleLeadDragEnd}>
-        <div className={`grid grid-cols-1 gap-4`} style={{ gridTemplateColumns: `repeat(${Math.min(etapas.length, 6)}, minmax(0, 1fr))` }}>
-          {etapas.map((etapa) => {
-            const etapaLeads = leads.filter((l) => l.etapa === etapa.key);
-            const total = etapaLeads.reduce((s, l) => s + l.valor, 0);
-            return (
-              <Droppable droppableId={etapa.key} key={etapa.key}>
-                {(provided, snapshot) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className={`funnel-stage transition-colors min-h-[200px] ${snapshot.isDraggingOver ? "ring-2 ring-primary/40 bg-primary/5" : ""}`}
-                  >
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className={`w-2 h-2 rounded-full ${etapa.color}`} />
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{etapa.label}</h3>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-3">
-                      {etapaLeads.length} lead{etapaLeads.length !== 1 ? "s" : ""} · R$ {total.toLocaleString("pt-BR")}
-                    </p>
-                    <div className="space-y-2">
-                      {etapaLeads.map((lead, index) => (
-                        <Draggable draggableId={lead.id} index={index} key={lead.id}>
-                          {(prov, snap) => (
-                            <div
-                              ref={prov.innerRef}
-                              {...prov.draggableProps}
-                              {...prov.dragHandleProps}
-                              onClick={() => openEdit(lead)}
-                              className={`bg-background rounded-lg p-3 border border-border shadow-sm hover:shadow-md transition-shadow group cursor-pointer select-none ${snap.isDragging ? "shadow-lg ring-2 ring-primary/30" : ""}`}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium truncate">{lead.nome}</p>
-                                  {lead.empresa && <p className="text-xs text-muted-foreground truncate">{lead.empresa}</p>}
+      {etapas.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <p>Nenhuma etapa encontrada. Crie as tabelas no Supabase e adicione etapas.</p>
+          <Button className="mt-4" onClick={() => setIsStageManagerOpen(true)}>
+            <Settings className="h-4 w-4 mr-1" /> Gerenciar Etapas
+          </Button>
+        </div>
+      ) : (
+        <DragDropContext onDragEnd={handleLeadDragEnd}>
+          <div className="grid grid-cols-1 gap-4" style={{ gridTemplateColumns: `repeat(${Math.min(etapas.length, 6)}, minmax(0, 1fr))` }}>
+            {etapas.map((etapa) => {
+              const etapaLeads = leads.filter((l) => l.etapa === etapa.key);
+              const total = etapaLeads.reduce((s, l) => s + l.valor, 0);
+              return (
+                <Droppable droppableId={etapa.key} key={etapa.key}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={`funnel-stage transition-colors min-h-[200px] ${snapshot.isDraggingOver ? "ring-2 ring-primary/40 bg-primary/5" : ""}`}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className={`w-2 h-2 rounded-full ${etapa.color}`} />
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{etapa.label}</h3>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        {etapaLeads.length} lead{etapaLeads.length !== 1 ? "s" : ""} · R$ {total.toLocaleString("pt-BR")}
+                      </p>
+                      <div className="space-y-2">
+                        {etapaLeads.map((lead, index) => (
+                          <Draggable draggableId={lead.id} index={index} key={lead.id}>
+                            {(prov, snap) => (
+                              <div
+                                ref={prov.innerRef}
+                                {...prov.draggableProps}
+                                {...prov.dragHandleProps}
+                                onClick={() => openEdit(lead)}
+                                className={`bg-background rounded-lg p-3 border border-border shadow-sm hover:shadow-md transition-shadow group cursor-pointer select-none ${snap.isDragging ? "shadow-lg ring-2 ring-primary/30" : ""}`}
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium truncate">{lead.nome}</p>
+                                    {lead.empresa && <p className="text-xs text-muted-foreground truncate">{lead.empresa}</p>}
+                                  </div>
+                                  <Badge variant="outline" className={`text-[10px] shrink-0 ml-1 ${lead.origem === "robo" ? "badge-cold" : "badge-warm"}`}>
+                                    {lead.origem === "robo" ? "🤖" : "✋"}
+                                  </Badge>
                                 </div>
-                                <Badge variant="outline" className={`text-[10px] shrink-0 ml-1 ${lead.origem === "robo" ? "badge-cold" : "badge-warm"}`}>
-                                  {lead.origem === "robo" ? "🤖" : "✋"}
-                                </Badge>
-                              </div>
-                              {lead.itens.length > 0 && (
-                                <div className="mt-1.5 space-y-0.5">
-                                  {lead.itens.slice(0, 2).map((item, i) => (
-                                    <p key={i} className="text-[10px] text-muted-foreground truncate">
-                                      • {item.quantidade}x {item.descricao}
-                                    </p>
-                                  ))}
-                                  {lead.itens.length > 2 && (
-                                    <p className="text-[10px] text-muted-foreground">+{lead.itens.length - 2} mais</p>
+                                {lead.itens.length > 0 && (
+                                  <div className="mt-1.5 space-y-0.5">
+                                    {lead.itens.slice(0, 2).map((item, i) => (
+                                      <p key={i} className="text-[10px] text-muted-foreground truncate">
+                                        • {item.quantidade}x {item.descricao}
+                                      </p>
+                                    ))}
+                                    {lead.itens.length > 2 && (
+                                      <p className="text-[10px] text-muted-foreground">+{lead.itens.length - 2} mais</p>
+                                    )}
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between mt-2">
+                                  <span className="text-xs font-mono font-medium">
+                                    R$ {lead.valor.toLocaleString("pt-BR")}
+                                  </span>
+                                  {etapa.key !== etapas[etapas.length - 1]?.key && (
+                                    <button
+                                      onClick={(e) => moveForward(e, lead.id)}
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
+                                      title="Avançar etapa"
+                                    >
+                                      <ArrowRight className="h-3.5 w-3.5 text-primary" />
+                                    </button>
                                   )}
                                 </div>
-                              )}
-                              <div className="flex items-center justify-between mt-2">
-                                <span className="text-xs font-mono font-medium">
-                                  R$ {lead.valor.toLocaleString("pt-BR")}
-                                </span>
-                                {etapa.key !== etapas[etapas.length - 1]?.key && (
-                                  <button
-                                    onClick={(e) => moveForward(e, lead.id)}
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
-                                    title="Avançar etapa"
-                                  >
-                                    <ArrowRight className="h-3.5 w-3.5 text-primary" />
-                                  </button>
-                                )}
                               </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </Droppable>
-            );
-          })}
-        </div>
-      </DragDropContext>
+                  )}
+                </Droppable>
+              );
+            })}
+          </div>
+        </DragDropContext>
+      )}
 
       {/* Stage Manager Dialog */}
       <Dialog open={isStageManagerOpen} onOpenChange={setIsStageManagerOpen}>
@@ -587,9 +676,14 @@ const Funil = () => {
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveEdit}>Salvar</Button>
+          <DialogFooter className="flex justify-between">
+            <Button variant="destructive" size="sm" onClick={() => editLead && handleDeleteLead(editLead.id)}>
+              <Trash2 className="h-3 w-3 mr-1" /> Excluir
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
+              <Button onClick={handleSaveEdit}>Salvar</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
