@@ -102,7 +102,7 @@ const Funil = () => {
       }
       byteArrays.push(new Uint8Array(byteNumbers));
     }
-    return new Blob(byteArrays, { type: 'application/pdf' });
+    return new Blob(byteArrays as BlobPart[], { type: 'application/pdf' });
   };
 
   const handleDownloadPdf = (base64Data: string, filename: string) => {
