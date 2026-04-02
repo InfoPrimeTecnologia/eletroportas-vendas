@@ -311,7 +311,6 @@ const Funil = () => {
   };
 
   const handleCreate = async () => {
-    if (!newLead.nome.trim()) return;
     const totalItens = newLead.itens.reduce((s, i) => s + i.valor_unitario * i.quantidade, 0);
     const leadData = {
       nome: newLead.nome,
@@ -797,7 +796,7 @@ const Funil = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreate} disabled={!newLead.nome.trim()}>Adicionar</Button>
+            <Button onClick={handleCreate}>Adicionar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
