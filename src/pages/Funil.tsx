@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package, Trash2, GripVertical, Settings, RefreshCw, Loader2, Paperclip, FileText, X } from "lucide-react";
+import { Plus, ArrowRight, User, Building2, Phone, Mail, DollarSign, Edit2, Package, Trash2, GripVertical, Settings, RefreshCw, Loader2, Paperclip, FileText, X, Download, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,51 @@ const Funil = () => {
   const [newItemDesc, setNewItemDesc] = useState("");
   const [newItemQty, setNewItemQty] = useState("1");
   const [newItemVal, setNewItemVal] = useState("");
+
+  // PDF viewer state
+  const [pdfViewerData, setPdfViewerData] = useState<string | null>(null);
+  const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
+
+  const handleDownloadPdf = (base64Data: string, filename: string) => {
+    try {
+      const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+      const byteCharacters = atob(base64Content);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Erro ao baixar PDF");
+    }
+  };
+
+  const handleViewPdf = (base64Data: string) => {
+    try {
+      const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+      const byteCharacters = atob(base64Content);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      setPdfViewerData(url);
+      setIsPdfViewerOpen(true);
+    } catch {
+      toast.error("Erro ao visualizar PDF");
+    }
+  };
 
   // Stage management state
   const [isStageManagerOpen, setIsStageManagerOpen] = useState(false);
@@ -744,13 +789,11 @@ const Funil = () => {
                   <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
                     <FileText className="h-4 w-4 text-primary" />
                     <span className="text-xs flex-1 truncate">PDF anexado</span>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
-                      const link = document.createElement('a');
-                      link.href = editLead.anexo_pdf!;
-                      link.download = `lead-${editLead.id}.pdf`;
-                      link.click();
-                    }}>
-                      <FileText className="h-3 w-3" />
+                    <Button variant="ghost" size="icon" className="h-6 w-6" title="Visualizar" onClick={() => handleViewPdf(editLead.anexo_pdf!)}>
+                      <Eye className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" title="Baixar" onClick={() => handleDownloadPdf(editLead.anexo_pdf!, `lead-${editLead.id}.pdf`)}>
+                      <Download className="h-3 w-3" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setEditLead({ ...editLead, anexo_pdf: undefined })}>
                       <X className="h-3 w-3" />
@@ -875,6 +918,30 @@ const Funil = () => {
             <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreate}>Adicionar</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* PDF Viewer Dialog */}
+      <Dialog open={isPdfViewerOpen} onOpenChange={(open) => {
+        setIsPdfViewerOpen(open);
+        if (!open && pdfViewerData) {
+          URL.revokeObjectURL(pdfViewerData);
+          setPdfViewerData(null);
+        }
+      }}>
+        <DialogContent className="max-w-4xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Visualizar PDF</DialogTitle>
+            <DialogDescription>Pré-visualização do documento anexado</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
+            {pdfViewerData && (
+              <iframe
+                src={pdfViewerData}
+                className="w-full h-full rounded-md border"
+                title="PDF Viewer"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
