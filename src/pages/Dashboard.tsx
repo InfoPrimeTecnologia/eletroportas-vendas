@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 
 interface OrcRow { id: number; numero: string; cliente_nome: string; cliente_telefone: string | null; status: string; valor_total: number; data_criacao: string; }
 interface PedRow { id: number; numero: string; cliente_nome: string; cliente_telefone: string | null; status: string; valor_total: number; data_criacao: string; }
+interface FunilLead { id: string; nome: string; etapa_key: string; valor: number; created_at: string; }
 
 interface DashboardMetrics {
   leadsQuentes: number;
@@ -61,6 +62,7 @@ const Dashboard = () => {
 
   const [rawOrcamentos, setRawOrcamentos] = useState<OrcRow[]>([]);
   const [rawPedidos, setRawPedidos] = useState<PedRow[]>([]);
+  const [funilLeads, setFunilLeads] = useState<FunilLead[]>([]);
 
   // Date filter
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
@@ -70,12 +72,14 @@ const Dashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [{ data: orcamentos }, { data: pedidos }] = await Promise.all([
+      const [{ data: orcamentos }, { data: pedidos }, { data: leads }] = await Promise.all([
         supabase.from("orcamentos").select("id, numero, cliente_nome, cliente_telefone, status, data_criacao, valor_total"),
         supabase.from("pedidos_venda").select("id, numero, cliente_nome, cliente_telefone, status, data_criacao, valor_total"),
+        (supabase as any).from("funil_leads").select("id, nome, etapa_key, valor, created_at"),
       ]);
       setRawOrcamentos(orcamentos || []);
       setRawPedidos(pedidos || []);
+      setFunilLeads(leads || []);
     } catch (err) {
       console.error("Erro ao carregar métricas:", err);
     } finally {
@@ -100,8 +104,10 @@ const Dashboard = () => {
   const filteredPedidos = useMemo(() => filterByDate(rawPedidos), [rawPedidos, dateFrom, dateTo]);
 
   const metrics = useMemo<DashboardMetrics>(() => {
-    const quentes = filteredOrcamentos.filter((o) => ["aceito", "enviado"].includes(o.status?.toLowerCase())).length;
-    const frios = filteredOrcamentos.filter((o) => ["pendente", "recusado"].includes(o.status?.toLowerCase())).length;
+    // Leads Quentes = leads na etapa "orcamento_enviado" do funil
+    const quentes = funilLeads.filter((l) => l.etapa_key === "orcamento_enviado").length;
+    // Leads Frios = leads na etapa "acompanhamento" do funil
+    const frios = funilLeads.filter((l) => l.etapa_key === "acompanhamento").length;
     const conversoes = filteredPedidos.length;
 
     const statusMap: Record<string, number> = {};
@@ -120,7 +126,7 @@ const Dashboard = () => {
     ].sort((a, b) => b.date - a.date).slice(0, 8);
 
     return { leadsQuentes: quentes, leadsFrios: frios, conversoes, funnelData, recentActivity: allItems };
-  }, [filteredOrcamentos, filteredPedidos]);
+  }, [filteredOrcamentos, filteredPedidos, funilLeads]);
 
   const weeklyData = useMemo(() => {
     const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
