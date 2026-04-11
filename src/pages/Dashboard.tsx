@@ -146,11 +146,11 @@ const Dashboard = () => {
 
   const openDetail = (type: "quentes" | "frios" | "conversoes") => {
     if (type === "quentes") {
-      setDetailTitle("Leads Quentes (Orçamentos Aceitos/Enviados)");
+      setDetailTitle("Leads Quentes (Etapa: Orçamento Enviado)");
       setDetailOrcamentos(filteredOrcamentos.filter((o) => ["aceito", "enviado"].includes(o.status?.toLowerCase())));
       setDetailType("orcamentos");
     } else if (type === "frios") {
-      setDetailTitle("Leads Frios (Orçamentos Pendentes/Recusados)");
+      setDetailTitle("Leads Frios (Etapa: Acompanhamento)");
       setDetailOrcamentos(filteredOrcamentos.filter((o) => ["pendente", "recusado"].includes(o.status?.toLowerCase())));
       setDetailType("orcamentos");
     } else {
