@@ -196,6 +196,9 @@ const Funil = () => {
     setLeads(rawLeads);
   }, []);
 
+  // Fixed stages that cannot be edited or deleted
+  const FIXED_STAGES = ["orcamento_enviado", "acompanhamento"];
+
   // ---- Initial load ----
   useEffect(() => {
     const load = async () => {
@@ -205,6 +208,23 @@ const Funil = () => {
     };
     load();
   }, [fetchEtapas, fetchLeads]);
+
+  // ---- Realtime subscription ----
+  useEffect(() => {
+    const channel = supabase
+      .channel('funil-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'funil_leads' }, () => {
+        fetchLeads();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'funil_etapas' }, () => {
+        fetchEtapas();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchLeads, fetchEtapas]);
 
   // ---- Auto-sync pendentes ----
   const syncPendentes = useCallback(async () => {
@@ -454,6 +474,11 @@ const Funil = () => {
   const handleSaveStage = async () => {
     if (!stageForm.label.trim()) return;
     if (editingStage) {
+      if (FIXED_STAGES.includes(editingStage.key)) {
+        toast.error("Esta etapa é fixa e não pode ser editada");
+        setIsStageFormOpen(false);
+        return;
+      }
       await (supabase as any).from('funil_etapas').update({ label: stageForm.label, color: stageForm.color }).eq('key', editingStage.key);
       setEtapas((prev) =>
         prev.map((s) => (s.key === editingStage.key ? { ...s, label: stageForm.label, color: stageForm.color } : s))
@@ -475,11 +500,14 @@ const Funil = () => {
   };
 
   const handleDeleteStage = async (key: string) => {
+    if (FIXED_STAGES.includes(key)) {
+      toast.error("Esta etapa é fixa e não pode ser excluída");
+      return;
+    }
     const hasLeads = leads.some((l) => l.etapa === key);
     if (hasLeads) {
       const firstAvailable = etapas.find((e) => e.key !== key);
       if (firstAvailable) {
-        // Move leads to first available stage in DB
         await (supabase as any).from('funil_leads').update({ etapa_key: firstAvailable.key }).eq('etapa_key', key);
         setLeads((prev) => prev.map((l) => (l.etapa === key ? { ...l, etapa: firstAvailable.key } : l)));
       }
@@ -690,18 +718,25 @@ const Funil = () => {
                           </div>
                           <div className={`w-3 h-3 rounded-full shrink-0 ${etapa.color}`} />
                           <span className="text-sm flex-1 truncate">{etapa.label}</span>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditStage(etapa)}>
-                            <Edit2 className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive"
-                            onClick={() => handleDeleteStage(etapa.key)}
-                            disabled={etapas.length <= 1}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          {!FIXED_STAGES.includes(etapa.key) && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditStage(etapa)}>
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                          {!FIXED_STAGES.includes(etapa.key) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive"
+                              onClick={() => handleDeleteStage(etapa.key)}
+                              disabled={etapas.length <= 1}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                          {FIXED_STAGES.includes(etapa.key) && (
+                            <Badge variant="outline" className="text-[10px] ml-1">Fixa</Badge>
+                          )}
                         </div>
                       )}
                     </Draggable>
