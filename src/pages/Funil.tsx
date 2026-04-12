@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -77,6 +78,8 @@ const Funil = () => {
   // PDF viewer state
   const [pdfViewerData, setPdfViewerData] = useState<string | null>(null);
   const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [leadToDelete, setLeadToDelete] = useState<string | null>(null);
 
   const cleanBase64 = (base64Data: string): string => {
     let cleaned = base64Data.trim();
@@ -873,7 +876,12 @@ const Funil = () => {
             </div>
           )}
           <DialogFooter className="flex justify-between">
-            <Button variant="destructive" size="sm" onClick={() => editLead && handleDeleteLead(editLead.id)}>
+            <Button variant="destructive" size="sm" onClick={() => {
+              if (editLead) {
+                setLeadToDelete(editLead.id);
+                setDeleteConfirmOpen(true);
+              }
+            }}>
               <Trash2 className="h-3 w-3 mr-1" /> Excluir
             </Button>
             <div className="flex gap-2">
@@ -994,6 +1002,33 @@ const Funil = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmação de exclusão de lead */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Lead</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este lead? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setLeadToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (leadToDelete) {
+                  handleDeleteLead(leadToDelete);
+                  setLeadToDelete(null);
+                  setDeleteConfirmOpen(false);
+                }
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
