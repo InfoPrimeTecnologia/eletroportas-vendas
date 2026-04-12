@@ -876,7 +876,12 @@ const Funil = () => {
             </div>
           )}
           <DialogFooter className="flex justify-between">
-            <Button variant="destructive" size="sm" onClick={() => editLead && handleDeleteLead(editLead.id)}>
+            <Button variant="destructive" size="sm" onClick={() => {
+              if (editLead) {
+                setLeadToDelete(editLead.id);
+                setDeleteConfirmOpen(true);
+              }
+            }}>
               <Trash2 className="h-3 w-3 mr-1" /> Excluir
             </Button>
             <div className="flex gap-2">
