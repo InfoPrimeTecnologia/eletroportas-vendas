@@ -78,6 +78,8 @@ const Funil = () => {
   // PDF viewer state
   const [pdfViewerData, setPdfViewerData] = useState<string | null>(null);
   const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [leadToDelete, setLeadToDelete] = useState<string | null>(null);
 
   const cleanBase64 = (base64Data: string): string => {
     let cleaned = base64Data.trim();
