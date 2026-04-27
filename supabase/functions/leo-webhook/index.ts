@@ -1,4 +1,4 @@
-// Webhook público do Agente Leo - v1.0.1
+// Webhook público do Agente Leo - v1.0.2
 // Recebe mensagens da PrimeSync, processa com IA e responde via WhatsApp
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -473,7 +473,7 @@ Deno.serve(async (req) => {
     const historico = await carregarHistorico(conversa.id);
 
     // Loop de tools (até 3 chamadas)
-    let messages = historico;
+    let messages: any[] = [...historico];
     let respostaFinal = "";
     for (let i = 0; i < 3; i++) {
       const ai = await chamarIA(messages);
