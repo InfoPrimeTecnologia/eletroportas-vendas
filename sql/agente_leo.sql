@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS public.leo_api_keys (
 DELETE FROM public.leo_api_keys
  WHERE key_name IN ('ZAPI_TOKEN','ZAPI_INSTANCE_ID','ZAPI_CLIENT_TOKEN');
 
--- Seeds das chaves esperadas (PrimeSync)
+-- Seeds das chaves (PrimeSync)
 INSERT INTO public.leo_api_keys (key_name, description) VALUES
   ('OPENAI_API_KEY',     'Chave da OpenAI (GPT-4o mini) - cérebro do agente Leo'),
   ('PRIMESYNC_BASE_URL', 'URL base da API PrimeSync (ex: https://api.primesync.com.br/...)'),
@@ -53,7 +53,7 @@ INSERT INTO public.leo_api_keys (key_name, description) VALUES
 ON CONFLICT (key_name) DO NOTHING;
 
 -- =====================================================
--- RLS
+-- RLS  (cast explícito para app_role)
 -- =====================================================
 ALTER TABLE public.leo_conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leo_messages      ENABLE ROW LEVEL SECURITY;
@@ -62,32 +62,38 @@ ALTER TABLE public.leo_api_keys      ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Admins visualizam conversas Leo" ON public.leo_conversations;
 CREATE POLICY "Admins visualizam conversas Leo"
 ON public.leo_conversations FOR SELECT TO authenticated
-USING (public.has_role(auth.uid(), 'super_admin') OR public.has_role(auth.uid(), 'admin'));
+USING (
+  public.has_role(auth.uid(), 'super_admin'::public.app_role)
+  OR public.has_role(auth.uid(), 'admin'::public.app_role)
+);
 
 DROP POLICY IF EXISTS "Super admin gerencia conversas Leo" ON public.leo_conversations;
 CREATE POLICY "Super admin gerencia conversas Leo"
 ON public.leo_conversations FOR ALL TO authenticated
-USING (public.has_role(auth.uid(), 'super_admin'))
-WITH CHECK (public.has_role(auth.uid(), 'super_admin'));
+USING (public.has_role(auth.uid(), 'super_admin'::public.app_role))
+WITH CHECK (public.has_role(auth.uid(), 'super_admin'::public.app_role));
 
 DROP POLICY IF EXISTS "Admins visualizam mensagens Leo" ON public.leo_messages;
 CREATE POLICY "Admins visualizam mensagens Leo"
 ON public.leo_messages FOR SELECT TO authenticated
-USING (public.has_role(auth.uid(), 'super_admin') OR public.has_role(auth.uid(), 'admin'));
+USING (
+  public.has_role(auth.uid(), 'super_admin'::public.app_role)
+  OR public.has_role(auth.uid(), 'admin'::public.app_role)
+);
 
 DROP POLICY IF EXISTS "Super admin gerencia mensagens Leo" ON public.leo_messages;
 CREATE POLICY "Super admin gerencia mensagens Leo"
 ON public.leo_messages FOR ALL TO authenticated
-USING (public.has_role(auth.uid(), 'super_admin'))
-WITH CHECK (public.has_role(auth.uid(), 'super_admin'));
+USING (public.has_role(auth.uid(), 'super_admin'::public.app_role))
+WITH CHECK (public.has_role(auth.uid(), 'super_admin'::public.app_role));
 
 DROP POLICY IF EXISTS "Apenas super admin acessa chaves Leo" ON public.leo_api_keys;
 CREATE POLICY "Apenas super admin acessa chaves Leo"
 ON public.leo_api_keys FOR ALL TO authenticated
-USING (public.has_role(auth.uid(), 'super_admin'))
-WITH CHECK (public.has_role(auth.uid(), 'super_admin'));
+USING (public.has_role(auth.uid(), 'super_admin'::public.app_role))
+WITH CHECK (public.has_role(auth.uid(), 'super_admin'::public.app_role));
 
--- Realtime (ignore erros se já estiverem na publicação)
+-- Realtime (ignora se já estiver na publicação)
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.leo_conversations;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
