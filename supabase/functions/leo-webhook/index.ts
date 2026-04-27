@@ -1,4 +1,4 @@
-// Webhook público do Agente Leo
+// Webhook público do Agente Leo - v1.0.1
 // Recebe mensagens da PrimeSync, processa com IA e responde via WhatsApp
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -423,11 +423,14 @@ Deno.serve(async (req) => {
 
   try {
     const raw = await req.json();
+    console.log("📨 Webhook recebido:", JSON.stringify(raw).substring(0, 800));
+
     const payload = Array.isArray(raw) ? raw[0] : raw;
     const body = payload?.body || payload;
 
     // Ignora mensagens enviadas por nós mesmos
     if (body?.fromMe === true) {
+      console.log("⏭️ Ignorado: fromMe=true");
       return new Response(JSON.stringify({ ignored: "fromMe" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -436,6 +439,7 @@ Deno.serve(async (req) => {
     // Só processa texto por enquanto
     const mediaType = body?.mediaType || "chat";
     if (mediaType !== "chat" && mediaType !== "text") {
+      console.log("⏭️ Ignorado: mediaType=", mediaType);
       return new Response(JSON.stringify({ ignored: "media" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -447,7 +451,10 @@ Deno.serve(async (req) => {
     const nome: string = contact?.name || contact?.pushname || "";
     const ticketId: number | undefined = body?.ticket?.id;
 
+    console.log(`📞 De: ${telefone} (${nome}) | Msg: "${messageBody}"`);
+
     if (!telefone || !messageBody) {
+      console.log("⏭️ Ignorado: campos faltando");
       return new Response(JSON.stringify({ ignored: "missing_fields" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
