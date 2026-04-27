@@ -1,9 +1,8 @@
 -- =====================================================
--- AGENTE LEO - Schema (executar manualmente no Supabase)
--- Cole no SQL Editor do Supabase e execute
+-- AGENTE LEO - Schema completo (rodar no SQL Editor do Supabase)
 -- =====================================================
 
--- 1) Conversas (uma por telefone + tipo de cliente)
+-- 1) Conversas
 CREATE TABLE IF NOT EXISTS public.leo_conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   telefone TEXT NOT NULL,
@@ -40,21 +39,25 @@ CREATE TABLE IF NOT EXISTS public.leo_api_keys (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Limpa seeds antigos da Z-API (caso já tenha rodado a versão anterior)
+DELETE FROM public.leo_api_keys
+ WHERE key_name IN ('ZAPI_TOKEN','ZAPI_INSTANCE_ID','ZAPI_CLIENT_TOKEN');
+
+-- Seeds das chaves esperadas (PrimeSync)
 INSERT INTO public.leo_api_keys (key_name, description) VALUES
-  ('OPENAI_API_KEY', 'Chave da OpenAI (GPT-4o mini) - cérebro do agente Leo'),
-  ('ZAPI_TOKEN', 'Token da Z-API para envio WhatsApp'),
-  ('ZAPI_INSTANCE_ID', 'Instance ID da Z-API'),
-  ('ZAPI_CLIENT_TOKEN', 'Client-Token da Z-API (security)'),
-  ('DOCRYA_API_KEY', 'Chave da API Docrya para PDFs de orçamento'),
-  ('WEBHOOK_SECRET', 'Secret para validar webhooks recebidos')
+  ('OPENAI_API_KEY',     'Chave da OpenAI (GPT-4o mini) - cérebro do agente Leo'),
+  ('PRIMESYNC_BASE_URL', 'URL base da API PrimeSync (ex: https://api.primesync.com.br/...)'),
+  ('PRIMESYNC_TOKEN',    'Bearer token da API PrimeSync para envio de mensagens WhatsApp'),
+  ('DOCRYA_API_KEY',     'Chave da API Docrya para PDFs de orçamento'),
+  ('WEBHOOK_SECRET',     'Secret para validar webhooks recebidos da PrimeSync')
 ON CONFLICT (key_name) DO NOTHING;
 
 -- =====================================================
 -- RLS
 -- =====================================================
 ALTER TABLE public.leo_conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.leo_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.leo_api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.leo_messages      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.leo_api_keys      ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Admins visualizam conversas Leo" ON public.leo_conversations;
 CREATE POLICY "Admins visualizam conversas Leo"
@@ -84,6 +87,10 @@ ON public.leo_api_keys FOR ALL TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'))
 WITH CHECK (public.has_role(auth.uid(), 'super_admin'));
 
--- Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.leo_conversations;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.leo_messages;
+-- Realtime (ignore erros se já estiverem na publicação)
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.leo_conversations;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.leo_messages;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
