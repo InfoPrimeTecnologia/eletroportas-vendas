@@ -50,7 +50,7 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
-  const { isAdmin, hasModuleAccess } = useUserRole();
+  const { isAdmin, isSuperAdmin, hasModuleAccess } = useUserRole();
 
   const isActive = (path: string) =>
     path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
@@ -174,6 +174,23 @@ export function AppSidebar() {
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                {isSuperAdmin && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive("/agente-leo")}
+                      tooltip="Agente Leo"
+                    >
+                      <NavLink
+                        to="/agente-leo"
+                        activeClassName="bg-sidebar-accent text-sidebar-primary"
+                      >
+                        <Bot className="h-4 w-4" />
+                        <span>Agente Leo</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

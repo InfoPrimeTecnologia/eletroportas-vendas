@@ -15,6 +15,7 @@ import Pedidos from "./pages/Pedidos";
 import NotaFiscalPage from "./pages/NotaFiscal";
 import Usuarios from "./pages/Usuarios";
 import Relatorios from "./pages/Relatorios";
+import AgenteLeo from "./pages/AgenteLeo";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -115,6 +116,16 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Relatorios />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/agente-leo"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <AgenteLeo />
                   </Layout>
                 </ProtectedRoute>
               }
