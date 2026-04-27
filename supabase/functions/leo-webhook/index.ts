@@ -1,7 +1,7 @@
-// Webhook público do Agente Leo - v1.0.2
+// Webhook público do Agente Leo - v1.0.3
 // Recebe mensagens da PrimeSync, processa com IA e responde via WhatsApp
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "npm:@supabase/supabase-js@2.95.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
