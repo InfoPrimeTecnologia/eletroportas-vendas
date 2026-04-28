@@ -1017,7 +1017,7 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
 
   const caption = "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
   const pdfEnviado = await enviarPdfBase64(telefone, pdfB64, filename, caption);
-  return { ok: pdfEnviado, pdf_enviado: pdfEnviado, caption, error: pdfEnviado ? null : "Falha ao enviar PDF" };
+  return { ok: pdfEnviado, pdf_enviado: pdfEnviado, caption, error: pdfEnviado ? null : "Falha ao enviar PDF", pdfBase64: pdfB64, filename, orcamento };
 }
 
 // ===========================
