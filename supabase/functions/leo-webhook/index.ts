@@ -584,10 +584,20 @@ Conduzir o cliente — passo a passo, sem pressa e sem repetições — até ger
 
 # ANTI-LOOP (CRÍTICO)
 Antes de escrever qualquer resposta, faça mentalmente este check:
-- "O cliente já respondeu o que eu ia perguntar?" → se sim, **avance**.
-- "Eu já fiz essa pergunta no histórico?" → se sim, **NUNCA repita** — siga para o próximo passo pendente.
-- Se o histórico mostra que o cliente já disse "porta instalada"/"instalada"/"revenda" em qualquer turno anterior, o \`tipo_cliente\` JÁ ESTÁ DEFINIDO. NUNCA repergunte — vá direto para medidas, lâmina, CEP ou orçamento, conforme o que falta.
+- "O cliente já respondeu o que eu ia perguntar **NESTA conversa atual**?" → se sim, **avance**.
+- "Eu já fiz essa pergunta no histórico recente?" → se sim, **NUNCA repita** — siga para o próximo passo pendente.
+- Se o histórico mostra que o cliente já disse "porta instalada"/"instalada"/"revenda" em qualquer turno anterior, o \`tipo_cliente\` JÁ ESTÁ DEFINIDO. NUNCA repergunte — vá direto para medidas.
 - "O cliente só me cumprimentou?" → responda em 1 frase curta e **siga para o próximo passo do fluxo**.
+
+# ANTI-ALUCINAÇÃO (CRÍTICO — NUNCA VIOLE)
+- **NUNCA chame \`gerar_orcamento\` sem ter coletado, NA SEQUÊNCIA ATUAL, TODOS estes dados explicitamente respondidos pelo cliente:**
+  1. \`tipo_cliente\` (porta_instalada ou revenda) — confirmado pela resposta do Passo 2.
+  2. \`largura\` e \`altura\` em metros — respondidas pelo cliente após sua pergunta do Passo 3 (ex: "4x3").
+  3. \`tipo_perfil\` (fechado/transvision/oblongo) — escolhido pelo cliente após o Passo 4.
+  4. Se for \`porta_instalada\`: \`frete\` retornado pela tool \`calcular_frete_cep\` (Passo 5). NUNCA invente frete.
+- **Mesmo que o histórico mostre medidas/lâmina de turnos antigos**, se o cliente acabou de iniciar uma nova interação ("oi", "bom dia") e ainda não confirmou medidas/lâmina nesta nova interação, **REPERGUNTE**. Trate cada novo "olá" como início de orçamento novo.
+- Se faltar QUALQUER dado, NÃO chame \`gerar_orcamento\`. Pergunte o que falta, UMA pergunta por vez.
+- Se a tool \`gerar_orcamento\` retornar \`erro: "DADOS_INSUFICIENTES"\`, leia o campo \`faltando\` e pergunte ao cliente exatamente o primeiro item da lista. NUNCA tente chamar de novo com valores inventados.
 `;
 
 const TOOLS = [
@@ -1028,15 +1038,44 @@ Deno.serve(async (req) => {
         let toolResult: any = {};
 
         if (fnName === "gerar_orcamento") {
+          // ===== VALIDAÇÃO RÍGIDA — bloqueia chamadas com dados faltando =====
+          const larguraNum = Number(args.largura);
+          const alturaNum = Number(args.altura);
+          const tcRawV = String(args.tipo_cliente || "").toLowerCase().trim();
+          const tcValid = tcRawV === "porta_instalada" || tcRawV === "revenda";
+          const perfilValid = ["fechado", "transvision", "oblongo"].includes(String(args.tipo_perfil || "").toLowerCase());
+          const freteNum = args.frete != null ? Number(args.frete) : NaN;
+
+          const faltando: string[] = [];
+          if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura (em metros, ex: 4)");
+          if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura (em metros, ex: 3)");
+          if (!tcValid) faltando.push("tipo_cliente (porta_instalada ou revenda)");
+          if (!perfilValid) faltando.push("tipo_perfil (fechado, transvision ou oblongo)");
+          if (tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
+            faltando.push("frete (calcule via tool calcular_frete_cep antes — peça o CEP ao cliente)");
+          }
+
+          if (faltando.length > 0) {
+            console.warn("🚫 gerar_orcamento BLOQUEADO — faltam:", faltando.join(", "));
+            toolResult = {
+              ok: false,
+              erro: "DADOS_INSUFICIENTES",
+              faltando,
+              instrucao: `NÃO gere o orçamento ainda. Faltam dados obrigatórios: ${faltando.join("; ")}. Pergunte ao cliente UMA pergunta por vez, na ordem do fluxo: medidas → lâmina → (se porta_instalada) CEP → gerar. NUNCA invente nem use valores padrão.`,
+            };
+            messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
+            continue;
+          }
+
           try {
             const o = calcularOrcamento({
-              largura: Number(args.largura),
-              altura: Number(args.altura),
-              tipo_cliente: args.tipo_cliente,
-              tipo_perfil: args.tipo_perfil,
+              largura: larguraNum,
+              altura: alturaNum,
+              tipo_cliente: tcRawV as any,
+              tipo_perfil: String(args.tipo_perfil).toLowerCase() as any,
               tipo_motor: args.tipo_motor,
               tipo_pintura: args.tipo_pintura,
-              frete: args.frete ? Number(args.frete) : 0,
+              frete: Number.isFinite(freteNum) ? freteNum : 0,
               cliente_nome: args.cliente_nome || nome,
               cliente_endereco: args.cliente_endereco,
             });
