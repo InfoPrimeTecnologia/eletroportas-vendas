@@ -851,6 +851,62 @@ async function salvarMensagem(conversation_id: string, role: string, content: st
   if (error) throw error;
 }
 
+function inferirTipoClienteTexto(texto: string): "porta_instalada" | "revenda" | null {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/\b(revenda|revender|revendedor|fornecimento|sem instalacao)\b/.test(t)) return "revenda";
+  if (/\b(instalada|instalar|instalacao|com instalacao|porta instalada)\b/.test(t)) return "porta_instalada";
+  return null;
+}
+
+function inferirMedidasTexto(texto: string): { largura: number; altura: number } | null {
+  const t = (texto || "").toLowerCase().replace(/,/g, ".");
+  const match = t.match(/(\d+(?:\.\d+)?)\s*(?:x|×|por|\/|-)\s*(\d+(?:\.\d+)?)/i);
+  if (!match) return null;
+  const largura = Number(match[1]);
+  const altura = Number(match[2]);
+  if (!Number.isFinite(largura) || !Number.isFinite(altura) || largura <= 0 || altura <= 0 || largura > 20 || altura > 20) return null;
+  return { largura, altura };
+}
+
+function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo" | null {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/\b(1|fechada|fechado|lisa|liso|meia cana)\b/.test(t)) return "fechado";
+  if (/\b(2|transvision|transvisao|visor|visores)\b/.test(t)) return "transvision";
+  if (/\b(3|oblongo|perfurada|perfurado)\b/.test(t)) return "oblongo";
+  return null;
+}
+
+async function aplicarExtracaoDeterministica(conversaId: string, telefone: string, texto: string) {
+  const { data: estado } = await supabase
+    .from("leo_conversations")
+    .select("tipo_cliente, largura, altura, tipo_perfil")
+    .eq("id", conversaId)
+    .maybeSingle();
+
+  const patch: Record<string, unknown> = {};
+  const tipo = inferirTipoClienteTexto(texto);
+  if (tipo && (!estado?.tipo_cliente || estado.tipo_cliente === "indefinido")) patch.tipo_cliente = tipo;
+
+  const medidas = inferirMedidasTexto(texto);
+  if (medidas && (estado?.largura == null || estado?.altura == null)) {
+    patch.largura = medidas.largura;
+    patch.altura = medidas.altura;
+  }
+
+  const lamina = inferirLaminaTexto(texto);
+  if (lamina && !estado?.tipo_perfil) patch.tipo_perfil = lamina;
+
+  if (Object.keys(patch).length > 0) {
+    patch.ultima_mensagem_at = new Date().toISOString();
+    const { error } = await supabase.from("leo_conversations").update(patch).eq("id", conversaId);
+    if (error) console.error("⚠️ Falha na extração determinística:", error.message);
+    else console.log("✅ Estado atualizado por extração determinística:", JSON.stringify(patch));
+    if (patch.tipo_cliente === "porta_instalada" || patch.tipo_cliente === "revenda") {
+      try { await atualizarTipoClienteLegado(telefone, patch.tipo_cliente as any); } catch (_) {}
+    }
+  }
+}
+
 async function mensagemJaProcessada(conversation_id: string, messageId?: string) {
   if (!messageId) return false;
   const { data } = await supabase
