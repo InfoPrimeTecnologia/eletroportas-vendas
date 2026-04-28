@@ -683,6 +683,90 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
   return { conversa: data, isNova: true };
 }
 
+// ===========================
+// FRETE — Cálculo por CEP (Haversine a partir da Eletroportas em Salvador-BA)
+// ===========================
+const COMPANY_LAT = -12.8933071;
+const COMPANY_LNG = -38.3582854;
+
+function getDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+async function calcularFretePorCep(cepRaw: string) {
+  const cep = (cepRaw || "").replace(/\D/g, "");
+  if (cep.length !== 8) {
+    return { ok: false, error: "CEP inválido. Peça novamente, com 8 dígitos." };
+  }
+  // 1) ViaCEP — endereço + UF
+  let uf = "", localidade = "", bairro = "", logradouro = "";
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    if (r.ok) {
+      const j = await r.json();
+      if (!j.erro) {
+        uf = (j.uf || "").toUpperCase();
+        localidade = j.localidade || "";
+        bairro = j.bairro || "";
+        logradouro = j.logradouro || "";
+      }
+    }
+  } catch (e) {
+    console.error("viacep erro:", e);
+  }
+  if (!uf) return { ok: false, error: "Não consegui consultar esse CEP. Pode confirmar o número?" };
+  if (uf !== "BA") {
+    return { ok: false, fora_da_bahia: true, uf, localidade, error: `CEP é de ${localidade}/${uf}. PORTA INSTALADA atendemos apenas na Bahia.` };
+  }
+
+  // 2) AwesomeAPI — lat/lng do CEP
+  let lat: number | null = null, lng: number | null = null;
+  try {
+    const r = await fetch(`https://cep.awesomeapi.com.br/json/${cep}`);
+    if (r.ok) {
+      const j = await r.json();
+      if (j?.lat && j?.lng) {
+        lat = parseFloat(j.lat);
+        lng = parseFloat(j.lng);
+      }
+    }
+  } catch (e) {
+    console.error("awesomeapi cep erro:", e);
+  }
+
+  if (lat == null || lng == null) {
+    // Fallback conservador: cobra um valor médio quando não temos coordenadas
+    const freteFallback = 350;
+    console.warn(`⚠️ Sem coordenadas para CEP ${cep}, usando frete fallback R$${freteFallback}`);
+    return {
+      ok: true,
+      cep,
+      uf, localidade, bairro, logradouro,
+      distancia_km: null,
+      frete: freteFallback,
+      observacao: "Frete estimado (sem coordenadas precisas).",
+    };
+  }
+
+  const distanciaKm = getDistanceInKm(COMPANY_LAT, COMPANY_LNG, lat, lng);
+  // Fórmula original: distância * 7 * 2 (ida e volta a R$7/km)
+  const frete = Math.round(distanciaKm * 7 * 2 * 100) / 100;
+  return {
+    ok: true,
+    cep,
+    uf, localidade, bairro, logradouro,
+    distancia_km: Math.round(distanciaKm * 100) / 100,
+    frete,
+  };
+}
+
 async function salvarMensagem(conversation_id: string, role: string, content: string, metadata: any = {}) {
   const { error } = await supabase.from("leo_messages").insert({ conversation_id, role, content, metadata });
   if (error) throw error;
