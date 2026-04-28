@@ -28,14 +28,14 @@ export function useUsersManagement() {
       // For now, we'll work with what we have from user_roles
       const userMap = new Map<string, UserWithRole>();
       
-      roles?.forEach(role => {
+      roles?.forEach((role: any) => {
         userMap.set(role.user_id, {
           id: role.user_id,
           email: '', // Will be filled by edge function
           role: role.role as AppRole,
           created_at: role.created_at,
           last_sign_in_at: null,
-          permissions: permissions?.filter(p => p.user_id === role.user_id) as UserPermission[] || [],
+          permissions: (permissions?.filter((p: any) => p.user_id === role.user_id) as UserPermission[]) || [],
         });
       });
 
