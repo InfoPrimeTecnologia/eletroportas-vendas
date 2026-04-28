@@ -14,6 +14,189 @@ export type Database = {
   }
   public: {
     Tables: {
+      Clientes: {
+        Row: {
+          CLI_BAIRRO: string | null
+          CLI_CEP: string | null
+          CLI_CNPJ: string
+          CLI_EMAIL: string | null
+          CLI_ENDERECO: string | null
+          CLI_FONE: string | null
+          CLI_NOME: string | null
+          id: number
+        }
+        Insert: {
+          CLI_BAIRRO?: string | null
+          CLI_CEP?: string | null
+          CLI_CNPJ: string
+          CLI_EMAIL?: string | null
+          CLI_ENDERECO?: string | null
+          CLI_FONE?: string | null
+          CLI_NOME?: string | null
+          id?: number
+        }
+        Update: {
+          CLI_BAIRRO?: string | null
+          CLI_CEP?: string | null
+          CLI_CNPJ?: string
+          CLI_EMAIL?: string | null
+          CLI_ENDERECO?: string | null
+          CLI_FONE?: string | null
+          CLI_NOME?: string | null
+          id?: number
+        }
+        Relationships: []
+      }
+      estoque: {
+        Row: {
+          codigo_sku: string
+          data_atualizacao: string
+          data_cadastro: string
+          descricao: string | null
+          fornecedor: string | null
+          id: number
+          preco_custo: number
+          preco_venda: number
+          produto_nome: string
+          quantidade: number
+          quantidade_minima: number
+          tipo_laminas: string
+          unidade_medida: string | null
+        }
+        Insert: {
+          codigo_sku: string
+          data_atualizacao?: string
+          data_cadastro?: string
+          descricao?: string | null
+          fornecedor?: string | null
+          id?: number
+          preco_custo?: number
+          preco_venda?: number
+          produto_nome: string
+          quantidade?: number
+          quantidade_minima?: number
+          tipo_laminas: string
+          unidade_medida?: string | null
+        }
+        Update: {
+          codigo_sku?: string
+          data_atualizacao?: string
+          data_cadastro?: string
+          descricao?: string | null
+          fornecedor?: string | null
+          id?: number
+          preco_custo?: number
+          preco_venda?: number
+          produto_nome?: string
+          quantidade?: number
+          quantidade_minima?: number
+          tipo_laminas?: string
+          unidade_medida?: string | null
+        }
+        Relationships: []
+      }
+      funil_etapas: {
+        Row: {
+          color: string
+          created_at: string
+          key: string
+          label: string
+          ordem: number
+          updated_at: string
+        }
+        Insert: {
+          color: string
+          created_at?: string
+          key: string
+          label: string
+          ordem?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          key?: string
+          label?: string
+          ordem?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      funil_leads: {
+        Row: {
+          anexo_pdf: string | null
+          created_at: string
+          email: string | null
+          empresa: string | null
+          etapa_key: string
+          id: string
+          itens: Json
+          nome: string
+          observacoes: string | null
+          origem: string
+          telefone: string | null
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          anexo_pdf?: string | null
+          created_at?: string
+          email?: string | null
+          empresa?: string | null
+          etapa_key?: string
+          id?: string
+          itens?: Json
+          nome: string
+          observacoes?: string | null
+          origem?: string
+          telefone?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          anexo_pdf?: string | null
+          created_at?: string
+          email?: string | null
+          empresa?: string | null
+          etapa_key?: string
+          id?: string
+          itens?: Json
+          nome?: string
+          observacoes?: string | null
+          origem?: string
+          telefone?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: []
+      }
+      leo_api_keys: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          key_name: string
+          key_value: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key_name: string
+          key_value?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key_name?: string
+          key_value?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       leo_conversations: {
         Row: {
           created_at: string
@@ -81,6 +264,137 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      orcamentos: {
+        Row: {
+          cliente_nome: string
+          cliente_telefone: string | null
+          created_at: string
+          data_criacao: string
+          id: number
+          itens: Json
+          numero: string | null
+          observacoes: string | null
+          origem: string
+          status: string
+          updated_at: string
+          valor_total: number
+        }
+        Insert: {
+          cliente_nome: string
+          cliente_telefone?: string | null
+          created_at?: string
+          data_criacao?: string
+          id?: number
+          itens?: Json
+          numero?: string | null
+          observacoes?: string | null
+          origem?: string
+          status?: string
+          updated_at?: string
+          valor_total?: number
+        }
+        Update: {
+          cliente_nome?: string
+          cliente_telefone?: string | null
+          created_at?: string
+          data_criacao?: string
+          id?: number
+          itens?: Json
+          numero?: string | null
+          observacoes?: string | null
+          origem?: string
+          status?: string
+          updated_at?: string
+          valor_total?: number
+        }
+        Relationships: []
+      }
+      pedidos_venda: {
+        Row: {
+          cliente_nome: string
+          cliente_telefone: string | null
+          created_at: string
+          data_criacao: string
+          id: number
+          itens: Json
+          numero: string | null
+          observacoes: string | null
+          orcamento_id: number | null
+          origem: string
+          status: string
+          updated_at: string
+          valor_total: number
+        }
+        Insert: {
+          cliente_nome: string
+          cliente_telefone?: string | null
+          created_at?: string
+          data_criacao?: string
+          id?: number
+          itens?: Json
+          numero?: string | null
+          observacoes?: string | null
+          orcamento_id?: number | null
+          origem?: string
+          status?: string
+          updated_at?: string
+          valor_total?: number
+        }
+        Update: {
+          cliente_nome?: string
+          cliente_telefone?: string | null
+          created_at?: string
+          data_criacao?: string
+          id?: number
+          itens?: Json
+          numero?: string | null
+          observacoes?: string | null
+          orcamento_id?: number | null
+          origem?: string
+          status?: string
+          updated_at?: string
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pedidos_venda_orcamento_id_fkey"
+            columns: ["orcamento_id"]
+            isOneToOne: false
+            referencedRelation: "orcamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_permissions: {
+        Row: {
+          can_delete: boolean
+          can_edit: boolean
+          can_view: boolean
+          created_at: string
+          id: string
+          module: string
+          user_id: string
+        }
+        Insert: {
+          can_delete?: boolean
+          can_edit?: boolean
+          can_view?: boolean
+          created_at?: string
+          id?: string
+          module: string
+          user_id: string
+        }
+        Update: {
+          can_delete?: boolean
+          can_edit?: boolean
+          can_view?: boolean
+          created_at?: string
+          id?: string
+          module?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
