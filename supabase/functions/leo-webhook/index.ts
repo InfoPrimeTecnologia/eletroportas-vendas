@@ -1174,7 +1174,9 @@ Deno.serve(async (req) => {
     }
 
     if (estadoProntoParaOrcamento(estadoAposExtracao)) {
-      if (await pdfJaEnviadoConversa(conversa.id)) {
+      const jaEnviouPdf = await pdfJaEnviadoConversa(conversa.id);
+      const pareceNovoPedido = /\b(orcamento|orçamento|cotacao|cotação|preco|preço|valor|nova|novo|outra|outro)\b/i.test(messageBody);
+      if (jaEnviouPdf && !pareceNovoPedido) {
         console.log("⏭️ PDF já enviado nesta conversa — não gera duplicado");
         return new Response(JSON.stringify({ ok: true, ignored: "pdf_already_sent" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
