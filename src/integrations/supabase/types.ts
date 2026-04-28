@@ -199,32 +199,50 @@ export type Database = {
       }
       leo_conversations: {
         Row: {
+          altura: number | null
+          cep: string | null
           created_at: string
+          endereco_instalacao: string | null
+          frete: number | null
           id: string
+          largura: number | null
           nome_cliente: string | null
           status: string
           telefone: string
           tipo_cliente: string
+          tipo_perfil: string | null
           ultima_mensagem_at: string | null
           updated_at: string
         }
         Insert: {
+          altura?: number | null
+          cep?: string | null
           created_at?: string
+          endereco_instalacao?: string | null
+          frete?: number | null
           id?: string
+          largura?: number | null
           nome_cliente?: string | null
           status?: string
           telefone: string
           tipo_cliente?: string
+          tipo_perfil?: string | null
           ultima_mensagem_at?: string | null
           updated_at?: string
         }
         Update: {
+          altura?: number | null
+          cep?: string | null
           created_at?: string
+          endereco_instalacao?: string | null
+          frete?: number | null
           id?: string
+          largura?: number | null
           nome_cliente?: string | null
           status?: string
           telefone?: string
           tipo_cliente?: string
+          tipo_perfil?: string | null
           ultima_mensagem_at?: string | null
           updated_at?: string
         }
