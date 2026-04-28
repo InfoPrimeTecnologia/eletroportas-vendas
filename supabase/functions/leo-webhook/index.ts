@@ -661,24 +661,34 @@ const TOOLS = [
 ];
 
 async function chamarIA(messages: any[]) {
-  const r = await fetch(AI_GATEWAY_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-      tools: TOOLS,
-    }),
-  });
-  if (!r.ok) {
-    const t = await r.text();
-    console.error("IA erro:", r.status, t);
-    throw new Error(`IA ${r.status}: ${t}`);
+  // Timeout generoso (30s) para o agente "pensar com calma" sem travar a request
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const r = await fetch(AI_GATEWAY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+        tools: TOOLS,
+        temperature: 0.2, // resposta mais previsível e fiel ao fluxo
+        top_p: 0.9,
+      }),
+      signal: controller.signal,
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      console.error("IA erro:", r.status, t);
+      throw new Error(`IA ${r.status}: ${t}`);
+    }
+    return await r.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return await r.json();
 }
 
 // ===========================
