@@ -622,13 +622,57 @@ Deno.serve(async (req) => {
     await salvarMensagem(conversa.id, "user", messageBody);
     const historico = await carregarHistorico(conversa.id);
 
-    // Contexto do cliente como mensagem de sistema dinâmica
+    // Detecção de estado: analisa o histórico para definir o PRÓXIMO PASSO obrigatório
+    const histTxt = historico.map((m) => `${m.role}: ${m.content}`).join("\n").toLowerCase();
+    const userMsgs = historico.filter((m) => m.role === "user").map((m) => m.content.toLowerCase());
+    const ultimaUser = userMsgs[userMsgs.length - 1] || "";
+
+    const jaPerguntouTipo = histTxt.includes("porta instalada ou em revenda") || histTxt.includes("porta instalada ou revenda");
+    const jaRespondeuTipo = userMsgs.some((m) => /revenda|instalad/i.test(m));
+    const tipoEscolhido = userMsgs.some((m) => /revenda/i.test(m)) ? "revenda" : (userMsgs.some((m) => /instalad/i.test(m)) ? "porta_instalada" : null);
+
+    const jaPerguntouMedidas = histTxt.includes("largura e altura") || histTxt.includes("largura e a altura");
+    const jaRespondeuMedidas = userMsgs.some((m) => /\d+\s*[x×]\s*\d+/i.test(m) || /\d+(?:[.,]\d+)?\s*m(?:etros?)?\s*(?:x|por)\s*\d+/i.test(m));
+
+    const jaPerguntouLamina = histTxt.includes("tipo da lâmina") || histTxt.includes("tipo da lamina");
+    const jaRespondeuLamina = userMsgs.some((m) => /(fechad|transvision|oblong|1\b|2\b|3\b)/i.test(m)) && jaPerguntouLamina;
+
+    const jaCadastrou = histTxt.includes("cliente cadastrado") || !!clienteExistente;
+
+    let proximoPasso = "";
+    if (!clienteExistente && !jaCadastrou) {
+      proximoPasso = "PRÓXIMO PASSO: colete nome, e-mail e CNPJ/CPF (se ainda não tiver). Quando tiver os 3, chame cadastrar_cliente.";
+    } else if (!jaPerguntouTipo) {
+      proximoPasso = "PRÓXIMO PASSO: pergunte exatamente: 'Você tem interesse em PORTA INSTALADA ou em REVENDA?'. NÃO se cumprimente.";
+    } else if (jaPerguntouTipo && !jaRespondeuTipo) {
+      proximoPasso = "PRÓXIMO PASSO: o cliente ainda não escolheu o tipo. Reformule de forma curta perguntando entre PORTA INSTALADA e REVENDA. NÃO se cumprimente.";
+    } else if (jaRespondeuTipo && !jaPerguntouMedidas) {
+      proximoPasso = `PRÓXIMO PASSO: o cliente JÁ ESCOLHEU "${tipoEscolhido}". NÃO repita a pergunta de tipo. Pergunte agora: 'Qual a largura e altura da porta em metros? (ex: 4x3)'`;
+    } else if (jaPerguntouMedidas && !jaRespondeuMedidas) {
+      proximoPasso = "PRÓXIMO PASSO: aguarde o cliente informar largura x altura. Se ele desviou do assunto, reformule pedindo as medidas.";
+    } else if (jaRespondeuMedidas && !jaPerguntouLamina) {
+      proximoPasso = "PRÓXIMO PASSO: você JÁ tem as medidas. NÃO repita perguntas anteriores. Pergunte agora: 'Qual o tipo da lâmina? 1️⃣ FECHADA  2️⃣ TRANSVISION  3️⃣ OBLONGO'";
+    } else if (jaPerguntouLamina && !jaRespondeuLamina) {
+      proximoPasso = "PRÓXIMO PASSO: aguarde o cliente escolher 1, 2 ou 3 (lâmina).";
+    } else if (jaRespondeuLamina) {
+      proximoPasso = `PRÓXIMO PASSO: você tem TODOS os dados (tipo=${tipoEscolhido}, medidas, lâmina). Chame AGORA a tool gerar_orcamento. NÃO faça mais perguntas.`;
+    }
+
+    console.log(`🧭 Estado: tipo=${tipoEscolhido} medidas=${jaRespondeuMedidas} lamina=${jaRespondeuLamina} | ${proximoPasso}`);
+
+    // Contexto do cliente + próximo passo determinístico
     const contextoCliente = clienteExistente
-      ? `[CONTEXTO] Cliente JÁ CADASTRADO: ${clienteExistente.CLI_NOME || "(sem nome)"} | CNPJ/CPF: ${clienteExistente.CLI_CNPJ} | Email: ${clienteExistente.CLI_EMAIL || "(não informado)"}. NÃO peça cadastro novamente — pergunte sobre porta instalada ou revenda.`
-      : `[CONTEXTO] Cliente NÃO CADASTRADO (telefone ${telefone}). Sua prioridade é coletar nome completo, e-mail e CNPJ ou CPF, e então chamar a tool cadastrar_cliente.`;
+      ? `[CONTEXTO] Cliente JÁ CADASTRADO: ${clienteExistente.CLI_NOME || "(sem nome)"} | CNPJ/CPF: ${clienteExistente.CLI_CNPJ} | Email: ${clienteExistente.CLI_EMAIL || "(não informado)"}. NÃO peça cadastro novamente.`
+      : `[CONTEXTO] Cliente NÃO CADASTRADO (telefone ${telefone}).`;
+
+    const instrucaoEstado = `[ESTADO ATUAL DA CONVERSA]\n${proximoPasso}\n\n⚠️ Última mensagem do cliente: "${ultimaUser}". Responda APENAS o próximo passo. NUNCA se apresente novamente. NUNCA repita pergunta já feita.`;
 
     // Loop de tools (até 3 chamadas)
-    let messages: any[] = [{ role: "system", content: contextoCliente }, ...historico];
+    let messages: any[] = [
+      { role: "system", content: contextoCliente },
+      { role: "system", content: instrucaoEstado },
+      ...historico,
+    ];
     let respostaFinal = "";
     for (let i = 0; i < 3; i++) {
       const ai = await chamarIA(messages);
