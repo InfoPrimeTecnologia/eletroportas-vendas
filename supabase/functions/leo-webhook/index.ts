@@ -1020,12 +1020,18 @@ async function pdfJaEnviadoConversa(conversation_id: string) {
 }
 
 async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone: string, nome: string) {
-  const { data: estado, error } = await supabase
-    .from("leo_conversations")
-    .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao")
-    .eq("id", conversaId)
-    .maybeSingle();
-  if (error) throw error;
+  const r = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao")
+      .eq("id", conversaId)
+      .maybeSingle()
+  );
+  if (r.error) {
+    console.error("⚠️", descreverErroPg(r.error, "gerarEEnviarOrcamento - leitura conversa: "));
+    return { ok: false, error: descreverErroPg(r.error) };
+  }
+  const estado: any = r.data;
 
   const largura = Number(estado?.largura);
   const altura = Number(estado?.altura);
