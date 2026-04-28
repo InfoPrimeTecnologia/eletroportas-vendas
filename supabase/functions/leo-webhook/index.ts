@@ -1304,16 +1304,18 @@ async function mensagemForaDeOrdem(conversation_id: string, rawTimestamp?: strin
   const incomingTs = Number(rawTimestamp || 0);
   if (!Number.isFinite(incomingTs) || incomingTs <= 0) return false;
 
-  const { data, error } = await supabase
-    .from("leo_messages")
-    .select("metadata")
-    .eq("conversation_id", conversation_id)
-    .eq("role", "user")
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const { data, error } = await withSchemaRetry(() =>
+    supabase
+      .from("leo_messages")
+      .select("metadata")
+      .eq("conversation_id", conversation_id)
+      .eq("role", "user")
+      .order("created_at", { ascending: false })
+      .limit(20)
+  );
 
   if (error) {
-    console.error("⚠️ Falha ao verificar ordem da mensagem:", error.message || error);
+    console.error("⚠️", descreverErroPg(error, "mensagemForaDeOrdem: "));
     return false;
   }
 
