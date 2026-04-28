@@ -1302,6 +1302,9 @@ Deno.serve(async (req) => {
           content: JSON.stringify(toolResult),
         });
       }
+      // Após processar todas as tool_calls, re-injeta [ESTADO] atualizado
+      // para que a próxima iteração da IA enxergue os dados recém-gravados.
+      messages.push({ role: "system", content: await montarEstado() });
     }
 
     try {
