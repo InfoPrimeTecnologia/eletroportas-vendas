@@ -140,12 +140,10 @@ export default function AgenteLeo() {
   };
 
   const handleResetMemory = async (convId: string) => {
-    const { error } = await supabase
-      .from("leo_messages" as any)
-      .delete()
-      .eq("conversation_id", convId);
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    try {
+      await callLeoAdmin({ action: "reset-memory", conversationId: convId });
+    } catch (error) {
+      toast({ title: "Erro", description: error instanceof Error ? error.message : "Falha ao zerar memória.", variant: "destructive" });
       return;
     }
     toast({ title: "Memória zerada", description: "Histórico da conversa foi apagado." });
@@ -153,12 +151,10 @@ export default function AgenteLeo() {
   };
 
   const handleDeleteConversation = async (convId: string) => {
-    const { error } = await supabase
-      .from("leo_conversations" as any)
-      .delete()
-      .eq("id", convId);
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    try {
+      await callLeoAdmin({ action: "delete-conversation", conversationId: convId });
+    } catch (error) {
+      toast({ title: "Erro", description: error instanceof Error ? error.message : "Falha ao excluir conversa.", variant: "destructive" });
       return;
     }
     toast({ title: "Conversa excluída" });
@@ -169,15 +165,14 @@ export default function AgenteLeo() {
 
   const handleSaveKey = async (key: ApiKey) => {
     setSavingKey(key.key_name);
-    const { error } = await supabase
-      .from("leo_api_keys" as any)
-      .update({ key_value: editKeys[key.key_name] || "", updated_at: new Date().toISOString() })
-      .eq("id", key.id);
-    setSavingKey(null);
-    if (error) {
-      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+    try {
+      await callLeoAdmin({ action: "save-key", keyId: key.id, keyValue: editKeys[key.key_name] || "" });
+    } catch (error) {
+      setSavingKey(null);
+      toast({ title: "Erro ao salvar", description: error instanceof Error ? error.message : "Falha ao salvar chave.", variant: "destructive" });
       return;
     }
+    setSavingKey(null);
     toast({ title: "Chave salva", description: `${key.key_name} atualizada.` });
     fetchAll();
   };
