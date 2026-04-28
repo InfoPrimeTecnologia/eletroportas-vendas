@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
+import { legacySupabase as supabase } from "@/integrations/supabase/legacyClient";
 import { Cliente } from "@/types/database";
 
 interface ClientePickerProps {
