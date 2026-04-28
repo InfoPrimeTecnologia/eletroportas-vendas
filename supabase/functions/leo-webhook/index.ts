@@ -1173,6 +1173,27 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (estadoProntoParaOrcamento(estadoAposExtracao)) {
+      if (await pdfJaEnviadoConversa(conversa.id)) {
+        console.log("⏭️ PDF já enviado nesta conversa — não gera duplicado");
+        return new Response(JSON.stringify({ ok: true, ignored: "pdf_already_sent" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
+      if (resultadoPdf.pdf_enviado) {
+        await salvarMensagem(conversa.id, "assistant", resultadoPdf.caption, { pdf_enviado: true, deterministic_flow: true });
+      } else {
+        const aviso = "Consegui levantar os dados, mas tive uma falha ao gerar o PDF. Vou deixar um atendente finalizar o envio por aqui.";
+        await salvarMensagem(conversa.id, "assistant", aviso, { deterministic_flow: true, pdf_error: resultadoPdf.error || resultadoPdf.faltando || null });
+        await enviarTexto(telefone, aviso);
+      }
+      return new Response(JSON.stringify({ ok: true, deterministic_pdf: true, pdf_enviado: Boolean(resultadoPdf.pdf_enviado) }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const historicoDb = await carregarHistorico(conversa.id);
     const historicoTemMensagemAtual = historicoDb.some(
       (m) => m.role === "user" && m.content.trim().toLowerCase() === messageBody.trim().toLowerCase()
