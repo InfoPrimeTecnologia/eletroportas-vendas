@@ -50,7 +50,9 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
-  const { isAdmin, isSuperAdmin, hasModuleAccess } = useUserRole();
+  const { isAdmin, isSuperAdmin } = useUserRole();
+  const isPrimeSyncOwner = user?.email?.toLowerCase() === "primesync@primesync.com.br";
+  const canManageSystem = isSuperAdmin || isPrimeSyncOwner;
 
   const isActive = (path: string) =>
     path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
@@ -137,7 +139,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Admin Section - Only visible for admins */}
-        {isAdmin && (
+        {(isAdmin || canManageSystem) && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest">
               Administração
@@ -174,7 +176,7 @@ export function AppSidebar() {
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                {isSuperAdmin && (
+                {canManageSystem && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
