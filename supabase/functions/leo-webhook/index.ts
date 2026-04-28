@@ -1072,6 +1072,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (await mensagemForaDeOrdem(conversa.id, body?.timestamp || null)) {
+      console.warn("⏭️ Ignorado: webhook antigo/fora de ordem", { messageId, timestamp: body?.timestamp });
+      return new Response(JSON.stringify({ ignored: "stale_out_of_order" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Lookup do cliente no backend legado
     const clienteExistente = await buscarClientePorTelefone(telefone);
 
@@ -1447,15 +1454,10 @@ Deno.serve(async (req) => {
   } catch (e: any) {
     const errMsg = e?.message || e?.error_description || e?.details || e?.hint || e?.code || JSON.stringify(e) || "erro desconhecido";
     console.error("leo-webhook erro:", errMsg, "stack:", e?.stack, "raw:", JSON.stringify(e, Object.getOwnPropertyNames(e || {})));
-    // Tenta avisar o cliente mesmo em erro fatal — agente nunca pode ficar mudo
-    try {
-      const tel = normalizarTelefone(telefoneFallback);
-      if (tel) {
-        await enviarTexto(tel, "Tive uma instabilidade momentânea aqui. Pode reenviar sua última mensagem? 🙏");
-      }
-    } catch (_) { /* silencioso */ }
-    return new Response(JSON.stringify({ error: errMsg }), {
-      status: 500,
+    // Não retorna 500 nem envia texto genérico: isso fazia o provedor reentregar webhooks antigos
+    // e o cliente recebia "instabilidade" duplicada mesmo quando o próximo passo já tinha sido enviado.
+    return new Response(JSON.stringify({ ok: false, handled: true, error: errMsg }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
