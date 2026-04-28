@@ -1160,7 +1160,7 @@ async function registrarLeadContatoInicial(telefone: string, nomeBruto: string) 
     const cli = await buscarClientePorTelefone(telefone).catch(() => null);
 
     // Evita duplicar leads ativos do mesmo telefone (não inserir se já houver lead aberto)
-    const { data: existente } = await supabase
+    const { data: existente } = await dashboardDb
       .from("funil_leads")
       .select("id, etapa_key")
       .eq("telefone", telefone)
@@ -1184,7 +1184,7 @@ async function registrarLeadContatoInicial(telefone: string, nomeBruto: string) 
       itens: [],
       observacoes: "Lead criado automaticamente pelo agente Leo via WhatsApp.",
     };
-    const { data, error } = await supabase
+    const { data, error } = await dashboardDb
       .from("funil_leads")
       .insert(payload)
       .select("id")
@@ -1203,7 +1203,7 @@ async function registrarLeadContatoInicial(telefone: string, nomeBruto: string) 
 
 /** Busca o lead aberto (não fechado/perdido) deste telefone. */
 async function buscarLeadAberto(telefone: string) {
-  const { data } = await supabase
+  const { data } = await dashboardDb
     .from("funil_leads")
     .select("id, etapa_key, itens, anexo_pdf, valor")
     .eq("telefone", telefone)
