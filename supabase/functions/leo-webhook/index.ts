@@ -605,6 +605,20 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "calcular_frete_cep",
+      description: "Calcula o frete a partir do CEP do cliente (apenas para PORTA INSTALADA na Bahia). Retorna o valor do frete em reais e o endereço resumido. Se o CEP for fora da Bahia, retorna fora_da_bahia=true.",
+      parameters: {
+        type: "object",
+        properties: {
+          cep: { type: "string", description: "CEP informado pelo cliente (com ou sem traço)" },
+        },
+        required: ["cep"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "transferir_humano",
       description: "Transfere a conversa para um atendente humano. Use quando: cliente porta instalada fora da BA, cliente quer falar com humano, ou situação fora do seu escopo.",
       parameters: {
