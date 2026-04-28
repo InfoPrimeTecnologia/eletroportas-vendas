@@ -711,7 +711,7 @@ async function chamarIA(messages: any[], options: { tools?: any[] | null; temper
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY || OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: AI_MODEL,
