@@ -948,8 +948,16 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
-    console.error("leo-webhook erro:", e);
-    return new Response(JSON.stringify({ error: e.message }), {
+    const errMsg = e?.message || e?.error_description || JSON.stringify(e) || "erro desconhecido";
+    console.error("leo-webhook erro:", errMsg, e);
+    // Tenta avisar o cliente mesmo em erro fatal — agente nunca pode ficar mudo
+    try {
+      const tel = normalizarTelefone((rawBody as any)?.from || (rawBody as any)?.contact?.phoneNumber || "");
+      if (tel) {
+        await enviarTexto(tel, "Tive uma instabilidade momentânea aqui. Pode reenviar sua última mensagem? 🙏");
+      }
+    } catch (_) { /* silencioso */ }
+    return new Response(JSON.stringify({ error: errMsg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
