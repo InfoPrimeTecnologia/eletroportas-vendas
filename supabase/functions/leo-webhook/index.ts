@@ -1377,6 +1377,8 @@ Deno.serve(async (req) => {
       const saudacao = `Olá, sou o Leo da Eletroportas. ${saudacaoHorario()}!`;
       await enviarTexto(telefone, saudacao);
       await salvarMensagem(conversa.id, "assistant", saudacao);
+      // ➕ DASHBOARD: cria lead em "Contato Inicial" assim que a conversa começa
+      await registrarLeadContatoInicial(telefone, conversa.nome_cliente || nome || "");
     }
 
     await salvarMensagem(conversa.id, "user", messageBody, { message_id: messageId || null, raw_timestamp: body?.timestamp || null });
@@ -1384,6 +1386,20 @@ Deno.serve(async (req) => {
       .from("leo_conversations")
       .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
       .eq("id", conversa.id);
+
+    // ➕ DASHBOARD: detecta aceite explícito do orçamento → gera pedido_venda e fecha o lead
+    if (pareceAceite(messageBody)) {
+      const r = await aceitarOrcamentoEGerarPedido(telefone);
+      if (r?.pedido_numero) {
+        const msg = `Perfeito! ✅ Orçamento ${r.orcamento_numero} aceito e pedido ${r.pedido_numero} aberto. Em breve um atendente confirma os próximos passos.`;
+        await salvarMensagem(conversa.id, "assistant", msg, { pedido_gerado: r.pedido_numero });
+        await enviarTexto(telefone, msg);
+        return new Response(JSON.stringify({ ok: true, pedido_gerado: r.pedido_numero }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
 
     const estadoAposExtracao = await carregarEstadoConversa(conversa.id);
