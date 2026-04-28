@@ -874,9 +874,11 @@ Deno.serve(async (req) => {
 
     if (pdfEnviadoNesteTurno) {
       await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, { pdf_enviado: true });
-    } else if (respostaFinal) {
-      await salvarMensagem(conversa.id, "assistant", respostaFinal);
-      await enviarTexto(telefone, respostaFinal);
+    } else {
+      const textoFinal = (respostaFinal || "").trim() ||
+        "Desculpe, tive uma instabilidade aqui. Pode repetir sua última mensagem, por favor? 🙏";
+      await salvarMensagem(conversa.id, "assistant", textoFinal);
+      await enviarTexto(telefone, textoFinal);
     }
 
     await supabase
