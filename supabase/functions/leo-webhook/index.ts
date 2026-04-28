@@ -924,9 +924,9 @@ async function carregarHistorico(conversation_id: string) {
     .from("leo_messages")
     .select("role, content")
     .eq("conversation_id", conversation_id)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(40);
-  return (data || []).map((m) => ({ role: m.role, content: m.content }));
+  return (data || []).reverse().map((m) => ({ role: m.role, content: m.content }));
 }
 
 // ===========================
