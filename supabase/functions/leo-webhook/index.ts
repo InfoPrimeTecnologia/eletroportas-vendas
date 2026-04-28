@@ -1721,7 +1721,7 @@ Deno.serve(async (req) => {
 
     console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"}`);
 
-    // Loop do agente: até 5 iterações de tool calling
+    // Loop do agente: LLM + tools, com histórico completo e limite de segurança
     let messages: any[] = [
       { role: "system", content: contextoCliente },
       ...historico,
@@ -1737,7 +1737,7 @@ Deno.serve(async (req) => {
     let pdfEnviadoNesteTurno = false;
     let pdfCaptionEnviada = "";
     let gerarOrcamentoFalhas = 0; // contador de DADOS_INSUFICIENTES
-    const MAX_ITER = 5;
+    const MAX_ITER = 8;
     for (let i = 0; i < MAX_ITER; i++) {
       const ai = await chamarIA(messages);
       const choice = ai.choices?.[0]?.message;
