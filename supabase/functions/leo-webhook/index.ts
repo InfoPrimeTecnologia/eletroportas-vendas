@@ -793,6 +793,9 @@ async function calcularFretePorCep(cepRaw: string) {
   if (cep.length !== 8) {
     return { ok: false, error: "CEP inválido. Peça novamente, com 8 dígitos." };
   }
+  const cepNumero = Number(cep);
+  const cepPareceBahia = Number.isFinite(cepNumero) && cepNumero >= 40000000 && cepNumero <= 48999999;
+  const freteFallback = 350;
   // 1) ViaCEP — endereço + UF
   let uf = "", localidade = "", bairro = "", logradouro = "";
   try {
@@ -809,7 +812,21 @@ async function calcularFretePorCep(cepRaw: string) {
   } catch (e) {
     console.error("viacep erro:", e);
   }
-  if (!uf) return { ok: false, error: "Não consegui consultar esse CEP. Pode confirmar o número?" };
+  if (!uf && cepPareceBahia) {
+    console.warn(`⚠️ ViaCEP indisponível/sem UF para CEP ${cep}; usando fallback BA R$${freteFallback}`);
+    return {
+      ok: true,
+      cep,
+      uf: "BA",
+      localidade: "Bahia",
+      bairro: "",
+      logradouro: "",
+      distancia_km: null,
+      frete: freteFallback,
+      observacao: "Frete estimado por faixa de CEP da Bahia.",
+    };
+  }
+  if (!uf) return { ok: false, fora_da_bahia: true, error: "Não consegui confirmar que esse CEP é da Bahia." };
   if (uf !== "BA") {
     return { ok: false, fora_da_bahia: true, uf, localidade, error: `CEP é de ${localidade}/${uf}. PORTA INSTALADA atendemos apenas na Bahia.` };
   }
@@ -831,7 +848,6 @@ async function calcularFretePorCep(cepRaw: string) {
 
   if (lat == null || lng == null) {
     // Fallback conservador: cobra um valor médio quando não temos coordenadas
-    const freteFallback = 350;
     console.warn(`⚠️ Sem coordenadas para CEP ${cep}, usando frete fallback R$${freteFallback}`);
     return {
       ok: true,
@@ -1000,6 +1016,11 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
       patch.endereco_instalacao = [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
         .filter((x: any) => x && String(x).trim())
         .join(", ") || null;
+    } else if (!frete.fora_da_bahia) {
+      console.warn(`⚠️ CEP ${cep} aceito com fallback para evitar loop: ${frete.error || "consulta indisponível"}`);
+      patch.cep = cep;
+      patch.frete = 350;
+      patch.endereco_instalacao = null;
     }
   }
 
