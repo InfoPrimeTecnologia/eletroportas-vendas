@@ -110,15 +110,19 @@ Deno.serve(async (req) => {
 
     if (action === "list") {
       const [convRes, keysRes] = await Promise.all([
-        supabase
-          .from("leo_conversations")
-          .select("id,telefone,tipo_cliente,nome_cliente,status,ultima_mensagem_at,created_at")
-          .order("ultima_mensagem_at", { ascending: false })
-          .limit(100),
-        supabase
-          .from("leo_api_keys")
-          .select("id,key_name,key_value,description,updated_at")
-          .order("key_name"),
+        withSchemaRetry(() =>
+          supabase
+            .from("leo_conversations")
+            .select("id,telefone,tipo_cliente,nome_cliente,status,ultima_mensagem_at,created_at")
+            .order("ultima_mensagem_at", { ascending: false })
+            .limit(100)
+        ),
+        withSchemaRetry(() =>
+          supabase
+            .from("leo_api_keys")
+            .select("id,key_name,key_value,description,updated_at")
+            .order("key_name")
+        ),
       ]);
 
       if (convRes.error) throw convRes.error;
