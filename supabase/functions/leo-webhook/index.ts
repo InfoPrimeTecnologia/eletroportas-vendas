@@ -708,15 +708,17 @@ Deno.serve(async (req) => {
             const pdfB64 = await gerarPdfDocrya(html, filename);
 
             if (pdfB64) {
-              await enviarPdfBase64(telefone, pdfB64, filename, "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄");
+              const pdfEnviado = await enviarPdfBase64(telefone, pdfB64, filename, "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄");
               toolResult = {
-                ok: true,
+                ok: pdfEnviado,
                 total_geral: o.total_geral,
                 subtotal_produtos: o.subtotal_produtos,
                 mao_de_obra: o.mao_de_obra,
                 frete: o.frete,
-                pdf_enviado: true,
-                instrucao: "Apenas confirme ao cliente que o PDF foi enviado. NÃO mencione valores no chat.",
+                pdf_enviado: pdfEnviado,
+                instrucao: pdfEnviado
+                  ? "Apenas confirme ao cliente que o PDF foi enviado. NÃO mencione valores no chat."
+                  : "Não confirme envio do PDF. Informe que houve instabilidade no envio do arquivo e que um atendente vai encaminhar em breve.",
               };
             } else {
               toolResult = { ok: false, error: "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
