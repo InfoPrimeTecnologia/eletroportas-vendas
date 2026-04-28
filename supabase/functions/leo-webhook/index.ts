@@ -954,7 +954,7 @@ Deno.serve(async (req) => {
     console.error("leo-webhook erro:", errMsg, e);
     // Tenta avisar o cliente mesmo em erro fatal — agente nunca pode ficar mudo
     try {
-      const tel = normalizarTelefone((rawBody as any)?.from || (rawBody as any)?.contact?.phoneNumber || "");
+      const tel = normalizarTelefone(telefoneFallback);
       if (tel) {
         await enviarTexto(tel, "Tive uma instabilidade momentânea aqui. Pode reenviar sua última mensagem? 🙏");
       }
