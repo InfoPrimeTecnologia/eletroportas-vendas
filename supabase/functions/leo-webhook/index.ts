@@ -1246,14 +1246,29 @@ Deno.serve(async (req) => {
             toolResult = { ok: false, error: r.error };
           }
         } else if (fnName === "calcular_frete_cep") {
-          const r = await calcularFretePorCep(String(args.cep || ""));
+          const r: any = await calcularFretePorCep(String(args.cep || ""));
           if (r.ok) {
-            // Se conseguiu calcular o frete, é PORTA INSTALADA na BA — grava no legado
+            // Grava cep, frete e endereço resumido no [ESTADO] da conversa
+            const enderecoResumo = [r.logradouro, r.bairro, r.localidade, r.uf]
+              .filter((x: any) => x && String(x).trim())
+              .join(", ");
+            await supabase
+              .from("leo_conversations")
+              .update({
+                cep: r.cep,
+                frete: r.frete,
+                endereco_instalacao: enderecoResumo || null,
+                tipo_cliente: "porta_instalada",
+                ultima_mensagem_at: new Date().toISOString(),
+              })
+              .eq("id", conversa.id);
             try { await atualizarTipoClienteLegado(telefone, "porta_instalada"); } catch (_) {}
             toolResult = {
-              ...r,
-              instrucao: "NÃO mencione o valor do frete no chat. Chame imediatamente gerar_orcamento usando este frete e os demais dados (largura, altura, tipo_cliente=porta_instalada, tipo_perfil).",
+              ok: true,
+              instrucao: "CEP e frete gravados no [ESTADO]. NÃO mencione o valor do frete ao cliente. Chame IMEDIATAMENTE gerar_orcamento (sem argumentos).",
             };
+          } else if (r.fora_da_bahia) {
+            toolResult = { ...r, instrucao: "Cliente fora da BA para PORTA INSTALADA. Chame transferir_humano." };
           } else {
             toolResult = r;
           }
@@ -1264,19 +1279,15 @@ Deno.serve(async (req) => {
           if (!tcNorm) {
             toolResult = { ok: false, error: "tipo_cliente inválido. Use 'porta_instalada' ou 'revenda'." };
           } else {
-            // 1) atualiza conversa atual
             await supabase
               .from("leo_conversations")
               .update({ tipo_cliente: tcNorm, ultima_mensagem_at: new Date().toISOString() })
               .eq("id", conversa.id);
-            // 2) propaga para a tabela legada Clientes (silencioso, não bloqueia)
             try { await atualizarTipoClienteLegado(telefone, tcNorm); } catch (_) {}
             toolResult = {
               ok: true,
               tipo_cliente: tcNorm,
-              instrucao: tcNorm === "porta_instalada"
-                ? "Tipo gravado. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta."
-                : "Tipo gravado. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.",
+              instrucao: "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta (ex: 4x3).",
             };
           }
         } else if (fnName === "transferir_humano") {
