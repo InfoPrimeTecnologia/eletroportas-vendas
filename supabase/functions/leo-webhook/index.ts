@@ -1353,8 +1353,8 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
     const { data: orc } = await dashboardDb
       .from("orcamentos")
       .select("id, numero, cliente_nome, cliente_telefone, valor_total, itens, observacoes, status")
-      .eq("cliente_telefone", telefone)
       .eq("origem", "leo_agent")
+      .ilike("observacoes", `%Telefone: ${telefone}%`)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -1372,7 +1372,7 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
       .from("pedidos_venda")
       .insert({
         cliente_nome: orc.cliente_nome,
-        cliente_telefone: orc.cliente_telefone,
+        cliente_cnpj: null,
         valor_total: orc.valor_total,
         status: "processando",
         origem: "leo_agent",
