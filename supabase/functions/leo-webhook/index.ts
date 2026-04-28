@@ -1314,8 +1314,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
-    const errMsg = e?.message || e?.error_description || JSON.stringify(e) || "erro desconhecido";
-    console.error("leo-webhook erro:", errMsg, e);
+    const errMsg = e?.message || e?.error_description || e?.details || e?.hint || e?.code || JSON.stringify(e) || "erro desconhecido";
+    console.error("leo-webhook erro:", errMsg, "stack:", e?.stack, "raw:", JSON.stringify(e, Object.getOwnPropertyNames(e || {})));
     // Tenta avisar o cliente mesmo em erro fatal — agente nunca pode ficar mudo
     try {
       const tel = normalizarTelefone(telefoneFallback);
