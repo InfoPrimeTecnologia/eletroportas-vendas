@@ -303,72 +303,49 @@ async function enviarTexto(numero: string, texto: string) {
   return r.ok;
 }
 
+function base64ToBlob(base64: string, mimeType: string) {
+  const clean = base64.includes(",") ? base64.split(",").pop() || "" : base64;
+  const binary = atob(clean);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mimeType });
+}
+
 async function enviarPdfBase64(numero: string, base64: string, filename: string, caption?: string) {
   const captionTxt = caption || "Segue seu orçamento em PDF.";
-  const dataUrl = `data:application/pdf;base64,${base64}`;
 
-  // Múltiplos formatos conhecidos de APIs estilo Whaticket/PrimeSync/Codechat para envio de documento
-  const payloads: Array<Record<string, unknown>> = [
-    // 1) Whaticket/PrimeSync — array "medias" com objeto file
-    {
-      number: numero,
-      body: captionTxt,
-      medias: [
-        {
-          name: filename,
-          fileName: filename,
-          mimetype: "application/pdf",
-          mediaType: "document",
-          data: base64,
-          base64,
-        },
-      ],
-    },
-    // 2) PrimeSync — campos planos com data URL
-    {
-      number: numero,
-      body: captionTxt,
-      mediaUrl: dataUrl,
-      fileName: filename,
-      mediaType: "document",
-      mimeType: "application/pdf",
-    },
-    // 3) Codechat/Evolution style
-    {
-      number: numero,
-      caption: captionTxt,
-      fileName: filename,
-      mediatype: "document",
-      mimetype: "application/pdf",
-      media: base64,
-    },
-    // 4) Tentativa antiga (fallback)
-    {
-      number: numero,
-      body: captionTxt,
-      media: base64,
-      fileName: filename,
-      mediaType: "document",
-      mimeType: "application/pdf",
-    },
+  // Whaticket/PrimeSync envia mídia como multipart/form-data; JSON com "medias"
+  // costuma enfileirar só o texto e descartar o anexo.
+  const pdfBlob = base64ToBlob(base64, "application/pdf");
+  const formVariants = [
+    { fileField: "medias", captionField: "body" },
+    { fileField: "medias", captionField: "caption" },
+    { fileField: "media", captionField: "body" },
   ];
 
-  for (const [idx, payload] of payloads.entries()) {
+  for (const [idx, variant] of formVariants.entries()) {
     try {
+      const form = new FormData();
+      form.append("number", numero);
+      form.append(variant.captionField, captionTxt);
+      form.append("fileName", filename);
+      form.append("mediaType", "document");
+      form.append("mimetype", "application/pdf");
+      form.append(variant.fileField, pdfBlob, filename);
+
       const r = await fetch(PRIMESYNC_URL, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${PRIMESYNC_TOKEN}`,
         },
-        body: JSON.stringify(payload),
+        body: form,
       });
       const txt = await r.text();
       const ok = r.ok && !/erro|error|invalid|missing/i.test(txt);
-      console.log(`📎 PrimeSync PDF tentativa ${idx + 1}: status=${r.status} ok=${ok} resp=${txt.substring(0, 300)}`);
+      console.log(`📎 PrimeSync PDF multipart ${idx + 1} (${variant.fileField}/${variant.captionField}): status=${r.status} ok=${ok} bytes=${pdfBlob.size} resp=${txt.substring(0, 300)}`);
       if (ok) return true;
     } catch (e) {
-      console.error(`📎 PrimeSync PDF tentativa ${idx + 1} exceção:`, e);
+      console.error(`📎 PrimeSync PDF multipart ${idx + 1} exceção:`, e);
     }
   }
   return false;
@@ -731,15 +708,17 @@ Deno.serve(async (req) => {
             const pdfB64 = await gerarPdfDocrya(html, filename);
 
             if (pdfB64) {
-              await enviarPdfBase64(telefone, pdfB64, filename, "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄");
+              const pdfEnviado = await enviarPdfBase64(telefone, pdfB64, filename, "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄");
               toolResult = {
-                ok: true,
+                ok: pdfEnviado,
                 total_geral: o.total_geral,
                 subtotal_produtos: o.subtotal_produtos,
                 mao_de_obra: o.mao_de_obra,
                 frete: o.frete,
-                pdf_enviado: true,
-                instrucao: "Apenas confirme ao cliente que o PDF foi enviado. NÃO mencione valores no chat.",
+                pdf_enviado: pdfEnviado,
+                instrucao: pdfEnviado
+                  ? "Apenas confirme ao cliente que o PDF foi enviado. NÃO mencione valores no chat."
+                  : "Não confirme envio do PDF. Informe que houve instabilidade no envio do arquivo e que um atendente vai encaminhar em breve.",
               };
             } else {
               toolResult = { ok: false, error: "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
