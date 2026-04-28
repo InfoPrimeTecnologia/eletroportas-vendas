@@ -76,6 +76,14 @@ Deno.serve(async (req) => {
       if (!conversationId) return json({ error: "Conversa não informada." }, 400);
       const { error } = await supabase.from("leo_messages").delete().eq("conversation_id", conversationId);
       if (error) throw error;
+      // Zera ultima_mensagem_at para que o webhook trate como nova sessão e re-saúde
+      await supabase
+        .from("leo_conversations")
+        .update({
+          ultima_mensagem_at: new Date(0).toISOString(),
+          tipo_cliente: "indefinido",
+        })
+        .eq("id", conversationId);
       return json({ ok: true });
     }
 
