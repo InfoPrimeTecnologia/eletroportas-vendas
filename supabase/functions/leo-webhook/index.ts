@@ -1016,6 +1016,11 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
       patch.endereco_instalacao = [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
         .filter((x: any) => x && String(x).trim())
         .join(", ") || null;
+    } else if (!frete.fora_da_bahia) {
+      console.warn(`⚠️ CEP ${cep} aceito com fallback para evitar loop: ${frete.error || "consulta indisponível"}`);
+      patch.cep = cep;
+      patch.frete = 350;
+      patch.endereco_instalacao = null;
     }
   }
 
