@@ -1425,6 +1425,16 @@ Deno.serve(async (req) => {
       const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
       if (resultadoPdf.pdf_enviado) {
         await salvarMensagem(conversa.id, "assistant", resultadoPdf.caption, { pdf_enviado: true, deterministic_flow: true });
+        // ➕ DASHBOARD: salva orçamento + anexo PDF e move lead para "orcamento_enviado"
+        if (resultadoPdf.pdfBase64 && resultadoPdf.orcamento) {
+          await registrarOrcamentoEAvancarFunil({
+            telefone,
+            nome: conversa.nome_cliente || nome || "",
+            orcamento: resultadoPdf.orcamento,
+            pdfBase64: resultadoPdf.pdfBase64,
+            filename: resultadoPdf.filename || `orcamento_${Date.now()}.pdf`,
+          });
+        }
       } else {
         const aviso = "Consegui levantar os dados, mas tive uma falha ao gerar o PDF. Vou deixar um atendente finalizar o envio por aqui.";
         await salvarMensagem(conversa.id, "assistant", aviso, { deterministic_flow: true, pdf_error: resultadoPdf.error || resultadoPdf.faltando || null });
