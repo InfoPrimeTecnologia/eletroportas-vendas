@@ -757,6 +757,8 @@ Deno.serve(async (req) => {
       ...historico,
     ];
     let respostaFinal = "";
+    let pdfEnviadoNesteTurno = false;
+    let pdfCaptionEnviada = "";
     for (let i = 0; i < 5; i++) {
       const ai = await chamarIA(messages);
       const choice = ai.choices?.[0]?.message;
@@ -798,7 +800,12 @@ Deno.serve(async (req) => {
             const pdfB64 = await gerarPdfDocrya(html, filename);
 
             if (pdfB64) {
-              const pdfEnviado = await enviarPdfBase64(telefone, pdfB64, filename, "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄");
+              const captionPdf = "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
+              const pdfEnviado = await enviarPdfBase64(telefone, pdfB64, filename, captionPdf);
+              if (pdfEnviado) {
+                pdfEnviadoNesteTurno = true;
+                pdfCaptionEnviada = captionPdf;
+              }
               toolResult = {
                 ok: pdfEnviado,
                 total_geral: o.total_geral,
@@ -807,7 +814,7 @@ Deno.serve(async (req) => {
                 frete: o.frete,
                 pdf_enviado: pdfEnviado,
                 instrucao: pdfEnviado
-                  ? "Apenas confirme ao cliente que o PDF foi enviado. NÃO mencione valores no chat."
+                  ? "O PDF já foi enviado com legenda. NÃO envie nova mensagem de confirmação. NÃO mencione valores no chat."
                   : "Não confirme envio do PDF. Informe que houve instabilidade no envio do arquivo e que um atendente vai encaminhar em breve.",
               };
             } else {
@@ -855,7 +862,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (respostaFinal) {
+    if (pdfEnviadoNesteTurno) {
+      await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, { pdf_enviado: true });
+    } else if (respostaFinal) {
       await salvarMensagem(conversa.id, "assistant", respostaFinal);
       await enviarTexto(telefone, respostaFinal);
     }
