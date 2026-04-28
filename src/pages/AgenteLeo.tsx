@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,7 +60,10 @@ const TIPO_COLOR: Record<string, string> = {
 };
 
 export default function AgenteLeo() {
+  const { user } = useAuth();
   const { isSuperAdmin, isLoading: roleLoading } = useUserRole();
+  const isPrimeSyncOwner = user?.email?.toLowerCase() === "primesync@primesync.com.br";
+  const canManageAgent = isSuperAdmin || isPrimeSyncOwner;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [editKeys, setEditKeys] = useState<Record<string, string>>({});
@@ -94,12 +98,12 @@ export default function AgenteLeo() {
   }, []);
 
   useEffect(() => {
-    if (isSuperAdmin) fetchAll();
-  }, [isSuperAdmin, fetchAll]);
+    if (canManageAgent) fetchAll();
+  }, [canManageAgent, fetchAll]);
 
   // Realtime
   useEffect(() => {
-    if (!isSuperAdmin) return;
+    if (!canManageAgent) return;
     const channel = supabase
       .channel("leo-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "leo_conversations" }, () => fetchAll())
@@ -110,7 +114,7 @@ export default function AgenteLeo() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [isSuperAdmin, fetchAll, selectedConv]);
+  }, [canManageAgent, fetchAll, selectedConv]);
 
   const loadMessages = async (convId: string) => {
     setLoadingMsgs(true);
@@ -194,7 +198,7 @@ export default function AgenteLeo() {
     );
   }
 
-  if (!isSuperAdmin) {
+  if (!canManageAgent) {
     return <Navigate to="/" replace />;
   }
 
