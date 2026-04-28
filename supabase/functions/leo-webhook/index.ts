@@ -1639,13 +1639,7 @@ Deno.serve(async (req) => {
       const jaEnviouPdf = await pdfJaEnviadoConversa(conversa.id);
       const pareceNovoPedido = /\b(orcamento|orçamento|cotacao|cotação|preco|preço|valor|nova|novo|outra|outro)\b/i.test(messageBody);
       if (jaEnviouPdf && !pareceNovoPedido) {
-        console.log("💬 PDF já enviado — respondendo follow-up sem gerar duplicado");
-        const followUp = "Estou por aqui. ✅ Já te enviei o orçamento em PDF. Se quiser seguir, pode responder *aprovado*; se quiser mudar alguma medida ou lâmina, me diga o que deseja alterar.";
-        await salvarMensagem(conversa.id, "assistant", followUp, { deterministic_flow: true, follow_up_pdf_enviado: true });
-        await enviarTexto(telefone, followUp);
-        return new Response(JSON.stringify({ ok: true, follow_up_pdf_enviado: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        console.log("💬 PDF já enviado — seguindo para IA responder sem gerar duplicado");
       }
 
       const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
