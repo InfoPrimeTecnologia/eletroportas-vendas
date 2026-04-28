@@ -1078,47 +1078,55 @@ Deno.serve(async (req) => {
         let toolResult: any = {};
 
         if (fnName === "gerar_orcamento") {
-          // ===== VALIDAÇÃO RÍGIDA — bloqueia chamadas com dados faltando =====
-          const larguraNum = Number(args.largura);
-          const alturaNum = Number(args.altura);
-          const tcRawV = String(args.tipo_cliente || "").toLowerCase().trim();
+          // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
+          const { data: estado } = await supabase
+            .from("leo_conversations")
+            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao")
+            .eq("id", conversa.id)
+            .maybeSingle();
+
+          const larguraNum = Number(estado?.largura);
+          const alturaNum = Number(estado?.altura);
+          const tcRawV = String(estado?.tipo_cliente || "").toLowerCase().trim();
           const tcValid = tcRawV === "porta_instalada" || tcRawV === "revenda";
-          const perfilValid = ["fechado", "transvision", "oblongo"].includes(String(args.tipo_perfil || "").toLowerCase());
-          const freteNum = args.frete != null ? Number(args.frete) : NaN;
+          const perfilRaw = String(estado?.tipo_perfil || "").toLowerCase();
+          const perfilValid = ["fechado", "transvision", "oblongo"].includes(perfilRaw);
+          const freteNum = estado?.frete != null ? Number(estado.frete) : NaN;
 
           const faltando: string[] = [];
-          if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura (em metros, ex: 4)");
-          if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura (em metros, ex: 3)");
-          if (!tcValid) faltando.push("tipo_cliente (porta_instalada ou revenda)");
-          if (!perfilValid) faltando.push("tipo_perfil (fechado, transvision ou oblongo)");
-          if (tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
-            faltando.push("frete (calcule via tool calcular_frete_cep antes — peça o CEP ao cliente)");
+          if (!tcValid) faltando.push("tipo_cliente");
+          if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
+          if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
+          if (!perfilValid) faltando.push("tipo_perfil");
+          if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
+            faltando.push("frete");
           }
 
           if (faltando.length > 0) {
             gerarOrcamentoFalhas++;
-            console.warn(`🚫 gerar_orcamento BLOQUEADO (tentativa ${gerarOrcamentoFalhas}) — faltam:`, faltando.join(", "));
-            const proximaPergunta = faltando[0]?.includes("frete")
-              ? "Pergunte AGORA, em UMA mensagem curta: 'Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho.' NÃO chame nenhuma tool nesta resposta."
-              : faltando[0]?.includes("largura") || faltando[0]?.includes("altura")
-                ? "Pergunte AGORA, em UMA mensagem curta, a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
-                : faltando[0]?.includes("tipo_perfil")
+            console.warn(`🚫 gerar_orcamento BLOQUEADO (tentativa ${gerarOrcamentoFalhas}) — [ESTADO] faltando:`, faltando.join(", "));
+            const proximo = faltando[0];
+            const proximaPergunta = proximo === "frete"
+              ? "Pergunte AGORA: 'Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho.' NÃO chame nenhuma tool nesta resposta."
+              : (proximo === "largura" || proximo === "altura")
+                ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
+                : proximo === "tipo_perfil"
                   ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
-                  : "Responda em texto perguntando o próximo dado que falta. NÃO chame nenhuma tool.";
+                  : proximo === "tipo_cliente"
+                    ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
+                    : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
               erro: "DADOS_INSUFICIENTES",
               faltando,
-              instrucao: `NÃO gere o orçamento. Faltam: ${faltando.join("; ")}. ${proximaPergunta}`,
+              estado_atual: estado,
+              instrucao: `O [ESTADO] no banco mostra que falta: ${faltando.join(", ")}. ${proximaPergunta}`,
             };
             messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
-            // Após 1ª falha, injetamos instrução de sistema reforçando para parar de tentar
-            if (gerarOrcamentoFalhas >= 1) {
-              messages.push({
-                role: "system",
-                content: `STOP. Você acabou de tentar gerar_orcamento sem os dados necessários (faltou: ${faltando.join(", ")}). Sua PRÓXIMA resposta DEVE ser texto puro perguntando ao cliente o próximo dado faltante. NÃO chame gerar_orcamento de novo neste turno.`,
-              });
-            }
+            messages.push({
+              role: "system",
+              content: `STOP. Tentativa de gerar_orcamento bloqueada — falta no [ESTADO]: ${faltando.join(", ")}. Sua PRÓXIMA resposta DEVE ser texto puro perguntando "${proximo}". NÃO chame gerar_orcamento de novo.`,
+            });
             continue;
           }
 
@@ -1127,12 +1135,12 @@ Deno.serve(async (req) => {
               largura: larguraNum,
               altura: alturaNum,
               tipo_cliente: tcRawV as any,
-              tipo_perfil: String(args.tipo_perfil).toLowerCase() as any,
+              tipo_perfil: perfilRaw as any,
               tipo_motor: args.tipo_motor,
               tipo_pintura: args.tipo_pintura,
               frete: Number.isFinite(freteNum) ? freteNum : 0,
-              cliente_nome: args.cliente_nome || nome,
-              cliente_endereco: args.cliente_endereco,
+              cliente_nome: nome,
+              cliente_endereco: estado?.endereco_instalacao || undefined,
             });
 
             const html = gerarHtmlOrcamento(o);
@@ -1148,46 +1156,76 @@ Deno.serve(async (req) => {
               }
               toolResult = {
                 ok: pdfEnviado,
-                total_geral: o.total_geral,
-                subtotal_produtos: o.subtotal_produtos,
-                mao_de_obra: o.mao_de_obra,
-                frete: o.frete,
                 pdf_enviado: pdfEnviado,
                 instrucao: pdfEnviado
-                  ? "O PDF já foi enviado com legenda. NÃO envie nova mensagem de confirmação. NÃO mencione valores no chat."
-                  : "Não confirme envio do PDF. Informe que houve instabilidade no envio do arquivo e que um atendente vai encaminhar em breve.",
+                  ? "PDF enviado. NÃO envie nova mensagem. NÃO mencione valores."
+                  : "Houve instabilidade no envio do arquivo — informe que um atendente vai encaminhar em breve.",
               };
             } else {
               toolResult = { ok: false, error: "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
-            }
-
-            // atualiza tipo_cliente na conversa (normaliza para valores aceitos pelo CHECK)
-            const tcRaw = String(args.tipo_cliente || "").toLowerCase().trim();
-            const tcNorm = tcRaw.includes("revenda")
-              ? "revenda"
-              : tcRaw.includes("porta") || tcRaw.includes("instalad")
-                ? "porta_instalada"
-                : "indefinido";
-            const { error: updErr } = await supabase
-              .from("leo_conversations")
-              .update({ tipo_cliente: tcNorm, ultima_mensagem_at: new Date().toISOString() })
-              .eq("id", conversa.id);
-            if (updErr) {
-              console.error("⚠️ Falha ao atualizar tipo_cliente:", JSON.stringify(updErr), "valor recebido:", args.tipo_cliente);
-            }
-            // Persiste o tipo na tabela legada Clientes também
-            if (tcNorm === "porta_instalada" || tcNorm === "revenda") {
-              try {
-                await atualizarTipoClienteLegado(telefone, tcNorm);
-              } catch (e: any) {
-                console.error("⚠️ Erro ao propagar tipo_cliente para legado:", e?.message);
-              }
             }
           } catch (e: any) {
             console.error("❌ Erro em gerar_orcamento:", e?.message, e);
             toolResult = { ok: false, error: e?.message || "erro ao gerar orçamento" };
           }
         } else if (fnName === "cadastrar_cliente") {
+          const r = await cadastrarCliente({
+            nome: String(args.nome || nome || "").trim(),
+            email: args.email ? String(args.email).trim() : undefined,
+            documento: String(args.documento || "").replace(/\D/g, ""),
+            telefone,
+            tipo_cliente: args.tipo_cliente,
+          });
+          if (r.ok) {
+            await supabase
+              .from("leo_conversations")
+              .update({ nome_cliente: args.nome })
+              .eq("id", conversa.id);
+            toolResult = {
+              ok: true,
+              instrucao: "Cliente cadastrado. Agora pergunte se ele tem interesse na PORTA INSTALADA ou em REVENDA.",
+            };
+          } else {
+            toolResult = { ok: false, error: r.error };
+          }
+        } else if (fnName === "definir_medidas") {
+          const lg = Number(args.largura);
+          const al = Number(args.altura);
+          if (!Number.isFinite(lg) || lg <= 0 || lg > 20 || !Number.isFinite(al) || al <= 0 || al > 20) {
+            toolResult = { ok: false, error: "Medidas inválidas. Pergunte de novo ao cliente em metros (ex: 4x3)." };
+          } else {
+            await supabase
+              .from("leo_conversations")
+              .update({ largura: lg, altura: al, ultima_mensagem_at: new Date().toISOString() })
+              .eq("id", conversa.id);
+            toolResult = {
+              ok: true,
+              largura: lg,
+              altura: al,
+              instrucao: "Medidas gravadas no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 4 perguntando o tipo da lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO).",
+            };
+          }
+        } else if (fnName === "definir_lamina") {
+          const p = String(args.tipo_perfil || "").toLowerCase();
+          const pNorm = p === "fechado" || p === "transvision" || p === "oblongo" ? p : null;
+          if (!pNorm) {
+            toolResult = { ok: false, error: "tipo_perfil inválido. Use fechado, transvision ou oblongo." };
+          } else {
+            await supabase
+              .from("leo_conversations")
+              .update({ tipo_perfil: pNorm, ultima_mensagem_at: new Date().toISOString() })
+              .eq("id", conversa.id);
+            // Lê o tipo_cliente para decidir o próximo passo
+            const { data: cv } = await supabase
+              .from("leo_conversations")
+              .select("tipo_cliente")
+              .eq("id", conversa.id)
+              .maybeSingle();
+            const proxima = cv?.tipo_cliente === "porta_instalada"
+              ? "Lâmina gravada. NÃO confirme. Siga DIRETO ao Passo 5: pergunte o CEP do local da instalação."
+              : "Lâmina gravada. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
+            toolResult = { ok: true, tipo_perfil: pNorm, instrucao: proxima };
+          }
           const r = await cadastrarCliente({
             nome: String(args.nome || nome || "").trim(),
             email: args.email ? String(args.email).trim() : undefined,
