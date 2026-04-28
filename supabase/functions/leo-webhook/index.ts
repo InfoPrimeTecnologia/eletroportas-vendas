@@ -527,6 +527,7 @@ Conduzir o cliente — passo a passo, sem pressa e sem repetições — até ger
    Pergunte UMA vez: "Você tem interesse em **PORTA INSTALADA** ou em **REVENDA**?"
    - PORTA INSTALADA → atendemos só na BAHIA. Se for fora da BA, chame \`transferir_humano\`.
    - REVENDA → atendemos qualquer estado, sem mão de obra/frete.
+   ⚠️ Assim que o cliente responder isso (ex.: "porta instalada", "instalada", "quero instalar", "revenda", "para revender"), **GRAVE MENTALMENTE** o \`tipo_cliente\` e **NÃO PERGUNTE DE NOVO em hipótese alguma** — siga para o Passo 3.
 
 **Passo 3 — Medidas:**
    "Qual a **largura e altura** da porta, em metros? (ex: 4x3)"
@@ -537,16 +538,25 @@ Conduzir o cliente — passo a passo, sem pressa e sem repetições — até ger
    2️⃣ TRANSVISION (com visores)
    3️⃣ OBLONGO (perfurada)"
    Mapeie a resposta para \`tipo_perfil\`: fechado | transvision | oblongo.
+   (Aceite sinônimos: "lisa"/"fechada"/"meia cana" → fechado; "transvision"/"visor" → transvision; "oblongo"/"perfurada" → oblongo.)
 
-**Passo 5 — Gerar orçamento:**
-   Com largura, altura, tipo_cliente e tipo_perfil definidos, chame **imediatamente** a tool \`gerar_orcamento\`. Não peça mais nada.
+**Passo 5 — CEP e frete (APENAS se tipo_cliente = porta_instalada):**
+   Pergunte UMA vez: "Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho."
+   Quando o cliente informar o CEP, chame **imediatamente** a tool \`calcular_frete_cep\` com o CEP.
+   - Se a tool retornar \`fora_da_bahia: true\`, chame \`transferir_humano\` (instalação só na BA).
+   - Se retornar \`ok: true\`, **NÃO mencione o valor do frete no chat** — siga direto para o Passo 6 chamando \`gerar_orcamento\` com o \`frete\` retornado.
+   Para REVENDA, pule este passo (não há frete/instalação).
+
+**Passo 6 — Gerar orçamento:**
+   Com largura, altura, tipo_cliente, tipo_perfil (e frete, se porta_instalada) definidos, chame **imediatamente** a tool \`gerar_orcamento\`. Não peça mais nada.
    Após a tool retornar \`pdf_enviado: true\`, responda APENAS algo como:
    "Pronto! Te enviei o orçamento em PDF, dá uma olhada por favor. Qualquer dúvida estou por aqui. 📄"
 
-# ANTI-LOOP
+# ANTI-LOOP (CRÍTICO)
 Antes de escrever qualquer resposta, faça mentalmente este check:
 - "O cliente já respondeu o que eu ia perguntar?" → se sim, **avance**.
-- "Eu já fiz essa pergunta no histórico?" → se sim, **NUNCA repita** — reformule pedindo a informação que falta ou avance.
+- "Eu já fiz essa pergunta no histórico?" → se sim, **NUNCA repita** — siga para o próximo passo pendente.
+- Se o histórico mostra que o cliente já disse "porta instalada"/"instalada"/"revenda" em qualquer turno anterior, o \`tipo_cliente\` JÁ ESTÁ DEFINIDO. NUNCA repergunte — vá direto para medidas, lâmina, CEP ou orçamento, conforme o que falta.
 - "O cliente só me cumprimentou?" → responda em 1 frase curta e **siga para o próximo passo do fluxo**.
 `;
 
@@ -589,6 +599,20 @@ const TOOLS = [
           tipo_cliente: { type: "string", enum: ["porta_instalada", "revenda"], description: "Tipo confirmado pelo cliente, se já souber" },
         },
         required: ["nome", "documento"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "calcular_frete_cep",
+      description: "Calcula o frete a partir do CEP do cliente (apenas para PORTA INSTALADA na Bahia). Retorna o valor do frete em reais e o endereço resumido. Se o CEP for fora da Bahia, retorna fora_da_bahia=true.",
+      parameters: {
+        type: "object",
+        properties: {
+          cep: { type: "string", description: "CEP informado pelo cliente (com ou sem traço)" },
+        },
+        required: ["cep"],
       },
     },
   },
@@ -657,6 +681,90 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
     .single();
   if (error) throw error;
   return { conversa: data, isNova: true };
+}
+
+// ===========================
+// FRETE — Cálculo por CEP (Haversine a partir da Eletroportas em Salvador-BA)
+// ===========================
+const COMPANY_LAT = -12.8933071;
+const COMPANY_LNG = -38.3582854;
+
+function getDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+async function calcularFretePorCep(cepRaw: string) {
+  const cep = (cepRaw || "").replace(/\D/g, "");
+  if (cep.length !== 8) {
+    return { ok: false, error: "CEP inválido. Peça novamente, com 8 dígitos." };
+  }
+  // 1) ViaCEP — endereço + UF
+  let uf = "", localidade = "", bairro = "", logradouro = "";
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    if (r.ok) {
+      const j = await r.json();
+      if (!j.erro) {
+        uf = (j.uf || "").toUpperCase();
+        localidade = j.localidade || "";
+        bairro = j.bairro || "";
+        logradouro = j.logradouro || "";
+      }
+    }
+  } catch (e) {
+    console.error("viacep erro:", e);
+  }
+  if (!uf) return { ok: false, error: "Não consegui consultar esse CEP. Pode confirmar o número?" };
+  if (uf !== "BA") {
+    return { ok: false, fora_da_bahia: true, uf, localidade, error: `CEP é de ${localidade}/${uf}. PORTA INSTALADA atendemos apenas na Bahia.` };
+  }
+
+  // 2) AwesomeAPI — lat/lng do CEP
+  let lat: number | null = null, lng: number | null = null;
+  try {
+    const r = await fetch(`https://cep.awesomeapi.com.br/json/${cep}`);
+    if (r.ok) {
+      const j = await r.json();
+      if (j?.lat && j?.lng) {
+        lat = parseFloat(j.lat);
+        lng = parseFloat(j.lng);
+      }
+    }
+  } catch (e) {
+    console.error("awesomeapi cep erro:", e);
+  }
+
+  if (lat == null || lng == null) {
+    // Fallback conservador: cobra um valor médio quando não temos coordenadas
+    const freteFallback = 350;
+    console.warn(`⚠️ Sem coordenadas para CEP ${cep}, usando frete fallback R$${freteFallback}`);
+    return {
+      ok: true,
+      cep,
+      uf, localidade, bairro, logradouro,
+      distancia_km: null,
+      frete: freteFallback,
+      observacao: "Frete estimado (sem coordenadas precisas).",
+    };
+  }
+
+  const distanciaKm = getDistanceInKm(COMPANY_LAT, COMPANY_LNG, lat, lng);
+  // Fórmula original: distância * 7 * 2 (ida e volta a R$7/km)
+  const frete = Math.round(distanciaKm * 7 * 2 * 100) / 100;
+  return {
+    ok: true,
+    cep,
+    uf, localidade, bairro, logradouro,
+    distancia_km: Math.round(distanciaKm * 100) / 100,
+    frete,
+  };
 }
 
 async function salvarMensagem(conversation_id: string, role: string, content: string, metadata: any = {}) {
@@ -932,6 +1040,16 @@ Deno.serve(async (req) => {
             };
           } else {
             toolResult = { ok: false, error: r.error };
+          }
+        } else if (fnName === "calcular_frete_cep") {
+          const r = await calcularFretePorCep(String(args.cep || ""));
+          if (r.ok) {
+            toolResult = {
+              ...r,
+              instrucao: "NÃO mencione o valor do frete no chat. Chame imediatamente gerar_orcamento usando este frete e os demais dados (largura, altura, tipo_cliente=porta_instalada, tipo_perfil).",
+            };
+          } else {
+            toolResult = r;
           }
         } else if (fnName === "transferir_humano") {
           if (ticketId) await transferirParaHumano(ticketId);
