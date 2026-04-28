@@ -947,19 +947,27 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (pdfEnviadoNesteTurno) {
-      await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, { pdf_enviado: true });
-    } else {
-      const textoFinal = (respostaFinal || "").trim() ||
-        "Desculpe, tive uma instabilidade aqui. Pode repetir sua última mensagem, por favor? 🙏";
-      await salvarMensagem(conversa.id, "assistant", textoFinal);
-      await enviarTexto(telefone, textoFinal);
+    try {
+      if (pdfEnviadoNesteTurno) {
+        await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, { pdf_enviado: true });
+      } else {
+        const textoFinal = (respostaFinal || "").trim() ||
+          "Desculpe, tive uma instabilidade aqui. Pode repetir sua última mensagem, por favor? 🙏";
+        await salvarMensagem(conversa.id, "assistant", textoFinal);
+        await enviarTexto(telefone, textoFinal);
+      }
+    } catch (e: any) {
+      console.error("⚠️ Falha ao persistir/enviar resposta final (não fatal):", e?.message, JSON.stringify(e));
     }
 
-    await supabase
-      .from("leo_conversations")
-      .update({ ultima_mensagem_at: new Date().toISOString() })
-      .eq("id", conversa.id);
+    try {
+      await supabase
+        .from("leo_conversations")
+        .update({ ultima_mensagem_at: new Date().toISOString() })
+        .eq("id", conversa.id);
+    } catch (e: any) {
+      console.error("⚠️ Falha ao atualizar ultima_mensagem_at (não fatal):", e?.message);
+    }
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
