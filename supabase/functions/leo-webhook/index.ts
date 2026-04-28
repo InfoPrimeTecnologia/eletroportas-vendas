@@ -617,6 +617,18 @@ async function salvarMensagem(conversation_id: string, role: string, content: st
   if (error) throw error;
 }
 
+async function mensagemJaProcessada(conversation_id: string, messageId?: string) {
+  if (!messageId) return false;
+  const { data } = await supabase
+    .from("leo_messages")
+    .select("id")
+    .eq("conversation_id", conversation_id)
+    .eq("role", "user")
+    .eq("metadata->>message_id", messageId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
 async function carregarHistorico(conversation_id: string) {
   const { data } = await supabase
     .from("leo_messages")
