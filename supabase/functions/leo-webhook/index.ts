@@ -1725,6 +1725,12 @@ Deno.serve(async (req) => {
       ...historico,
       { role: "system", content: await montarEstado() },
     ];
+    if (await pdfJaEnviadoConversa(conversa.id)) {
+      messages.push({
+        role: "system",
+        content: "O orçamento em PDF já foi enviado nesta conversa. Responda normalmente qualquer dúvida do cliente e oriente próximos passos. NÃO chame gerar_orcamento, a menos que o cliente peça explicitamente um novo orçamento, alteração de medida, troca de lâmina ou atualização de dados.",
+      });
+    }
     let respostaFinal = "";
     let pdfEnviadoNesteTurno = false;
     let pdfCaptionEnviada = "";
