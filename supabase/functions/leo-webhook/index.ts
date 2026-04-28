@@ -1047,6 +1047,14 @@ Deno.serve(async (req) => {
             if (updErr) {
               console.error("⚠️ Falha ao atualizar tipo_cliente:", JSON.stringify(updErr), "valor recebido:", args.tipo_cliente);
             }
+            // Persiste o tipo na tabela legada Clientes também
+            if (tcNorm === "porta_instalada" || tcNorm === "revenda") {
+              try {
+                await atualizarTipoClienteLegado(telefone, tcNorm);
+              } catch (e: any) {
+                console.error("⚠️ Erro ao propagar tipo_cliente para legado:", e?.message);
+              }
+            }
           } catch (e: any) {
             console.error("❌ Erro em gerar_orcamento:", e?.message, e);
             toolResult = { ok: false, error: e?.message || "erro ao gerar orçamento" };
