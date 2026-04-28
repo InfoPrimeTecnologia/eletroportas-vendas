@@ -846,9 +846,48 @@ async function calcularFretePorCep(cepRaw: string) {
   };
 }
 
+/** Tenta novamente quando o PostgREST está recarregando o schema cache (erro vem com tudo vazio). */
+async function withSchemaRetry<T extends { error: any }>(fn: () => Promise<T>, tentativas = 4): Promise<T> {
+  let ultimo: T | undefined;
+  for (let i = 0; i < tentativas; i++) {
+    const r = await fn();
+    const err: any = r?.error;
+    if (!err) return r;
+    const msg = String(err?.message || "");
+    const code = String(err?.code || "");
+    const semInfo = !msg && !code && err?.details == null && err?.hint == null;
+    const schemaIssue = /schema cache|Could not query the database|JWT|fetch failed/i.test(msg);
+    if (semInfo || schemaIssue) {
+      ultimo = r;
+      await new Promise((res) => setTimeout(res, 250 * (i + 1)));
+      continue;
+    }
+    return r;
+  }
+  return ultimo as T;
+}
+
+function descreverErroPg(err: any, prefixo = ""): string {
+  if (!err) return prefixo + "sem erro";
+  const partes = [
+    err?.message,
+    err?.details,
+    err?.hint,
+    err?.code ? `code=${err.code}` : null,
+    err?.status ? `status=${err.status}` : null,
+  ].filter(Boolean);
+  return prefixo + (partes.join(" | ") || "PostgrestError vazio (provável recarga de schema cache)");
+}
+
 async function salvarMensagem(conversation_id: string, role: string, content: string, metadata: any = {}) {
-  const { error } = await supabase.from("leo_messages").insert({ conversation_id, role, content, metadata });
-  if (error) throw error;
+  const r = await withSchemaRetry(() =>
+    supabase.from("leo_messages").insert({ conversation_id, role, content, metadata })
+  );
+  if (r.error) {
+    // Não joga para o catch global — não queremos derrubar o turno inteiro só porque
+    // o histórico não pôde ser persistido. O envio para o cliente continua.
+    console.error("⚠️", descreverErroPg(r.error, "salvarMensagem falhou: "));
+  }
 }
 
 function inferirTipoClienteTexto(texto: string): "porta_instalada" | "revenda" | null {
