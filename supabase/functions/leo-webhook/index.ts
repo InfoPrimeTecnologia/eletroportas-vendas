@@ -32,6 +32,10 @@ const legacyDb = createClient(LEGACY_SUPABASE_URL, LEGACY_SUPABASE_KEY, {
   auth: { persistSession: false },
 });
 
+// A dashboard atual lê/grava no backend legado; qualquer dado comercial
+// gerado pelo Leo precisa ir para este cliente para aparecer nas telas.
+const dashboardDb = legacyDb;
+
 // Saudação por horário (timezone Brasil)
 function saudacaoHorario(): string {
   const hora = new Date().toLocaleString("en-US", {
@@ -694,7 +698,7 @@ const TOOLS = [
   },
 ];
 
-async function chamarIA(messages: any[]) {
+async function chamarIA(messages: any[], options: { tools?: any[] | null; temperature?: number } = {}) {
   // Timeout generoso (30s) para o agente "pensar com calma" sem travar a request
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30_000);
@@ -708,8 +712,8 @@ async function chamarIA(messages: any[]) {
       body: JSON.stringify({
         model: AI_MODEL,
         messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-        tools: TOOLS,
-        temperature: 0.2, // resposta mais previsível e fiel ao fluxo
+        ...(options.tools === null ? {} : { tools: options.tools || TOOLS }),
+        temperature: options.temperature ?? 0.2, // resposta mais previsível e fiel ao fluxo
         top_p: 0.9,
       }),
       signal: controller.signal,
@@ -1156,7 +1160,7 @@ async function registrarLeadContatoInicial(telefone: string, nomeBruto: string) 
     const cli = await buscarClientePorTelefone(telefone).catch(() => null);
 
     // Evita duplicar leads ativos do mesmo telefone (não inserir se já houver lead aberto)
-    const { data: existente } = await supabase
+    const { data: existente } = await dashboardDb
       .from("funil_leads")
       .select("id, etapa_key")
       .eq("telefone", telefone)
@@ -1180,7 +1184,7 @@ async function registrarLeadContatoInicial(telefone: string, nomeBruto: string) 
       itens: [],
       observacoes: "Lead criado automaticamente pelo agente Leo via WhatsApp.",
     };
-    const { data, error } = await supabase
+    const { data, error } = await dashboardDb
       .from("funil_leads")
       .insert(payload)
       .select("id")
@@ -1199,7 +1203,7 @@ async function registrarLeadContatoInicial(telefone: string, nomeBruto: string) 
 
 /** Busca o lead aberto (não fechado/perdido) deste telefone. */
 async function buscarLeadAberto(telefone: string) {
-  const { data } = await supabase
+  const { data } = await dashboardDb
     .from("funil_leads")
     .select("id, etapa_key, itens, anexo_pdf, valor")
     .eq("telefone", telefone)
@@ -1221,15 +1225,17 @@ async function registrarOrcamentoEAvancarFunil(params: {
   const { telefone, nome, orcamento, pdfBase64, filename } = params;
   try {
     const itensJson = orcamento.itens.map((i: any) => ({
-      codigo: i.code,
+      codigo_sku: i.code,
+      produto_nome: i.description,
       descricao: i.description,
       quantidade: i.qty,
-      unidade: i.unit,
       preco_unitario: i.unit_price,
+      unidade: i.unit,
       subtotal: i.subtotal,
     }));
     const observacoes = [
       `Origem: Agente Leo (WhatsApp)`,
+      `Telefone: ${telefone}`,
       `Tipo: ${orcamento.tipo_cliente}`,
       `Medidas: ${orcamento.largura}m x ${orcamento.altura}m`,
       `Lâmina: ${orcamento.tipo_perfil}`,
@@ -1237,11 +1243,11 @@ async function registrarOrcamentoEAvancarFunil(params: {
       orcamento.mao_de_obra ? `Mão de obra: R$ ${orcamento.mao_de_obra.toFixed(2)}` : null,
     ].filter(Boolean).join(" | ");
 
-    const { data: orc, error: orcErr } = await supabase
+    const { data: orc, error: orcErr } = await dashboardDb
       .from("orcamentos")
       .insert({
         cliente_nome: nome || `Contato ${telefone}`,
-        cliente_telefone: telefone,
+        cliente_cnpj: null,
         valor_total: orcamento.total_geral,
         status: "pendente",
         origem: "leo_agent",
@@ -1260,7 +1266,7 @@ async function registrarOrcamentoEAvancarFunil(params: {
     const lead = await buscarLeadAberto(telefone);
     const anexo = `data:application/pdf;base64,${pdfBase64}`;
     if (lead?.id) {
-      await supabase
+      await dashboardDb
         .from("funil_leads")
         .update({
           etapa_key: "orcamento_enviado",
@@ -1273,7 +1279,7 @@ async function registrarOrcamentoEAvancarFunil(params: {
       console.log("✅ Lead movido para orcamento_enviado:", lead.id);
     } else {
       // cria direto na etapa orcamento_enviado caso não exista
-      await supabase.from("funil_leads").insert({
+      await dashboardDb.from("funil_leads").insert({
         nome: nome || `Contato ${telefone}`,
         telefone,
         valor: orcamento.total_geral,
@@ -1310,15 +1316,46 @@ function pareceAceite(texto: string): boolean {
   return padroes.some((re) => re.test(t));
 }
 
+async function interpretarAceiteContextual(params: { texto: string; historico: any[]; estado: any }) {
+  const respostaLamina = inferirLaminaTexto(params.texto);
+  if (respostaLamina && !params.estado?.cep) return false;
+
+  try {
+    const ai = await chamarIA([
+      {
+        role: "system",
+        content:
+          "Classifique se a ÚLTIMA mensagem do cliente é um aceite comercial inequívoco de um orçamento JÁ ENVIADO. " +
+          "Responda somente JSON válido no formato {\"aceitou\":boolean,\"confianca\":0..1}. " +
+          "Não marque aceite para escolha de produto/lâmina/medida/CEP, mesmo que use palavras como fechado/fechada.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          estado: params.estado,
+          historico_recente: params.historico.slice(-12),
+          ultima_mensagem: params.texto,
+        }),
+      },
+    ], { tools: null, temperature: 0 });
+    const raw = (ai.choices?.[0]?.message?.content || "").trim();
+    const parsed = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/```$/i, ""));
+    return parsed?.aceitou === true && Number(parsed?.confianca || 0) >= 0.75;
+  } catch (e: any) {
+    console.error("⚠️ interpretarAceiteContextual falhou, fallback seguro:", e?.message || e);
+    return pareceAceite(params.texto);
+  }
+}
+
 /** Converte o último orçamento pendente em pedido de venda e move o lead para "fechado". */
 async function aceitarOrcamentoEGerarPedido(telefone: string) {
   try {
-    const { data: orc } = await supabase
+    const { data: orc } = await dashboardDb
       .from("orcamentos")
-      .select("id, numero, cliente_nome, cliente_telefone, valor_total, itens, observacoes, status")
-      .eq("cliente_telefone", telefone)
+      .select("id, numero, cliente_nome, valor_total, itens, observacoes, status")
       .eq("origem", "leo_agent")
-      .order("created_at", { ascending: false })
+      .ilike("observacoes", `%Telefone: ${telefone}%`)
+      .order("data_criacao", { ascending: false })
       .limit(1)
       .maybeSingle();
     if (!orc) {
@@ -1331,11 +1368,11 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
     }
 
     // Cria o pedido de venda com base no orçamento
-    const { data: ped, error: pedErr } = await supabase
+    const { data: ped, error: pedErr } = await dashboardDb
       .from("pedidos_venda")
       .insert({
         cliente_nome: orc.cliente_nome,
-        cliente_telefone: orc.cliente_telefone,
+        cliente_cnpj: null,
         valor_total: orc.valor_total,
         status: "processando",
         origem: "leo_agent",
@@ -1349,12 +1386,12 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
       console.error("⚠️ Falha ao criar pedido_venda:", pedErr.message);
       return null;
     }
-    await supabase.from("orcamentos").update({ status: "aceito" }).eq("id", orc.id);
+    await dashboardDb.from("orcamentos").update({ status: "aceito" }).eq("id", orc.id);
 
     // Move o lead para "fechado"
     const lead = await buscarLeadAberto(telefone);
     if (lead?.id) {
-      await supabase
+      await dashboardDb
         .from("funil_leads")
         .update({
           etapa_key: "fechado",
@@ -1521,7 +1558,11 @@ Deno.serve(async (req) => {
     // ➕ DASHBOARD: detecta aceite explícito do orçamento → gera pedido_venda e fecha o lead
     // Só aceita depois que o orçamento já foi enviado nesta conversa. Antes disso,
     // respostas como "fechada" são tratadas como tipo de lâmina, nunca como aceite.
-    if (estadoProntoParaOrcamento(estadoAntesAceite) && await pdfJaEnviadoConversa(conversa.id) && pareceAceite(messageBody)) {
+    const historicoParaAceite = await carregarHistorico(conversa.id);
+    const aceiteContextual = estadoProntoParaOrcamento(estadoAntesAceite) &&
+      await pdfJaEnviadoConversa(conversa.id) &&
+      await interpretarAceiteContextual({ texto: messageBody, historico: historicoParaAceite, estado: estadoAntesAceite });
+    if (aceiteContextual) {
       const r = await aceitarOrcamentoEGerarPedido(telefone);
       if (r?.pedido_numero) {
         const msg = `Perfeito! ✅ Orçamento ${r.orcamento_numero} aceito e pedido ${r.pedido_numero} aberto. Em breve um atendente confirma os próximos passos.`;
