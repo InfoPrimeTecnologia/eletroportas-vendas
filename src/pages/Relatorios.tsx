@@ -13,7 +13,7 @@ import {
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell,
 } from 'recharts';
-import { supabase } from '@/integrations/supabase/client';
+import { legacySupabase as supabase } from '@/integrations/supabase/legacyClient';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
