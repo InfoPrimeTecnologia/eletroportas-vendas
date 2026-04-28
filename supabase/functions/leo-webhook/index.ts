@@ -63,12 +63,16 @@ async function buscarClientePorTelefone(telefone: string) {
   ].filter(Boolean)));
 
   for (const v of variacoes) {
-    const { data } = await legacyDb
+    const { data, error } = await legacyDb
       .from("Clientes")
-      .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE, tipo_cliente")
+      .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE")
       .ilike("CLI_FONE", `%${v}%`)
       .limit(1)
       .maybeSingle();
+    if (error) {
+      console.error("buscarClientePorTelefone erro:", error?.message || error);
+      continue;
+    }
     if (data) return data;
   }
   return null;
@@ -81,22 +85,61 @@ async function cadastrarCliente(input: {
   documento: string; // CNPJ ou CPF
   telefone: string;
 }) {
+  // Validações antes de tocar no DB para não bater erro de PK vazia / duplicate
+  const nome = (input.nome || "").trim();
+  const documento = (input.documento || "").replace(/\D/g, "");
+  const telefone = normalizarTelefone(input.telefone);
+
+  const faltando: string[] = [];
+  if (!nome) faltando.push("nome completo");
+  if (!documento) faltando.push("CNPJ ou CPF");
+  if (faltando.length) {
+    return { ok: false, error: `Dados faltando: ${faltando.join(", ")}. Peça ao cliente educadamente.` };
+  }
+  if (documento.length < 11) {
+    return { ok: false, error: "Documento inválido (mínimo 11 dígitos). Peça novamente ao cliente." };
+  }
+
+  // Verifica se já existe pelo CNPJ (PK) — evita duplicate key
+  const { data: existente } = await legacyDb
+    .from("Clientes")
+    .select("CLI_CNPJ")
+    .eq("CLI_CNPJ", documento)
+    .maybeSingle();
+  if (existente) {
+    // Atualiza dados em vez de duplicar
+    const { error: updErr } = await legacyDb
+      .from("Clientes")
+      .update({
+        CLI_NOME: nome,
+        CLI_EMAIL: input.email || null,
+        CLI_FONE: telefone,
+      })
+      .eq("CLI_CNPJ", documento);
+    if (updErr) {
+      console.error("Erro ao atualizar cliente:", updErr);
+      return { ok: false, error: updErr.message || "Falha ao atualizar cadastro." };
+    }
+    return { ok: true, cliente: { CLI_CNPJ: documento, CLI_NOME: nome }, atualizado: true };
+  }
+
   const { data, error } = await legacyDb
     .from("Clientes")
     .insert({
-      CLI_CNPJ: input.documento,
-      CLI_NOME: input.nome,
+      CLI_CNPJ: documento,
+      CLI_NOME: nome,
       CLI_EMAIL: input.email || null,
-      CLI_FONE: normalizarTelefone(input.telefone),
+      CLI_FONE: telefone,
     })
     .select()
     .single();
   if (error) {
     console.error("Erro ao cadastrar cliente:", error);
-    return { ok: false, error: error.message };
+    return { ok: false, error: error.message || "Falha ao cadastrar." };
   }
   return { ok: true, cliente: data };
 }
+
 
 // ===========================
 // CÁLCULO DE ORÇAMENTO
