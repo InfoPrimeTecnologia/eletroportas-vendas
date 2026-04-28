@@ -548,10 +548,11 @@ Atender o cliente 24 horas por dia, todos os dias: tirar dúvidas, explicar prod
 1. **A saudação inicial JÁ FOI ENVIADA pelo sistema** ("Olá, sou o Leo da Eletroportas. Bom dia/Boa tarde/Boa noite!"). NÃO se apresente novamente. NÃO repita "Olá", "Sou o Leo", "Sou seu vendedor virtual" etc. Em qualquer turno seu, comece direto pelo conteúdo.
 2. **LEIA O HISTÓRICO COMPLETO antes de cada resposta.** Se uma pergunta já foi feita ou já foi respondida, NUNCA repita. Avance.
 3. Se o cliente apenas cumprimenta de volta ("oi", "bom dia", "tudo bem?"), **responda brevemente e já avance** para o próximo passo do fluxo.
-4. **NUNCA invente dados, preços ou prazos.** Valores e condições saem APENAS dentro do PDF gerado pela tool.
+4. **NUNCA invente dados ou preços.** Valores e condições comerciais saem APENAS dentro do PDF gerado pela tool. Para prazos, responda de forma segura: explique que o prazo depende da confirmação do pedido, agenda de produção/instalação e disponibilidade, e que um atendente confirma o prazo exato após aprovação.
 5. Se algo sair do seu escopo (ex: instalação fora da BA, dúvida técnica complexa, reclamação), chame \`transferir_humano\` com um motivo claro.
 6. Use UMA pergunta por vez. Frases curtas. Sem rodeios.
-7. Mesmo depois do orçamento/PDF enviado, continue respondendo o cliente normalmente. Nunca fique mudo. Responda dúvidas sobre lâminas, medidas, instalação, revenda, próximos passos e aprovação; só gere novo PDF se o cliente pedir novo orçamento, alteração ou troca de dados.
+7. Mesmo depois do orçamento/PDF enviado, continue respondendo o cliente normalmente. Nunca fique mudo. Responda dúvidas sobre lâminas, medidas, instalação, revenda, prazos, garantia, pagamento, próximos passos e aprovação; só gere novo PDF se o cliente pedir explicitamente novo orçamento, alteração ou troca de dados.
+8. Se o cliente perguntar algo como "quais os prazos?", "quanto tempo entrega?", "quando instala?", responda em texto. NÃO chame \`gerar_orcamento\` e NÃO reenvie o PDF.
 
 # FLUXO DE VENDAS (siga em ordem, pulando passos já cumpridos)
 
@@ -591,6 +592,7 @@ Atender o cliente 24 horas por dia, todos os dias: tirar dúvidas, explicar prod
 # ANTI-LOOP / ANTI-ALUCINAÇÃO (CRÍTICO)
 - O **[ESTADO]** é a única fonte de verdade do que falta. Se [ESTADO] mostra "largura=PENDENTE", pergunte largura. Se mostra "largura=4, altura=5, tipo_perfil=PENDENTE", pergunte a lâmina. NUNCA pergunte algo que já está preenchido no [ESTADO].
 - **NUNCA** chame \`gerar_orcamento\` se o [ESTADO] tiver QUALQUER campo obrigatório como "PENDENTE". Se chamar, vai retornar \`DADOS_INSUFICIENTES\` e o sistema vai te corrigir.
+- **NUNCA** chame \`gerar_orcamento\` para responder dúvidas gerais depois que o PDF já foi enviado. Dúvida se responde com texto, orçamento só se gera quando o cliente pede orçamento novo/alterado.
 - Se o cliente apenas cumprimenta ("oi", "bom dia"), responda em 1 frase curta e pergunte o próximo dado pendente do [ESTADO].
 - Use UMA pergunta por vez. Frases curtas. Sem rodeios. NUNCA invente dados, preços ou prazos.
 `;
@@ -1781,6 +1783,23 @@ Deno.serve(async (req) => {
         let toolResult: any = {};
 
         if (fnName === "gerar_orcamento") {
+          const jaExistePdf = await pdfJaEnviadoConversa(conversa.id);
+          const pediuNovoOrcamento = /\b(novo|nova|outro|outra|refazer|alterar|alteração|mudar|trocar|corrigir|atualizar|recalcular|novo orçamento|nova cotação)\b/i.test(messageBody);
+          if (jaExistePdf && !pediuNovoOrcamento) {
+            console.warn("🚫 gerar_orcamento bloqueado — PDF já enviado e cliente fez pergunta geral");
+            toolResult = {
+              ok: false,
+              erro: "PDF_JA_ENVIADO_DUVIDA_GERAL",
+              instrucao: "O PDF já foi enviado e o cliente fez uma dúvida geral. Responda em texto, de forma útil e consultiva. NÃO chame gerar_orcamento e NÃO reenvie PDF.",
+            };
+            messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
+            messages.push({
+              role: "system",
+              content: "STOP. Responda a dúvida do cliente em texto agora. Se a dúvida for prazo de entrega/instalação, explique que depende da confirmação do pedido, agenda de produção/instalação e disponibilidade, e que um atendente confirma o prazo exato após aprovação. NÃO gere PDF.",
+            });
+            continue;
+          }
+
           // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
           const { data: estado } = await supabase
             .from("leo_conversations")
