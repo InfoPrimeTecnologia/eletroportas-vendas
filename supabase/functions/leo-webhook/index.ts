@@ -1017,12 +1017,17 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
 }
 
 async function carregarEstadoConversa(conversaId: string) {
-  const { data, error } = await supabase
-    .from("leo_conversations")
-    .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete")
-    .eq("id", conversaId)
-    .maybeSingle();
-  if (error) throw error;
+  const { data, error } = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+      .eq("id", conversaId)
+      .maybeSingle()
+  );
+  if (error) {
+    console.error("⚠️", descreverErroPg(error, "carregarEstadoConversa falhou: "));
+    return null;
+  }
   return data;
 }
 
