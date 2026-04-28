@@ -644,6 +644,25 @@ Deno.serve(async (req) => {
           } catch (e: any) {
             toolResult = { ok: false, error: e.message };
           }
+        } else if (fnName === "cadastrar_cliente") {
+          const r = await cadastrarCliente({
+            nome: String(args.nome || nome || "").trim(),
+            email: args.email ? String(args.email).trim() : undefined,
+            documento: String(args.documento || "").replace(/\D/g, ""),
+            telefone,
+          });
+          if (r.ok) {
+            await supabase
+              .from("leo_conversations")
+              .update({ nome_cliente: args.nome })
+              .eq("id", conversa.id);
+            toolResult = {
+              ok: true,
+              instrucao: "Cliente cadastrado. Agora pergunte se ele tem interesse na PORTA INSTALADA ou em REVENDA.",
+            };
+          } else {
+            toolResult = { ok: false, error: r.error };
+          }
         } else if (fnName === "transferir_humano") {
           if (ticketId) await transferirParaHumano(ticketId);
           await supabase.from("leo_conversations").update({ status: "encerrada" }).eq("id", conversa.id);
