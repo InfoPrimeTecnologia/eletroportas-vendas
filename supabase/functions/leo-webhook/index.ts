@@ -18,7 +18,8 @@ const DOCRYA_API_KEY = Deno.env.get("DOCRYA_API_KEY")!;
 
 const DOCRYA_URL = "https://www.docrya.com/api/v1/html-to-pdf";
 const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const AI_MODEL = "google/gemini-2.5-flash";
+// Modelo de alto nível para vendas (raciocínio + tool calling consistente)
+const AI_MODEL = "google/gemini-2.5-pro";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
