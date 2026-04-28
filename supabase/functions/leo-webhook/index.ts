@@ -698,7 +698,7 @@ const TOOLS = [
   },
 ];
 
-async function chamarIA(messages: any[]) {
+async function chamarIA(messages: any[], options: { tools?: any[] | null; temperature?: number } = {}) {
   // Timeout generoso (30s) para o agente "pensar com calma" sem travar a request
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30_000);
@@ -712,8 +712,8 @@ async function chamarIA(messages: any[]) {
       body: JSON.stringify({
         model: AI_MODEL,
         messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-        tools: TOOLS,
-        temperature: 0.2, // resposta mais previsível e fiel ao fluxo
+        ...(options.tools === null ? {} : { tools: options.tools || TOOLS }),
+        temperature: options.temperature ?? 0.2, // resposta mais previsível e fiel ao fluxo
         top_p: 0.9,
       }),
       signal: controller.signal,
