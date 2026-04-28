@@ -22,6 +22,26 @@ function json(body: unknown, status = 200) {
   });
 }
 
+/**
+ * Executa uma chamada do supabase-js com retry automático quando o
+ * PostgREST está recarregando o schema cache (erro transitório que ocorre
+ * após migrations ou em picos de carga).
+ */
+async function withSchemaRetry<T extends { error: any }>(fn: () => Promise<T>, tentativas = 4): Promise<T> {
+  let ultimo: T | undefined;
+  for (let i = 0; i < tentativas; i++) {
+    const r = await fn();
+    const msg = String(r?.error?.message || "");
+    if (r?.error && /schema cache|Could not query the database/i.test(msg)) {
+      ultimo = r;
+      await new Promise((res) => setTimeout(res, 300 * (i + 1)));
+      continue;
+    }
+    return r;
+  }
+  return ultimo as T;
+}
+
 async function assertOwner(req: Request) {
   const authHeader = req.headers.get("Authorization");
   const token = authHeader?.replace(/^Bearer\s+/i, "");
