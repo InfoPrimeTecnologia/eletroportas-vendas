@@ -622,7 +622,7 @@ Deno.serve(async (req) => {
             const pdfB64 = await gerarPdfDocrya(html, filename);
 
             if (pdfB64) {
-              await enviarPdfBase64(telefone, pdfB64, filename, `Olá! Segue seu orçamento. Total: R$ ${o.total_geral.toFixed(2)}`);
+              await enviarPdfBase64(telefone, pdfB64, filename, "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄");
               toolResult = {
                 ok: true,
                 total_geral: o.total_geral,
