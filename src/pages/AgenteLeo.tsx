@@ -89,9 +89,11 @@ export default function AgenteLeo() {
       const keys = (data.apiKeys || []) as ApiKey[];
       setConversations(convs);
       setApiKeys(keys);
-      const map: Record<string, string> = {};
-      keys.forEach((k: ApiKey) => (map[k.key_name] = k.key_value || ""));
-      setEditKeys(map);
+      if (!silent) {
+        const map: Record<string, string> = {};
+        keys.forEach((k: ApiKey) => (map[k.key_name] = k.key_value || ""));
+        setEditKeys(map);
+      }
       setSelectedConv((current) => {
         if (!current) return convs.find((c) => c.status === "ativa") ?? convs[0] ?? null;
         return convs.find((c) => c.id === current.id) ?? current;
@@ -155,6 +157,16 @@ export default function AgenteLeo() {
   useEffect(() => {
     if (selectedConvId) loadMessages(selectedConvId);
   }, [selectedConvId, loadMessages]);
+
+  useEffect(() => {
+    if (!canManageAgent) return;
+    const interval = window.setInterval(() => {
+      fetchAll(true);
+      const convId = selectedConvIdRef.current;
+      if (convId) loadMessages(convId, true);
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [canManageAgent, fetchAll, loadMessages]);
 
   const handleResetMemory = async (convId: string) => {
     try {
