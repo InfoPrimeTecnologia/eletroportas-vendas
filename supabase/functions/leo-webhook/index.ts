@@ -995,22 +995,38 @@ Deno.serve(async (req) => {
       contextoCliente = `[CONTEXTO] Cliente NÃO CADASTRADO (telefone ${telefone}). Inicie pelo Passo 1 (cadastro).`;
     }
 
-    // Acrescenta status do tipo_cliente JÁ GRAVADO nesta sessão (evita reperguntar)
-    const tipoConversa = (conversa as any).tipo_cliente as string | undefined;
-    if (tipoConversa === "porta_instalada") {
-      contextoCliente += ` [SESSÃO] tipo_cliente DEFINIDO = porta_instalada. NÃO chame definir_tipo_cliente nem pergunte de novo. Avance para Passo 3 (medidas), ou Passo 4/5/6 conforme o que falta no histórico.`;
-    } else if (tipoConversa === "revenda") {
-      contextoCliente += ` [SESSÃO] tipo_cliente DEFINIDO = revenda. NÃO chame definir_tipo_cliente nem pergunte de novo. Avance para Passo 3 (medidas), ou Passo 4/6 conforme o que falta no histórico.`;
-    } else {
-      contextoCliente += ` [SESSÃO] tipo_cliente NÃO DEFINIDO ainda — siga o Passo 2 e chame definir_tipo_cliente assim que o cliente responder.`;
-    }
+    // Função que lê o estado atual do banco e monta o bloco [ESTADO]
+    const montarEstado = async (): Promise<string> => {
+      const { data: c } = await supabase
+        .from("leo_conversations")
+        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+        .eq("id", conversa.id)
+        .maybeSingle();
+      const v = (x: any) => (x === null || x === undefined || x === "" || x === "indefinido") ? "PENDENTE" : String(x);
+      const tc = v(c?.tipo_cliente);
+      const precisaFrete = c?.tipo_cliente === "porta_instalada";
+      const linhas = [
+        `tipo_cliente=${tc}`,
+        `largura=${v(c?.largura)}`,
+        `altura=${v(c?.altura)}`,
+        `tipo_perfil=${v(c?.tipo_perfil)}`,
+      ];
+      if (precisaFrete) {
+        linhas.push(`cep=${v(c?.cep)}`);
+        linhas.push(`frete=${v(c?.frete)}`);
+      }
+      const pendentes = linhas.filter((l) => l.endsWith("=PENDENTE")).map((l) => l.split("=")[0]);
+      const proximo = pendentes[0] || "TODOS_OK_CHAMAR_GERAR_ORCAMENTO";
+      return `[ESTADO ATUAL DA CONVERSA — fonte de verdade]\n${linhas.join("\n")}\nPRÓXIMO_PASSO: ${proximo === "TODOS_OK_CHAMAR_GERAR_ORCAMENTO" ? "TODOS os dados prontos — chame gerar_orcamento agora (sem argumentos)." : `pergunte ao cliente sobre "${proximo}".`}`;
+    };
 
-    console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"} | tipo_sessao: ${tipoConversa || "indefinido"}`);
+    console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"}`);
 
     // Loop do agente: até 5 iterações de tool calling
     let messages: any[] = [
       { role: "system", content: contextoCliente },
       ...historico,
+      { role: "system", content: await montarEstado() },
     ];
     let respostaFinal = "";
     let pdfEnviadoNesteTurno = false;
