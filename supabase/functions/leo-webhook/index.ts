@@ -1226,25 +1226,6 @@ Deno.serve(async (req) => {
               : "Lâmina gravada. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
             toolResult = { ok: true, tipo_perfil: pNorm, instrucao: proxima };
           }
-          const r = await cadastrarCliente({
-            nome: String(args.nome || nome || "").trim(),
-            email: args.email ? String(args.email).trim() : undefined,
-            documento: String(args.documento || "").replace(/\D/g, ""),
-            telefone,
-            tipo_cliente: args.tipo_cliente,
-          });
-          if (r.ok) {
-            await supabase
-              .from("leo_conversations")
-              .update({ nome_cliente: args.nome })
-              .eq("id", conversa.id);
-            toolResult = {
-              ok: true,
-              instrucao: "Cliente cadastrado. Agora pergunte se ele tem interesse na PORTA INSTALADA ou em REVENDA.",
-            };
-          } else {
-            toolResult = { ok: false, error: r.error };
-          }
         } else if (fnName === "calcular_frete_cep") {
           const r: any = await calcularFretePorCep(String(args.cep || ""));
           if (r.ok) {
