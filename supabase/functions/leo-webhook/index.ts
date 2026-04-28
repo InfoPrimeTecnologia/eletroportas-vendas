@@ -576,12 +576,12 @@ const TOOLS = [
     type: "function",
     function: {
       name: "cadastrar_cliente",
-      description: "Cadastra um novo cliente no banco de dados. Use APENAS quando tiver coletado nome, e-mail e CNPJ/CPF do cliente novo.",
+      description: "Cadastra um novo cliente no banco de dados. Use APENAS quando tiver coletado nome completo e CNPJ (ou CPF). Email é opcional — pode chamar sem se o cliente não quis informar.",
       parameters: {
         type: "object",
         properties: {
           nome: { type: "string", description: "Nome completo do cliente" },
-          email: { type: "string", description: "E-mail do cliente" },
+          email: { type: "string", description: "E-mail do cliente (opcional)" },
           documento: { type: "string", description: "CNPJ ou CPF (apenas números ou formatado)" },
         },
         required: ["nome", "documento"],
