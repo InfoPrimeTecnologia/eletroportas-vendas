@@ -1070,14 +1070,29 @@ Deno.serve(async (req) => {
           }
 
           if (faltando.length > 0) {
-            console.warn("🚫 gerar_orcamento BLOQUEADO — faltam:", faltando.join(", "));
+            gerarOrcamentoFalhas++;
+            console.warn(`🚫 gerar_orcamento BLOQUEADO (tentativa ${gerarOrcamentoFalhas}) — faltam:`, faltando.join(", "));
+            const proximaPergunta = faltando[0]?.includes("frete")
+              ? "Pergunte AGORA, em UMA mensagem curta: 'Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho.' NÃO chame nenhuma tool nesta resposta."
+              : faltando[0]?.includes("largura") || faltando[0]?.includes("altura")
+                ? "Pergunte AGORA, em UMA mensagem curta, a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
+                : faltando[0]?.includes("tipo_perfil")
+                  ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
+                  : "Responda em texto perguntando o próximo dado que falta. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
               erro: "DADOS_INSUFICIENTES",
               faltando,
-              instrucao: `NÃO gere o orçamento ainda. Faltam dados obrigatórios: ${faltando.join("; ")}. Pergunte ao cliente UMA pergunta por vez, na ordem do fluxo: medidas → lâmina → (se porta_instalada) CEP → gerar. NUNCA invente nem use valores padrão.`,
+              instrucao: `NÃO gere o orçamento. Faltam: ${faltando.join("; ")}. ${proximaPergunta}`,
             };
             messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
+            // Após 1ª falha, injetamos instrução de sistema reforçando para parar de tentar
+            if (gerarOrcamentoFalhas >= 1) {
+              messages.push({
+                role: "system",
+                content: `STOP. Você acabou de tentar gerar_orcamento sem os dados necessários (faltou: ${faltando.join(", ")}). Sua PRÓXIMA resposta DEVE ser texto puro perguntando ao cliente o próximo dado faltante. NÃO chame gerar_orcamento de novo neste turno.`,
+              });
+            }
             continue;
           }
 
