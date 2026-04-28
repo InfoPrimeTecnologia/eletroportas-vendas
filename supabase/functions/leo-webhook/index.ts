@@ -1241,7 +1241,7 @@ async function registrarOrcamentoEAvancarFunil(params: {
       orcamento.mao_de_obra ? `Mão de obra: R$ ${orcamento.mao_de_obra.toFixed(2)}` : null,
     ].filter(Boolean).join(" | ");
 
-    const { data: orc, error: orcErr } = await supabase
+    const { data: orc, error: orcErr } = await dashboardDb
       .from("orcamentos")
       .insert({
         cliente_nome: nome || `Contato ${telefone}`,
@@ -1264,7 +1264,7 @@ async function registrarOrcamentoEAvancarFunil(params: {
     const lead = await buscarLeadAberto(telefone);
     const anexo = `data:application/pdf;base64,${pdfBase64}`;
     if (lead?.id) {
-      await supabase
+      await dashboardDb
         .from("funil_leads")
         .update({
           etapa_key: "orcamento_enviado",
@@ -1277,7 +1277,7 @@ async function registrarOrcamentoEAvancarFunil(params: {
       console.log("✅ Lead movido para orcamento_enviado:", lead.id);
     } else {
       // cria direto na etapa orcamento_enviado caso não exista
-      await supabase.from("funil_leads").insert({
+      await dashboardDb.from("funil_leads").insert({
         nome: nome || `Contato ${telefone}`,
         telefone,
         valor: orcamento.total_geral,
