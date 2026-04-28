@@ -953,6 +953,73 @@ function proximaPerguntaDeterministica(estado: any): string | null {
   return null;
 }
 
+function estadoProntoParaOrcamento(estado: any): boolean {
+  const tipo = String(estado?.tipo_cliente || "").toLowerCase();
+  const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
+  const largura = Number(estado?.largura);
+  const altura = Number(estado?.altura);
+  const perfil = String(estado?.tipo_perfil || "").toLowerCase();
+  const perfilValido = ["fechado", "transvision", "oblongo"].includes(perfil);
+  return Boolean(
+    tipoValido &&
+    Number.isFinite(largura) && largura > 0 && largura <= 20 &&
+    Number.isFinite(altura) && altura > 0 && altura <= 20 &&
+    perfilValido &&
+    (tipo !== "porta_instalada" || Boolean(estado?.cep))
+  );
+}
+
+async function pdfJaEnviadoConversa(conversation_id: string) {
+  const { data } = await supabase
+    .from("leo_messages")
+    .select("metadata")
+    .eq("conversation_id", conversation_id)
+    .eq("role", "assistant")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  return Boolean((data || []).some((m: any) => m?.metadata?.pdf_enviado === true));
+}
+
+async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone: string, nome: string) {
+  const { data: estado, error } = await supabase
+    .from("leo_conversations")
+    .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao")
+    .eq("id", conversaId)
+    .maybeSingle();
+  if (error) throw error;
+
+  const largura = Number(estado?.largura);
+  const altura = Number(estado?.altura);
+  const tipoCliente = String(estado?.tipo_cliente || "").toLowerCase();
+  const tipoPerfil = String(estado?.tipo_perfil || "").toLowerCase();
+  const frete = estado?.frete != null ? Number(estado.frete) : 0;
+
+  const faltando: string[] = [];
+  if (tipoCliente !== "porta_instalada" && tipoCliente !== "revenda") faltando.push("tipo_cliente");
+  if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
+  if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
+  if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
+  if (tipoCliente === "porta_instalada" && (!Number.isFinite(frete) || frete <= 0)) faltando.push("frete");
+  if (faltando.length) return { ok: false, faltando };
+
+  const orcamento = calcularOrcamento({
+    largura,
+    altura,
+    tipo_cliente: tipoCliente as any,
+    tipo_perfil: tipoPerfil as any,
+    frete,
+    cliente_nome: nome,
+    cliente_endereco: estado?.endereco_instalacao || undefined,
+  });
+  const filename = `orcamento_${Date.now()}.pdf`;
+  const pdfB64 = await gerarPdfDocrya(gerarHtmlOrcamento(orcamento), filename);
+  if (!pdfB64) return { ok: false, error: "Falha ao gerar PDF" };
+
+  const caption = "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
+  const pdfEnviado = await enviarPdfBase64(telefone, pdfB64, filename, caption);
+  return { ok: pdfEnviado, pdf_enviado: pdfEnviado, caption, error: pdfEnviado ? null : "Falha ao enviar PDF" };
+}
+
 async function mensagemJaProcessada(conversation_id: string, messageId?: string) {
   if (!messageId) return false;
   const { data } = await supabase
