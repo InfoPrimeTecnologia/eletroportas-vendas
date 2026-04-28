@@ -1314,6 +1314,37 @@ function pareceAceite(texto: string): boolean {
   return padroes.some((re) => re.test(t));
 }
 
+async function interpretarAceiteContextual(params: { texto: string; historico: any[]; estado: any }) {
+  const respostaLamina = inferirLaminaTexto(params.texto);
+  if (respostaLamina && !params.estado?.cep) return false;
+
+  try {
+    const ai = await chamarIA([
+      {
+        role: "system",
+        content:
+          "Classifique se a ÚLTIMA mensagem do cliente é um aceite comercial inequívoco de um orçamento JÁ ENVIADO. " +
+          "Responda somente JSON válido no formato {\"aceitou\":boolean,\"confianca\":0..1}. " +
+          "Não marque aceite para escolha de produto/lâmina/medida/CEP, mesmo que use palavras como fechado/fechada.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          estado: params.estado,
+          historico_recente: params.historico.slice(-12),
+          ultima_mensagem: params.texto,
+        }),
+      },
+    ]);
+    const raw = (ai.choices?.[0]?.message?.content || "").trim();
+    const parsed = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/```$/i, ""));
+    return parsed?.aceitou === true && Number(parsed?.confianca || 0) >= 0.75;
+  } catch (e: any) {
+    console.error("⚠️ interpretarAceiteContextual falhou, fallback seguro:", e?.message || e);
+    return pareceAceite(params.texto);
+  }
+}
+
 /** Converte o último orçamento pendente em pedido de venda e move o lead para "fechado". */
 async function aceitarOrcamentoEGerarPedido(telefone: string) {
   try {
