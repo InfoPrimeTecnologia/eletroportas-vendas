@@ -654,6 +654,35 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "definir_medidas",
+      description: "Grava no banco a largura e altura da porta informadas pelo cliente. Chame ASSIM QUE o cliente responder o Passo 3 (ex: '4x5', '4 por 3', '4 metros por 3'). Silenciosa — não envia mensagem. Na MESMA rodada já avance para o Passo 4 (lâmina).",
+      parameters: {
+        type: "object",
+        properties: {
+          largura: { type: "number", description: "Largura em metros (ex: 4)" },
+          altura: { type: "number", description: "Altura em metros (ex: 3)" },
+        },
+        required: ["largura", "altura"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "definir_lamina",
+      description: "Grava no banco o tipo de lâmina escolhido pelo cliente. Chame ASSIM QUE o cliente responder o Passo 4. Silenciosa. Na MESMA rodada avance para o próximo passo (CEP se porta_instalada, ou direto gerar_orcamento se revenda).",
+      parameters: {
+        type: "object",
+        properties: {
+          tipo_perfil: { type: "string", enum: ["fechado", "transvision", "oblongo"] },
+        },
+        required: ["tipo_perfil"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "transferir_humano",
       description: "Transfere a conversa para um atendente humano. Use quando: cliente porta instalada fora da BA, cliente quer falar com humano, ou situação fora do seu escopo.",
       parameters: {
