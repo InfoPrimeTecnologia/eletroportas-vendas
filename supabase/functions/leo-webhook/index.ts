@@ -535,7 +535,8 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
 }
 
 async function salvarMensagem(conversation_id: string, role: string, content: string, metadata: any = {}) {
-  await supabase.from("leo_messages").insert({ conversation_id, role, content, metadata });
+  const { error } = await supabase.from("leo_messages").insert({ conversation_id, role, content, metadata });
+  if (error) throw error;
 }
 
 async function carregarHistorico(conversation_id: string) {
@@ -620,7 +621,18 @@ Deno.serve(async (req) => {
     }
 
     await salvarMensagem(conversa.id, "user", messageBody);
-    const historico = await carregarHistorico(conversa.id);
+    await supabase
+      .from("leo_conversations")
+      .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
+      .eq("id", conversa.id);
+
+    const historicoDb = await carregarHistorico(conversa.id);
+    const historicoTemMensagemAtual = historicoDb.some(
+      (m) => m.role === "user" && m.content.trim().toLowerCase() === messageBody.trim().toLowerCase()
+    );
+    const historico = historicoTemMensagemAtual
+      ? historicoDb
+      : [...historicoDb, { role: "user", content: messageBody }];
 
     // Detecção de estado: analisa o histórico para definir o PRÓXIMO PASSO obrigatório
     const histTxt = historico.map((m) => `${m.role}: ${m.content}`).join("\n").toLowerCase();
