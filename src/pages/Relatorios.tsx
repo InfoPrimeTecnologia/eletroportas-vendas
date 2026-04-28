@@ -48,7 +48,7 @@ export default function Relatorios() {
     let from = 0;
     let hasMore = true;
     while (hasMore) {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('Clientes')
         .select('CLI_NOME, CLI_CNPJ, CLI_EMAIL, CLI_FONE, CLI_BAIRRO, CLI_CEP')
         .range(from, from + PAGE - 1);

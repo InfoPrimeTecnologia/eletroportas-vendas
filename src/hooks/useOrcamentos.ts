@@ -38,7 +38,7 @@ export function useOrcamentos() {
   const { data: orcamentos = [], isLoading } = useQuery({
     queryKey: ['orcamentos'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('orcamentos')
         .select('*')
         .order('data_criacao', { ascending: false });
@@ -49,7 +49,7 @@ export function useOrcamentos() {
 
   const createOrcamento = useMutation({
     mutationFn: async (orc: OrcamentoInsert) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('orcamentos')
         .insert({
           cliente_telefone: orc.cliente_telefone,
@@ -76,7 +76,7 @@ export function useOrcamentos() {
 
   const updateOrcamento = useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: Partial<OrcamentoInsert> }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('orcamentos')
         .update(updates as any)
         .eq('id', id)
@@ -96,7 +96,7 @@ export function useOrcamentos() {
 
   const deleteOrcamento = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('orcamentos')
         .delete()
         .eq('id', id);

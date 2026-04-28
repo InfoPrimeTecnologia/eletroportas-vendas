@@ -40,7 +40,7 @@ export function usePedidos() {
   const { data: pedidos = [], isLoading } = useQuery({
     queryKey: ['pedidos'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('pedidos_venda')
         .select('*')
         .order('data_criacao', { ascending: false });
@@ -51,7 +51,7 @@ export function usePedidos() {
 
   const createPedido = useMutation({
     mutationFn: async (ped: PedidoInsert) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('pedidos_venda')
         .insert({
           cliente_telefone: ped.cliente_telefone,
@@ -79,7 +79,7 @@ export function usePedidos() {
 
   const updatePedido = useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: Partial<PedidoInsert> }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('pedidos_venda')
         .update(updates as any)
         .eq('id', id)
@@ -99,7 +99,7 @@ export function usePedidos() {
 
   const deletePedido = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('pedidos_venda')
         .delete()
         .eq('id', id);
