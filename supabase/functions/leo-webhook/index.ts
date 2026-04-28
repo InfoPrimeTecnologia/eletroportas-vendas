@@ -695,6 +695,7 @@ Deno.serve(async (req) => {
     });
   }
 
+  let telefoneFallback = "";
   try {
     const raw = await req.json();
     console.log("📨 Webhook recebido:", JSON.stringify(raw).substring(0, 800));
