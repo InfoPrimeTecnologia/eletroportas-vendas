@@ -642,6 +642,9 @@ Deno.serve(async (req) => {
     const jaPerguntouTipo = histTxt.includes("porta instalada ou em revenda") || histTxt.includes("porta instalada ou revenda");
     const jaRespondeuTipo = userMsgs.some((m) => /revenda|instalad/i.test(m));
     const tipoEscolhido = userMsgs.some((m) => /revenda/i.test(m)) ? "revenda" : (userMsgs.some((m) => /instalad/i.test(m)) ? "porta_instalada" : null);
+    if (tipoEscolhido && conversa.tipo_cliente !== tipoEscolhido) {
+      await supabase.from("leo_conversations").update({ tipo_cliente: tipoEscolhido }).eq("id", conversa.id);
+    }
 
     const jaPerguntouMedidas = histTxt.includes("largura e altura") || histTxt.includes("largura e a altura");
     const jaRespondeuMedidas = userMsgs.some((m) => /\d+\s*[x×]\s*\d+/i.test(m) || /\d+(?:[.,]\d+)?\s*m(?:etros?)?\s*(?:x|por)\s*\d+/i.test(m));
@@ -671,6 +674,24 @@ Deno.serve(async (req) => {
     }
 
     console.log(`🧭 Estado: tipo=${tipoEscolhido} medidas=${jaRespondeuMedidas} lamina=${jaRespondeuLamina} | ${proximoPasso}`);
+
+    if (tipoEscolhido && jaPerguntouTipo && !jaPerguntouMedidas) {
+      const resposta = "Qual a largura e altura da porta em metros? (ex: 4x3)";
+      await salvarMensagem(conversa.id, "assistant", resposta, { deterministic: true, step: "medidas" });
+      await enviarTexto(telefone, resposta);
+      return new Response(JSON.stringify({ ok: true, deterministic: "medidas" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (jaRespondeuMedidas && !jaPerguntouLamina) {
+      const resposta = "Qual o tipo da lâmina?\n1️⃣ FECHADA\n2️⃣ TRANSVISION\n3️⃣ OBLONGO";
+      await salvarMensagem(conversa.id, "assistant", resposta, { deterministic: true, step: "lamina" });
+      await enviarTexto(telefone, resposta);
+      return new Response(JSON.stringify({ ok: true, deterministic: "lamina" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Contexto do cliente + próximo passo determinístico
     const contextoCliente = clienteExistente
