@@ -74,11 +74,11 @@ export default function AgenteLeo() {
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const callLeoAdmin = async (body: Record<string, unknown>) => {
+  const callLeoAdmin = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("leo-admin", { body });
     if (error) throw error;
     return data as any;
-  };
+  }, []);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -97,7 +97,7 @@ export default function AgenteLeo() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [callLeoAdmin]);
 
   useEffect(() => {
     if (canManageAgent) {
@@ -136,8 +136,11 @@ export default function AgenteLeo() {
 
   const openConversation = (conv: Conversation) => {
     setSelectedConv(conv);
-    loadMessages(conv.id);
   };
+
+  useEffect(() => {
+    if (selectedConv) loadMessages(selectedConv.id);
+  }, [selectedConv?.id]);
 
   const handleResetMemory = async (convId: string) => {
     try {
