@@ -907,6 +907,35 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   }
 }
 
+async function carregarEstadoConversa(conversaId: string) {
+  const { data, error } = await supabase
+    .from("leo_conversations")
+    .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+    .eq("id", conversaId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+function proximaPerguntaDeterministica(estado: any): string | null {
+  const tipo = String(estado?.tipo_cliente || "").toLowerCase();
+  const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
+  const largura = Number(estado?.largura);
+  const altura = Number(estado?.altura);
+
+  if (!tipoValido) return "Você tem interesse em *PORTA INSTALADA* ou em *REVENDA*?";
+  if (!Number.isFinite(largura) || largura <= 0 || !Number.isFinite(altura) || altura <= 0) {
+    return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
+  }
+  if (!estado?.tipo_perfil) {
+    return "Qual o tipo da lâmina?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
+  }
+  if (tipo === "porta_instalada" && !estado?.cep) {
+    return "Por último, qual o *CEP do local da instalação*? Assim calculo o frete certinho.";
+  }
+  return null;
+}
+
 async function mensagemJaProcessada(conversation_id: string, messageId?: string) {
   if (!messageId) return false;
   const { data } = await supabase
