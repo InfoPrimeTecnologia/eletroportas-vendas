@@ -364,6 +364,7 @@ async function transferirParaHumano(ticketId: number) {
 // Docrya — gerar PDF
 // ===========================
 async function gerarPdfDocrya(html: string, filename: string): Promise<string | null> {
+  console.log(`📄 Docrya: gerando PDF "${filename}" (html ${html.length} chars)`);
   const r = await fetch(DOCRYA_URL, {
     method: "POST",
     headers: {
@@ -373,10 +374,11 @@ async function gerarPdfDocrya(html: string, filename: string): Promise<string | 
     body: JSON.stringify({ html, filename }),
   });
   if (!r.ok) {
-    console.error("Docrya erro:", r.status, await r.text());
+    console.error("📄 Docrya erro:", r.status, await r.text());
     return null;
   }
   const buf = new Uint8Array(await r.arrayBuffer());
+  console.log(`📄 Docrya OK: ${buf.length} bytes`);
   // base64 em chunks (evita stack overflow)
   let binary = "";
   const chunk = 0x8000;
