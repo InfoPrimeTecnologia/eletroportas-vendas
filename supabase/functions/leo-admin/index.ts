@@ -70,8 +70,23 @@ Deno.serve(async (req) => {
   const auth = await assertOwner(req);
   if (!auth.ok) return auth.response;
 
+  let action: string | undefined;
+  let conversationId: string | undefined;
+  let keyId: string | undefined;
+  let keyValue: any;
   try {
-    const { action, conversationId, keyId, keyValue } = await req.json();
+    const raw = await req.text();
+    const parsed = raw ? JSON.parse(raw) : {};
+    action = parsed?.action;
+    conversationId = parsed?.conversationId;
+    keyId = parsed?.keyId;
+    keyValue = parsed?.keyValue;
+  } catch (e: any) {
+    console.error("leo-admin body parse error:", e?.message || e);
+    return json({ error: "Body inválido (JSON esperado)." }, 400);
+  }
+
+  try {
 
     if (action === "list") {
       const [convRes, keysRes] = await Promise.all([
