@@ -24,6 +24,79 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
+// Backend legado (onde estão Clientes, estoque, funil)
+const LEGACY_SUPABASE_URL = "https://pdwghmxolqiuyxunglon.supabase.co";
+const LEGACY_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkd2dobXhvbHFpdXl4dW5nbG9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyNjM1NTMsImV4cCI6MjA4NDgzOTU1M30.FmYvMO9HLz-AUUH29TwBbRYA2KMPdyczSjorq3vVDcM";
+const legacyDb = createClient(LEGACY_SUPABASE_URL, LEGACY_SUPABASE_KEY, {
+  auth: { persistSession: false },
+});
+
+// Saudação por horário (timezone Brasil)
+function saudacaoHorario(): string {
+  const hora = new Date().toLocaleString("en-US", {
+    timeZone: "America/Bahia",
+    hour: "2-digit",
+    hour12: false,
+  });
+  const h = parseInt(hora, 10);
+  if (h >= 5 && h < 12) return "Bom dia";
+  if (h >= 12 && h < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+// Normaliza telefone (remove tudo que não for dígito)
+function normalizarTelefone(t: string): string {
+  return (t || "").replace(/\D/g, "");
+}
+
+// Busca cliente no backend legado pelo telefone
+async function buscarClientePorTelefone(telefone: string) {
+  const tel = normalizarTelefone(telefone);
+  if (!tel) return null;
+  // tenta variações: completo, sem código país (55), últimos 11 dígitos
+  const variacoes = Array.from(new Set([
+    tel,
+    tel.startsWith("55") ? tel.slice(2) : tel,
+    tel.slice(-11),
+    tel.slice(-10),
+  ].filter(Boolean)));
+
+  for (const v of variacoes) {
+    const { data } = await legacyDb
+      .from("Clientes")
+      .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE")
+      .ilike("CLI_FONE", `%${v}%`)
+      .limit(1)
+      .maybeSingle();
+    if (data) return data;
+  }
+  return null;
+}
+
+// Cadastra um novo cliente no backend legado
+async function cadastrarCliente(input: {
+  nome: string;
+  email?: string;
+  documento: string; // CNPJ ou CPF
+  telefone: string;
+}) {
+  const { data, error } = await legacyDb
+    .from("Clientes")
+    .insert({
+      CLI_CNPJ: input.documento,
+      CLI_NOME: input.nome,
+      CLI_EMAIL: input.email || null,
+      CLI_FONE: normalizarTelefone(input.telefone),
+    })
+    .select()
+    .single();
+  if (error) {
+    console.error("Erro ao cadastrar cliente:", error);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, cliente: data };
+}
+
 // ===========================
 // CÁLCULO DE ORÇAMENTO
 // ===========================
