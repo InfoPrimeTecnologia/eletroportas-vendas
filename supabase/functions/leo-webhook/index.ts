@@ -11,7 +11,7 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
 const PRIMESYNC_URL = Deno.env.get("PRIMESYNC_URL")!;
 const PRIMESYNC_TOKEN = Deno.env.get("PRIMESYNC_TOKEN")!;
 const DOCRYA_API_KEY = Deno.env.get("DOCRYA_API_KEY")!;
