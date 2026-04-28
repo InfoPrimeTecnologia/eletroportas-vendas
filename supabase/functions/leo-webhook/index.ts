@@ -586,6 +586,7 @@ const TOOLS = [
           nome: { type: "string", description: "Nome completo do cliente" },
           email: { type: "string", description: "E-mail do cliente (opcional)" },
           documento: { type: "string", description: "CNPJ ou CPF (apenas números ou formatado)" },
+          tipo_cliente: { type: "string", enum: ["porta_instalada", "revenda"], description: "Tipo confirmado pelo cliente, se já souber" },
         },
         required: ["nome", "documento"],
       },
