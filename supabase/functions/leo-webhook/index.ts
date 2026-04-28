@@ -425,7 +425,7 @@ const TOOLS = [
           cliente_nome: { type: "string" },
           cliente_endereco: { type: "string" },
         },
-        required: ["largura", "altura", "tipo_cliente"],
+        required: ["largura", "altura", "tipo_cliente", "tipo_perfil"],
       },
     },
   },
