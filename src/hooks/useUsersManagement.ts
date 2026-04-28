@@ -11,14 +11,14 @@ export function useUsersManagement() {
     queryKey: ['all-users'],
     queryFn: async () => {
       // Get all user roles
-      const { data: roles, error: rolesError } = await supabase
+      const { data: roles, error: rolesError } = await (supabase as any)
         .from('user_roles')
         .select('*');
       
       if (rolesError) throw rolesError;
 
       // Get all permissions
-      const { data: permissions, error: permsError } = await supabase
+      const { data: permissions, error: permsError } = await (supabase as any)
         .from('user_permissions')
         .select('*');
       
@@ -46,7 +46,7 @@ export function useUsersManagement() {
   // Update user role
   const updateRoleMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('user_roles')
         .upsert({ 
           user_id: userId, 
@@ -85,7 +85,7 @@ export function useUsersManagement() {
       }>;
     }) => {
       // Delete existing permissions
-      const { error: deleteError } = await supabase
+      const { error: deleteError } = await (supabase as any)
         .from('user_permissions')
         .delete()
         .eq('user_id', userId);
@@ -94,7 +94,7 @@ export function useUsersManagement() {
 
       // Insert new permissions
       if (permissions.length > 0) {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from('user_permissions')
           .insert(permissions.map(p => ({
             user_id: userId,
@@ -124,13 +124,13 @@ export function useUsersManagement() {
   const deleteUserRoleMutation = useMutation({
     mutationFn: async (userId: string) => {
       // Delete permissions first
-      await supabase
+      await (supabase as any)
         .from('user_permissions')
         .delete()
         .eq('user_id', userId);
 
       // Delete role
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('user_roles')
         .delete()
         .eq('user_id', userId);

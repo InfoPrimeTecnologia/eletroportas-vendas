@@ -33,13 +33,17 @@ export function useUserRole() {
     queryFn: async () => {
       if (!user?.id) return [];
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('user_permissions')
         .select('*')
         .eq('user_id', user.id);
       
-      if (error) throw error;
-      return data as unknown as UserPermission[];
+      // Tabela pode não existir no backend novo - retorna lista vazia em vez de quebrar
+      if (error) {
+        console.warn('user_permissions indisponível:', error.message);
+        return [] as UserPermission[];
+      }
+      return (data || []) as unknown as UserPermission[];
     },
     enabled: !!user?.id,
   });
