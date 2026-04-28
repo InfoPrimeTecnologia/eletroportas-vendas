@@ -78,7 +78,7 @@ export default function AgenteLeo() {
   const callLeoAdmin = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("leo-admin", { body });
     if (error) throw error;
-    return data as any;
+    return data as Record<string, unknown>;
   }, []);
 
   const fetchAll = useCallback(async (silent = false) => {
