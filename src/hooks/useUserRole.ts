@@ -10,20 +10,18 @@ export function useUserRole() {
     queryKey: ['user-role', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
-      
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id);
-      
-      console.log('[useUserRole] user', user.id, 'rows:', data, 'err:', error?.message);
-      
-      if (error) {
-        console.warn('[useUserRole] erro:', error.message);
-        return null;
-      }
-      
-      const roles = (data ?? []).map((r: any) => r.role as AppRole);
+
+      const roleChecks = await Promise.all([
+        supabase.rpc('has_role', { _user_id: user.id, _role: 'super_admin' }),
+        supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' }),
+        supabase.rpc('has_role', { _user_id: user.id, _role: 'user' }),
+      ]);
+
+      const roles: AppRole[] = [];
+      if (roleChecks[0].data === true) roles.push('super_admin');
+      if (roleChecks[1].data === true) roles.push('admin');
+      if (roleChecks[2].data === true) roles.push('user');
+
       // Prioridade: super_admin > admin > user
       if (roles.includes('super_admin')) return 'super_admin' as AppRole;
       if (roles.includes('admin')) return 'admin' as AppRole;
