@@ -972,24 +972,18 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   );
   if (histRes.error) console.error("⚠️", descreverErroPg(histRes.error, "leitura histórico determinístico falhou: "));
 
+  const baseEstado = estadoRes.data || {};
   const textos = [texto, ...((histRes.data || []) as any[]).map((m) => String(m?.content || ""))].filter(Boolean);
-  const estado = aplicarInferenciasEmEstado(estadoRes.data || {}, textos);
+  const estado = aplicarInferenciasEmEstado(baseEstado, textos);
 
   const patch: Record<string, unknown> = {};
-  const tipo = inferirTipoClienteTexto(texto);
-  if (tipo && (!estado?.tipo_cliente || estado.tipo_cliente === "indefinido")) patch.tipo_cliente = tipo;
-
-  const medidas = inferirMedidasTexto(texto);
-  if (medidas && (estado?.largura == null || estado?.altura == null)) {
-    patch.largura = medidas.largura;
-    patch.altura = medidas.altura;
-  }
-
-  const lamina = inferirLaminaTexto(texto);
-  if (lamina && !estado?.tipo_perfil) patch.tipo_perfil = lamina;
+  if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
+  if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
+  if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
+  if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
 
   const cep = inferirCepTexto(texto);
-  if (cep && estado?.tipo_cliente === "porta_instalada" && !estado?.cep) {
+  if (cep && estado?.tipo_cliente === "porta_instalada" && !baseEstado?.cep) {
     const frete: any = await calcularFretePorCep(cep);
     if (frete.ok) {
       patch.cep = frete.cep;
