@@ -187,7 +187,7 @@ const Funil = () => {
         const clienteMap = new Map(clientes.map((c: any) => [c.CLI_FONE, c]));
         for (const lead of rawLeads) {
           if (lead.telefone && clienteMap.has(lead.telefone)) {
-            const cliente = clienteMap.get(lead.telefone)!;
+            const cliente: any = clienteMap.get(lead.telefone)!;
             lead.nome = cliente.CLI_NOME || lead.nome;
             lead.email = cliente.CLI_EMAIL || lead.email;
             lead.empresa = cliente.CLI_CNPJ || lead.empresa;
