@@ -995,7 +995,7 @@ Deno.serve(async (req) => {
     let respostaFinal = "";
     let pdfEnviadoNesteTurno = false;
     let pdfCaptionEnviada = "";
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       const ai = await chamarIA(messages);
       const choice = ai.choices?.[0]?.message;
       if (!choice) break;
