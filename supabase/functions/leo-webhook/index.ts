@@ -724,6 +724,7 @@ Deno.serve(async (req) => {
     const messageId: string | undefined = body?.messageId || body?.id;
     const contact = body?.contact || {};
     const telefone: string = contact?.phoneNumber || body?.from || "";
+    telefoneFallback = telefone;
     const nome: string = contact?.name || contact?.pushname || "";
     const ticketId: number | undefined = body?.ticket?.id;
 
