@@ -129,6 +129,8 @@ export default function AgenteLeo() {
     }
   }, [callLeoAdmin]);
 
+  const selectedConvId = selectedConv?.id;
+
   // Realtime
   useEffect(() => {
     if (!canManageAgent) return;
@@ -151,8 +153,8 @@ export default function AgenteLeo() {
   };
 
   useEffect(() => {
-    if (selectedConv) loadMessages(selectedConv.id);
-  }, [selectedConv?.id]);
+    if (selectedConvId) loadMessages(selectedConvId);
+  }, [selectedConvId, loadMessages]);
 
   const handleResetMemory = async (convId: string) => {
     try {
