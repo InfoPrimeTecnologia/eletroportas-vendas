@@ -735,6 +735,48 @@ async function chamarIA(messages: any[], options: { tools?: any[] | null; temper
 // Janela de inatividade: após 3h sem mensagem, considera "nova sessão" e re-saúda
 const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
 
+function estadoInicialConversa(telefone: string, nome?: string) {
+  return {
+    telefone,
+    tipo_cliente: "indefinido",
+    nome_cliente: nome || null,
+    status: "ativa",
+    largura: null,
+    altura: null,
+    tipo_perfil: null,
+    cep: null,
+    frete: null,
+    endereco_instalacao: null,
+    ultima_mensagem_at: new Date().toISOString(),
+  };
+}
+
+async function reutilizarConversaComoNovaSessao(conversa: any, telefone: string, nome?: string) {
+  // A constraint UNIQUE(telefone, tipo_cliente) impede criar/atualizar outra conversa
+  // para o mesmo telefone/tipo. Por isso consolidamos em uma única conversa ativa
+  // quando começa uma nova sessão, evitando loop em "PORTA INSTALADA ou REVENDA?".
+  const limparOutras = await withSchemaRetry(() =>
+    supabase.from("leo_conversations").delete().eq("telefone", telefone).neq("id", conversa.id)
+  );
+  if (limparOutras.error) console.error("⚠️", descreverErroPg(limparOutras.error, "getOuCriarConversa limpar duplicadas: "));
+
+  const limparMensagens = await withSchemaRetry(() =>
+    supabase.from("leo_messages").delete().eq("conversation_id", conversa.id)
+  );
+  if (limparMensagens.error) console.error("⚠️", descreverErroPg(limparMensagens.error, "getOuCriarConversa limpar mensagens: "));
+
+  const reset = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .update(estadoInicialConversa(telefone, nome))
+      .eq("id", conversa.id)
+      .select()
+      .single()
+  );
+  if (reset.error) throw reset.error;
+  return { conversa: reset.data, isNova: true };
+}
+
 async function getOuCriarConversa(telefone: string, nome?: string) {
   const existingRes = await withSchemaRetry(() =>
     supabase
@@ -754,20 +796,26 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
     const inativaHaMuito = Date.now() - ultima > SESSION_GAP_MS;
     if (!inativaHaMuito) return { conversa: existing, isNova: false };
 
-    // Nova sessão de verdade: encerra a anterior para não reaproveitar estado/histórico antigo.
-    const encerrar = await withSchemaRetry(() =>
-      supabase
-        .from("leo_conversations")
-        .update({ status: "encerrada", ultima_mensagem_at: new Date().toISOString() })
-        .eq("id", existing.id)
-    );
-    if (encerrar.error) console.error("⚠️", descreverErroPg(encerrar.error, "getOuCriarConversa encerrar antiga: "));
+    // Nova sessão de verdade: reutiliza a mesma linha e limpa estado/histórico antigo.
+    return await reutilizarConversaComoNovaSessao(existing, telefone, nome);
   }
+
+  const qualquerRes = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .select("*")
+      .eq("telefone", telefone)
+      .order("ultima_mensagem_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  );
+  if (qualquerRes.error) console.error("⚠️", descreverErroPg(qualquerRes.error, "getOuCriarConversa leitura qualquer: "));
+  if (qualquerRes.data) return await reutilizarConversaComoNovaSessao(qualquerRes.data, telefone, nome);
 
   const criar = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .insert({ telefone, tipo_cliente: "indefinido", nome_cliente: nome })
+      .insert(estadoInicialConversa(telefone, nome))
       .select()
       .single()
   );
