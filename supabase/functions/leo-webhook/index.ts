@@ -965,6 +965,32 @@ async function mensagemJaProcessada(conversation_id: string, messageId?: string)
   return Boolean(data);
 }
 
+async function mensagemForaDeOrdem(conversation_id: string, rawTimestamp?: string | number | null) {
+  const incomingTs = Number(rawTimestamp || 0);
+  if (!Number.isFinite(incomingTs) || incomingTs <= 0) return false;
+
+  const { data, error } = await supabase
+    .from("leo_messages")
+    .select("metadata")
+    .eq("conversation_id", conversation_id)
+    .eq("role", "user")
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.error("⚠️ Falha ao verificar ordem da mensagem:", error.message || error);
+    return false;
+  }
+
+  const latestTs = (data || [])
+    .map((m: any) => Number(m?.metadata?.raw_timestamp || 0))
+    .filter((ts: number) => Number.isFinite(ts) && ts > 0)
+    .sort((a: number, b: number) => b - a)[0];
+
+  // Ignora reentregas antigas do provedor. Mantém 2s de tolerância para pequenas variações.
+  return Boolean(latestTs && incomingTs < latestTs - 2000);
+}
+
 async function carregarHistorico(conversation_id: string) {
   const { data } = await supabase
     .from("leo_messages")
@@ -1042,6 +1068,13 @@ Deno.serve(async (req) => {
     if (await mensagemJaProcessada(conversa.id, messageId)) {
       console.log("⏭️ Ignorado: messageId já processado", messageId);
       return new Response(JSON.stringify({ ignored: "duplicate_message_id" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (await mensagemForaDeOrdem(conversa.id, body?.timestamp || null)) {
+      console.warn("⏭️ Ignorado: webhook antigo/fora de ordem", { messageId, timestamp: body?.timestamp });
+      return new Response(JSON.stringify({ ignored: "stale_out_of_order" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -1421,15 +1454,10 @@ Deno.serve(async (req) => {
   } catch (e: any) {
     const errMsg = e?.message || e?.error_description || e?.details || e?.hint || e?.code || JSON.stringify(e) || "erro desconhecido";
     console.error("leo-webhook erro:", errMsg, "stack:", e?.stack, "raw:", JSON.stringify(e, Object.getOwnPropertyNames(e || {})));
-    // Tenta avisar o cliente mesmo em erro fatal — agente nunca pode ficar mudo
-    try {
-      const tel = normalizarTelefone(telefoneFallback);
-      if (tel) {
-        await enviarTexto(tel, "Tive uma instabilidade momentânea aqui. Pode reenviar sua última mensagem? 🙏");
-      }
-    } catch (_) { /* silencioso */ }
-    return new Response(JSON.stringify({ error: errMsg }), {
-      status: 500,
+    // Não retorna 500 nem envia texto genérico: isso fazia o provedor reentregar webhooks antigos
+    // e o cliente recebia "instabilidade" duplicada mesmo quando o próximo passo já tinha sido enviado.
+    return new Response(JSON.stringify({ ok: false, handled: true, error: errMsg }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
