@@ -143,6 +143,36 @@ async function cadastrarCliente(input: {
   return { ok: true, cliente: data };
 }
 
+// Atualiza o tipo_cliente na tabela legada Clientes (procurando pelo telefone)
+async function atualizarTipoClienteLegado(telefone: string, tipo: "porta_instalada" | "revenda") {
+  const tel = normalizarTelefone(telefone);
+  if (!tel) return;
+  const valor = tipo === "porta_instalada" ? "Porta Instalada" : "Revenda";
+  const variacoes = Array.from(new Set([
+    tel,
+    tel.startsWith("55") ? tel.slice(2) : tel,
+    tel.slice(-11),
+    tel.slice(-10),
+  ].filter(Boolean)));
+  for (const v of variacoes) {
+    const { data: found } = await legacyDb
+      .from("Clientes")
+      .select("CLI_CNPJ")
+      .ilike("CLI_FONE", `%${v}%`)
+      .limit(1)
+      .maybeSingle();
+    if (found?.CLI_CNPJ) {
+      const { error } = await legacyDb
+        .from("Clientes")
+        .update({ tipo_cliente: valor })
+        .eq("CLI_CNPJ", found.CLI_CNPJ);
+      if (error) console.error("⚠️ Falha ao atualizar tipo_cliente legado:", error.message);
+      else console.log(`✅ tipo_cliente legado atualizado para "${valor}" (CNPJ ${found.CLI_CNPJ})`);
+      return;
+    }
+  }
+  console.warn(`⚠️ Cliente ${tel} não encontrado no legado para atualizar tipo_cliente`);
+}
 
 // ===========================
 // CÁLCULO DE ORÇAMENTO
