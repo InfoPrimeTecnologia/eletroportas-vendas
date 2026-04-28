@@ -551,7 +551,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const conversa = await getOuCriarConversa(telefone, nome);
+    const { conversa, isNova } = await getOuCriarConversa(telefone, nome);
 
     // Conversa encerrada (já foi transferida) → não responde
     if (conversa.status === "encerrada") {
@@ -560,11 +560,26 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Lookup do cliente no backend legado
+    const clienteExistente = await buscarClientePorTelefone(telefone);
+
+    // Em conversa nova, envia saudação fixa antes da IA
+    if (isNova) {
+      const saudacao = `Olá, sou o Leo da Eletroportas. ${saudacaoHorario()}!`;
+      await enviarTexto(telefone, saudacao);
+      await salvarMensagem(conversa.id, "assistant", saudacao);
+    }
+
     await salvarMensagem(conversa.id, "user", messageBody);
     const historico = await carregarHistorico(conversa.id);
 
+    // Contexto do cliente como mensagem de sistema dinâmica
+    const contextoCliente = clienteExistente
+      ? `[CONTEXTO] Cliente JÁ CADASTRADO: ${clienteExistente.CLI_NOME || "(sem nome)"} | CNPJ/CPF: ${clienteExistente.CLI_CNPJ} | Email: ${clienteExistente.CLI_EMAIL || "(não informado)"}. NÃO peça cadastro novamente — pergunte sobre porta instalada ou revenda.`
+      : `[CONTEXTO] Cliente NÃO CADASTRADO (telefone ${telefone}). Sua prioridade é coletar nome completo, e-mail e CNPJ ou CPF, e então chamar a tool cadastrar_cliente.`;
+
     // Loop de tools (até 3 chamadas)
-    let messages: any[] = [...historico];
+    let messages: any[] = [{ role: "system", content: contextoCliente }, ...historico];
     let respostaFinal = "";
     for (let i = 0; i < 3; i++) {
       const ai = await chamarIA(messages);
