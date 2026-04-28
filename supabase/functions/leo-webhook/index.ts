@@ -846,9 +846,48 @@ async function calcularFretePorCep(cepRaw: string) {
   };
 }
 
+/** Tenta novamente quando o PostgREST está recarregando o schema cache (erro vem com tudo vazio). */
+async function withSchemaRetry<T extends { error: any }>(fn: () => Promise<T>, tentativas = 4): Promise<T> {
+  let ultimo: T | undefined;
+  for (let i = 0; i < tentativas; i++) {
+    const r = await fn();
+    const err: any = r?.error;
+    if (!err) return r;
+    const msg = String(err?.message || "");
+    const code = String(err?.code || "");
+    const semInfo = !msg && !code && err?.details == null && err?.hint == null;
+    const schemaIssue = /schema cache|Could not query the database|JWT|fetch failed/i.test(msg);
+    if (semInfo || schemaIssue) {
+      ultimo = r;
+      await new Promise((res) => setTimeout(res, 250 * (i + 1)));
+      continue;
+    }
+    return r;
+  }
+  return ultimo as T;
+}
+
+function descreverErroPg(err: any, prefixo = ""): string {
+  if (!err) return prefixo + "sem erro";
+  const partes = [
+    err?.message,
+    err?.details,
+    err?.hint,
+    err?.code ? `code=${err.code}` : null,
+    err?.status ? `status=${err.status}` : null,
+  ].filter(Boolean);
+  return prefixo + (partes.join(" | ") || "PostgrestError vazio (provável recarga de schema cache)");
+}
+
 async function salvarMensagem(conversation_id: string, role: string, content: string, metadata: any = {}) {
-  const { error } = await supabase.from("leo_messages").insert({ conversation_id, role, content, metadata });
-  if (error) throw error;
+  const r = await withSchemaRetry(() =>
+    supabase.from("leo_messages").insert({ conversation_id, role, content, metadata })
+  );
+  if (r.error) {
+    // Não joga para o catch global — não queremos derrubar o turno inteiro só porque
+    // o histórico não pôde ser persistido. O envio para o cliente continua.
+    console.error("⚠️", descreverErroPg(r.error, "salvarMensagem falhou: "));
+  }
 }
 
 function inferirTipoClienteTexto(texto: string): "porta_instalada" | "revenda" | null {
@@ -981,12 +1020,18 @@ async function pdfJaEnviadoConversa(conversation_id: string) {
 }
 
 async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone: string, nome: string) {
-  const { data: estado, error } = await supabase
-    .from("leo_conversations")
-    .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao")
-    .eq("id", conversaId)
-    .maybeSingle();
-  if (error) throw error;
+  const r = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao")
+      .eq("id", conversaId)
+      .maybeSingle()
+  );
+  if (r.error) {
+    console.error("⚠️", descreverErroPg(r.error, "gerarEEnviarOrcamento - leitura conversa: "));
+    return { ok: false, error: descreverErroPg(r.error) };
+  }
+  const estado: any = r.data;
 
   const largura = Number(estado?.largura);
   const altura = Number(estado?.altura);
@@ -1259,16 +1304,18 @@ async function mensagemForaDeOrdem(conversation_id: string, rawTimestamp?: strin
   const incomingTs = Number(rawTimestamp || 0);
   if (!Number.isFinite(incomingTs) || incomingTs <= 0) return false;
 
-  const { data, error } = await supabase
-    .from("leo_messages")
-    .select("metadata")
-    .eq("conversation_id", conversation_id)
-    .eq("role", "user")
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const { data, error } = await withSchemaRetry(() =>
+    supabase
+      .from("leo_messages")
+      .select("metadata")
+      .eq("conversation_id", conversation_id)
+      .eq("role", "user")
+      .order("created_at", { ascending: false })
+      .limit(20)
+  );
 
   if (error) {
-    console.error("⚠️ Falha ao verificar ordem da mensagem:", error.message || error);
+    console.error("⚠️", descreverErroPg(error, "mensagemForaDeOrdem: "));
     return false;
   }
 
@@ -1799,8 +1846,22 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
-    const errMsg = e?.message || e?.error_description || e?.details || e?.hint || e?.code || JSON.stringify(e) || "erro desconhecido";
-    console.error("leo-webhook erro:", errMsg, "stack:", e?.stack, "raw:", JSON.stringify(e, Object.getOwnPropertyNames(e || {})));
+    // Captura defensiva: PostgrestError costuma ter message/details/hint/code,
+    // mas em alguns recarregamentos do schema cache vem tudo em branco.
+    const partes = [
+      e?.message,
+      e?.error_description,
+      e?.details,
+      e?.hint,
+      e?.code ? `code=${e.code}` : null,
+      e?.status ? `status=${e.status}` : null,
+      e?.statusText,
+      e?.name,
+    ].filter(Boolean);
+    const errMsg = partes.join(" | ") || (typeof e === "string" ? e : "") || "erro desconhecido (objeto vazio)";
+    let raw = "";
+    try { raw = JSON.stringify(e, Object.getOwnPropertyNames(e || {})); } catch { raw = String(e); }
+    console.error("leo-webhook erro:", errMsg, "| stack:", e?.stack || "n/a", "| raw:", raw, "| typeof:", typeof e, "| ctor:", e?.constructor?.name);
     // Não retorna 500 nem envia texto genérico: isso fazia o provedor reentregar webhooks antigos
     // e o cliente recebia "instabilidade" duplicada mesmo quando o próximo passo já tinha sido enviado.
     return new Response(JSON.stringify({ ok: false, handled: true, error: errMsg }), {
