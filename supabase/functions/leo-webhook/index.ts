@@ -1225,15 +1225,17 @@ async function registrarOrcamentoEAvancarFunil(params: {
   const { telefone, nome, orcamento, pdfBase64, filename } = params;
   try {
     const itensJson = orcamento.itens.map((i: any) => ({
-      codigo: i.code,
+      codigo_sku: i.code,
+      produto_nome: i.description,
       descricao: i.description,
       quantidade: i.qty,
-      unidade: i.unit,
       preco_unitario: i.unit_price,
+      unidade: i.unit,
       subtotal: i.subtotal,
     }));
     const observacoes = [
       `Origem: Agente Leo (WhatsApp)`,
+      `Telefone: ${telefone}`,
       `Tipo: ${orcamento.tipo_cliente}`,
       `Medidas: ${orcamento.largura}m x ${orcamento.altura}m`,
       `Lâmina: ${orcamento.tipo_perfil}`,
@@ -1245,7 +1247,7 @@ async function registrarOrcamentoEAvancarFunil(params: {
       .from("orcamentos")
       .insert({
         cliente_nome: nome || `Contato ${telefone}`,
-        cliente_telefone: telefone,
+        cliente_cnpj: null,
         valor_total: orcamento.total_geral,
         status: "pendente",
         origem: "leo_agent",
