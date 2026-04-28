@@ -474,7 +474,7 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
     .limit(1)
     .maybeSingle();
 
-  if (existing) return existing;
+  if (existing) return { conversa: existing, isNova: false };
 
   const { data, error } = await supabase
     .from("leo_conversations")
@@ -482,7 +482,7 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
     .select()
     .single();
   if (error) throw error;
-  return data;
+  return { conversa: data, isNova: true };
 }
 
 async function salvarMensagem(conversation_id: string, role: string, content: string, metadata: any = {}) {
