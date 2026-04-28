@@ -767,7 +767,17 @@ Deno.serve(async (req) => {
       const toolCalls = choice.tool_calls;
 
       if (!toolCalls || toolCalls.length === 0) {
-        respostaFinal = choice.content || "";
+        respostaFinal = (choice.content || "").trim();
+        if (!respostaFinal) {
+          // IA retornou vazio — força uma nova chamada pedindo resposta textual
+          console.warn("⚠️ IA retornou content vazio sem tool_calls — solicitando retry");
+          messages.push({
+            role: "system",
+            content: "Sua última resposta veio vazia. Responda agora ao cliente em UMA mensagem curta em português, seguindo o fluxo. NÃO use tool_calls nesta resposta.",
+          });
+          const retry = await chamarIA(messages);
+          respostaFinal = (retry.choices?.[0]?.message?.content || "").trim();
+        }
         break;
       }
 
