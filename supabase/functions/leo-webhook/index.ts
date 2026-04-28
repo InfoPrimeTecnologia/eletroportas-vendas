@@ -649,6 +649,20 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "definir_tipo_cliente",
+      description: "Registra IMEDIATAMENTE no banco de dados o tipo de atendimento que o cliente escolheu. Chame ASSIM QUE o cliente responder 'porta instalada', 'instalada', 'quero instalar', 'revenda', 'para revender' ou equivalente. NÃO espere coletar mais dados. Esta tool é silenciosa — não envia mensagem ao cliente, apenas grava no banco.",
+      parameters: {
+        type: "object",
+        properties: {
+          tipo_cliente: { type: "string", enum: ["porta_instalada", "revenda"] },
+        },
+        required: ["tipo_cliente"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "transferir_humano",
       description: "Transfere a conversa para um atendente humano. Use quando: cliente porta instalada fora da BA, cliente quer falar com humano, ou situação fora do seu escopo.",
       parameters: {
