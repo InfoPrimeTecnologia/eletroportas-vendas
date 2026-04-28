@@ -1295,10 +1295,13 @@ async function registrarOrcamentoEAvancarFunil(params: {
 function pareceAceite(texto: string): boolean {
   const t = (texto || "").toLowerCase().trim();
   if (!t) return false;
+  if (/^(fechada|fechado|lisa|liso|meia cana|transvision|oblongo|perfurada|perfurado|1|2|3)$/i.test(t)) {
+    return false;
+  }
   // Frases curtas claras de aceite
   const padroes = [
     /\baceito\b/, /\baceitar\b/, /\baceita?do\b/,
-    /\bfechad[oa]\b/, /\bfechar( o)? (orcamento|orçamento|pedido)\b/, /\bpode (fechar|seguir)\b/,
+    /\b(fechar|fechado|fechada) (o )?(orcamento|orçamento|pedido|negocio|negócio)\b/, /\bpode (fechar|seguir)\b/,
     /\bpode (gerar|emitir) (o )?pedido\b/, /\bquero (fechar|comprar)\b/,
     /\bconfirmo( o)? (orcamento|orçamento|pedido)\b/, /\bconcordo( com)? (o )?(orcamento|orçamento|pedido)\b/,
     /\baprovad[oa]\b/, /\baprovar( o)? (orcamento|orçamento)\b/,
@@ -1513,8 +1516,12 @@ Deno.serve(async (req) => {
       .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
       .eq("id", conversa.id);
 
+    const estadoAntesAceite = await carregarEstadoConversa(conversa.id);
+
     // ➕ DASHBOARD: detecta aceite explícito do orçamento → gera pedido_venda e fecha o lead
-    if (pareceAceite(messageBody)) {
+    // Só aceita depois que o orçamento já foi enviado nesta conversa. Antes disso,
+    // respostas como "fechada" são tratadas como tipo de lâmina, nunca como aceite.
+    if (estadoProntoParaOrcamento(estadoAntesAceite) && await pdfJaEnviadoConversa(conversa.id) && pareceAceite(messageBody)) {
       const r = await aceitarOrcamentoEGerarPedido(telefone);
       if (r?.pedido_numero) {
         const msg = `Perfeito! ✅ Orçamento ${r.orcamento_numero} aceito e pedido ${r.pedido_numero} aberto. Em breve um atendente confirma os próximos passos.`;
