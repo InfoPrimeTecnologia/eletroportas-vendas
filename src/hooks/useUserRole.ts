@@ -4,23 +4,21 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AppRole, AppModule, UserPermission } from '@/types/roles';
 
 export function useUserRole() {
-  const { user } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
 
   const { data: userRole, isLoading: roleLoading } = useQuery({
     queryKey: ['user-role', user?.id],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!user?.id || !session?.access_token) return null;
 
-      const roleChecks = await Promise.all([
-        supabase.rpc('has_role', { _user_id: user.id, _role: 'super_admin' }),
-        supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' }),
-        supabase.rpc('has_role', { _user_id: user.id, _role: 'user' }),
-      ]);
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id);
 
-      const roles: AppRole[] = [];
-      if (roleChecks[0].data === true) roles.push('super_admin');
-      if (roleChecks[1].data === true) roles.push('admin');
-      if (roleChecks[2].data === true) roles.push('user');
+      if (error) return null;
+
+      const roles = (data ?? []).map((r) => r.role as AppRole);
 
       // Prioridade: super_admin > admin > user
       if (roles.includes('super_admin')) return 'super_admin' as AppRole;
@@ -28,13 +26,13 @@ export function useUserRole() {
       if (roles.includes('user')) return 'user' as AppRole;
       return null;
     },
-    enabled: !!user?.id,
+    enabled: !authLoading && !!user?.id && !!session?.access_token,
   });
 
   const { data: permissions, isLoading: permissionsLoading } = useQuery({
     queryKey: ['user-permissions', user?.id],
     queryFn: async () => {
-      if (!user?.id) return [];
+      if (!user?.id || userRole !== 'user') return [];
       
       const { data, error } = await (supabase as any)
         .from('user_permissions')
@@ -48,10 +46,10 @@ export function useUserRole() {
       }
       return (data || []) as unknown as UserPermission[];
     },
-    enabled: !!user?.id,
+    enabled: !authLoading && !!user?.id && userRole === 'user',
   });
 
-  const isLoading = roleLoading || permissionsLoading;
+  const isLoading = authLoading || roleLoading || (userRole === 'user' && permissionsLoading);
 
   const isSuperAdmin = userRole === 'super_admin';
   const isAdmin = userRole === 'admin' || userRole === 'super_admin';
