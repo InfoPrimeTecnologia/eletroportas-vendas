@@ -876,10 +876,15 @@ function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo
   return null;
 }
 
+function inferirCepTexto(texto: string): string | null {
+  const match = (texto || "").match(/\b\d{5}-?\d{3}\b/);
+  return match ? match[0].replace(/\D/g, "") : null;
+}
+
 async function aplicarExtracaoDeterministica(conversaId: string, telefone: string, texto: string) {
   const { data: estado } = await supabase
     .from("leo_conversations")
-    .select("tipo_cliente, largura, altura, tipo_perfil")
+    .select("tipo_cliente, largura, altura, tipo_perfil, cep")
     .eq("id", conversaId)
     .maybeSingle();
 
@@ -896,6 +901,18 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const lamina = inferirLaminaTexto(texto);
   if (lamina && !estado?.tipo_perfil) patch.tipo_perfil = lamina;
 
+  const cep = inferirCepTexto(texto);
+  if (cep && estado?.tipo_cliente === "porta_instalada" && !estado?.cep) {
+    const frete: any = await calcularFretePorCep(cep);
+    if (frete.ok) {
+      patch.cep = frete.cep;
+      patch.frete = frete.frete;
+      patch.endereco_instalacao = [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
+        .filter((x: any) => x && String(x).trim())
+        .join(", ") || null;
+    }
+  }
+
   if (Object.keys(patch).length > 0) {
     patch.ultima_mensagem_at = new Date().toISOString();
     const { error } = await supabase.from("leo_conversations").update(patch).eq("id", conversaId);
@@ -905,6 +922,35 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
       try { await atualizarTipoClienteLegado(telefone, patch.tipo_cliente as any); } catch (_) {}
     }
   }
+}
+
+async function carregarEstadoConversa(conversaId: string) {
+  const { data, error } = await supabase
+    .from("leo_conversations")
+    .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+    .eq("id", conversaId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+function proximaPerguntaDeterministica(estado: any): string | null {
+  const tipo = String(estado?.tipo_cliente || "").toLowerCase();
+  const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
+  const largura = Number(estado?.largura);
+  const altura = Number(estado?.altura);
+
+  if (!tipoValido) return "Você tem interesse em *PORTA INSTALADA* ou em *REVENDA*?";
+  if (!Number.isFinite(largura) || largura <= 0 || !Number.isFinite(altura) || altura <= 0) {
+    return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
+  }
+  if (!estado?.tipo_perfil) {
+    return "Qual o tipo da lâmina?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
+  }
+  if (tipo === "porta_instalada" && !estado?.cep) {
+    return "Por último, qual o *CEP do local da instalação*? Assim calculo o frete certinho.";
+  }
+  return null;
 }
 
 async function mensagemJaProcessada(conversation_id: string, messageId?: string) {
@@ -1016,6 +1062,16 @@ Deno.serve(async (req) => {
       .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
       .eq("id", conversa.id);
     await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
+
+    const estadoAposExtracao = await carregarEstadoConversa(conversa.id);
+    const perguntaDeterministica = proximaPerguntaDeterministica(estadoAposExtracao);
+    if (perguntaDeterministica) {
+      await salvarMensagem(conversa.id, "assistant", perguntaDeterministica, { deterministic_flow: true });
+      await enviarTexto(telefone, perguntaDeterministica);
+      return new Response(JSON.stringify({ ok: true, deterministic_flow: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const historicoDb = await carregarHistorico(conversa.id);
     const historicoTemMensagemAtual = historicoDb.some(
