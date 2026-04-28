@@ -84,11 +84,13 @@ async function cadastrarCliente(input: {
   email?: string;
   documento: string; // CNPJ ou CPF
   telefone: string;
+  tipo_cliente?: "porta_instalada" | "revenda";
 }) {
-  // Validações antes de tocar no DB para não bater erro de PK vazia / duplicate
   const nome = (input.nome || "").trim();
   const documento = (input.documento || "").replace(/\D/g, "");
   const telefone = normalizarTelefone(input.telefone);
+  const isCPF = documento.length === 11;
+  const isCNPJ = documento.length === 14;
 
   const faltando: string[] = [];
   if (!nome) faltando.push("nome completo");
@@ -96,8 +98,19 @@ async function cadastrarCliente(input: {
   if (faltando.length) {
     return { ok: false, error: `Dados faltando: ${faltando.join(", ")}. Peça ao cliente educadamente.` };
   }
-  if (documento.length < 11) {
-    return { ok: false, error: "Documento inválido (mínimo 11 dígitos). Peça novamente ao cliente." };
+  if (!isCPF && !isCNPJ) {
+    return { ok: false, error: "Documento inválido (CPF deve ter 11 dígitos, CNPJ 14). Peça novamente." };
+  }
+
+  const payload: Record<string, unknown> = {
+    CLI_NOME: nome,
+    CLI_EMAIL: input.email || null,
+    CLI_FONE: telefone,
+    CLI_CNPJ: documento, // PK – guarda o documento informado (CPF ou CNPJ)
+    CLI_CPF: isCPF ? documento : null,
+  };
+  if (input.tipo_cliente) {
+    payload.tipo_cliente = input.tipo_cliente === "porta_instalada" ? "Porta Instalada" : "Revenda";
   }
 
   // Verifica se já existe pelo CNPJ (PK) — evita duplicate key
@@ -107,14 +120,9 @@ async function cadastrarCliente(input: {
     .eq("CLI_CNPJ", documento)
     .maybeSingle();
   if (existente) {
-    // Atualiza dados em vez de duplicar
     const { error: updErr } = await legacyDb
       .from("Clientes")
-      .update({
-        CLI_NOME: nome,
-        CLI_EMAIL: input.email || null,
-        CLI_FONE: telefone,
-      })
+      .update(payload)
       .eq("CLI_CNPJ", documento);
     if (updErr) {
       console.error("Erro ao atualizar cliente:", updErr);
@@ -125,12 +133,7 @@ async function cadastrarCliente(input: {
 
   const { data, error } = await legacyDb
     .from("Clientes")
-    .insert({
-      CLI_CNPJ: documento,
-      CLI_NOME: nome,
-      CLI_EMAIL: input.email || null,
-      CLI_FONE: telefone,
-    })
+    .insert(payload)
     .select()
     .single();
   if (error) {
