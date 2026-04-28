@@ -60,7 +60,7 @@ const TIPO_COLOR: Record<string, string> = {
 };
 
 export default function AgenteLeo() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { isSuperAdmin, isLoading: roleLoading } = useUserRole();
   const isPrimeSyncOwner = user?.email?.toLowerCase() === "primesync@primesync.com.br";
   const canManageAgent = isSuperAdmin || isPrimeSyncOwner;
@@ -79,11 +79,12 @@ export default function AgenteLeo() {
     const [convRes, keysRes] = await Promise.all([
       supabase
         .from("leo_conversations" as any)
-        .select("*")
-        .order("ultima_mensagem_at", { ascending: false }),
+        .select("id,telefone,tipo_cliente,nome_cliente,status,ultima_mensagem_at,created_at")
+        .order("ultima_mensagem_at", { ascending: false })
+        .limit(100),
       supabase
         .from("leo_api_keys" as any)
-        .select("*")
+        .select("id,key_name,key_value,description,updated_at")
         .order("key_name"),
     ]);
     if (!convRes.error) setConversations((convRes.data as any) || []);
@@ -98,8 +99,12 @@ export default function AgenteLeo() {
   }, []);
 
   useEffect(() => {
-    if (canManageAgent) fetchAll();
-  }, [canManageAgent, fetchAll]);
+    if (canManageAgent) {
+      fetchAll();
+      return;
+    }
+    if (!authLoading && (!roleLoading || isPrimeSyncOwner)) setLoading(false);
+  }, [authLoading, canManageAgent, fetchAll, isPrimeSyncOwner, roleLoading]);
 
   // Realtime
   useEffect(() => {
@@ -190,7 +195,7 @@ export default function AgenteLeo() {
   const countByTipo = (tipo: string) =>
     conversations.filter((c) => c.tipo_cliente === tipo).length;
 
-  if (roleLoading) {
+  if (authLoading || (roleLoading && !isPrimeSyncOwner)) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
