@@ -557,7 +557,7 @@ Conduzir o cliente — passo a passo, sem pressa e sem repetições — até ger
    Pergunte UMA vez: "Você tem interesse em **PORTA INSTALADA** ou em **REVENDA**?"
    - PORTA INSTALADA → atendemos só na BAHIA. Se for fora da BA, chame \`transferir_humano\`.
    - REVENDA → atendemos qualquer estado, sem mão de obra/frete.
-   ⚠️ Assim que o cliente responder isso (ex.: "porta instalada", "instalada", "quero instalar", "revenda", "para revender"), **GRAVE MENTALMENTE** o \`tipo_cliente\` e **NÃO PERGUNTE DE NOVO em hipótese alguma** — siga para o Passo 3.
+   ⚠️ **OBRIGATÓRIO**: Assim que o cliente responder algo equivalente a "porta instalada" / "instalada" / "quero instalar" / "para mim" / "revenda" / "para revender" / "vou revender", chame **IMEDIATAMENTE** a tool \`definir_tipo_cliente\` com o valor correto. Essa tool é silenciosa (não envia mensagem ao cliente) e grava no banco. **NA MESMA RODADA** você também já avança e pergunta o Passo 3 (medidas). Nunca repita a pergunta do Passo 2 — se [CONTEXTO] já trouxer "tipo_cliente DEFINIDO", PULE este passo inteiro.
 
 **Passo 3 — Medidas:**
    "Qual a **largura e altura** da porta, em metros? (ex: 4x3)"
@@ -649,6 +649,20 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "definir_tipo_cliente",
+      description: "Registra IMEDIATAMENTE no banco de dados o tipo de atendimento que o cliente escolheu. Chame ASSIM QUE o cliente responder 'porta instalada', 'instalada', 'quero instalar', 'revenda', 'para revender' ou equivalente. NÃO espere coletar mais dados. Esta tool é silenciosa — não envia mensagem ao cliente, apenas grava no banco.",
+      parameters: {
+        type: "object",
+        properties: {
+          tipo_cliente: { type: "string", enum: ["porta_instalada", "revenda"] },
+        },
+        required: ["tipo_cliente"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "transferir_humano",
       description: "Transfere a conversa para um atendente humano. Use quando: cliente porta instalada fora da BA, cliente quer falar com humano, ou situação fora do seu escopo.",
       parameters: {
@@ -661,24 +675,34 @@ const TOOLS = [
 ];
 
 async function chamarIA(messages: any[]) {
-  const r = await fetch(AI_GATEWAY_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-      tools: TOOLS,
-    }),
-  });
-  if (!r.ok) {
-    const t = await r.text();
-    console.error("IA erro:", r.status, t);
-    throw new Error(`IA ${r.status}: ${t}`);
+  // Timeout generoso (30s) para o agente "pensar com calma" sem travar a request
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const r = await fetch(AI_GATEWAY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+        tools: TOOLS,
+        temperature: 0.2, // resposta mais previsível e fiel ao fluxo
+        top_p: 0.9,
+      }),
+      signal: controller.signal,
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      console.error("IA erro:", r.status, t);
+      throw new Error(`IA ${r.status}: ${t}`);
+    }
+    return await r.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return await r.json();
 }
 
 // ===========================
@@ -951,7 +975,17 @@ Deno.serve(async (req) => {
       contextoCliente = `[CONTEXTO] Cliente NÃO CADASTRADO (telefone ${telefone}). Inicie pelo Passo 1 (cadastro).`;
     }
 
-    console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"}`);
+    // Acrescenta status do tipo_cliente JÁ GRAVADO nesta sessão (evita reperguntar)
+    const tipoConversa = (conversa as any).tipo_cliente as string | undefined;
+    if (tipoConversa === "porta_instalada") {
+      contextoCliente += ` [SESSÃO] tipo_cliente DEFINIDO = porta_instalada. NÃO chame definir_tipo_cliente nem pergunte de novo. Avance para Passo 3 (medidas), ou Passo 4/5/6 conforme o que falta no histórico.`;
+    } else if (tipoConversa === "revenda") {
+      contextoCliente += ` [SESSÃO] tipo_cliente DEFINIDO = revenda. NÃO chame definir_tipo_cliente nem pergunte de novo. Avance para Passo 3 (medidas), ou Passo 4/6 conforme o que falta no histórico.`;
+    } else {
+      contextoCliente += ` [SESSÃO] tipo_cliente NÃO DEFINIDO ainda — siga o Passo 2 e chame definir_tipo_cliente assim que o cliente responder.`;
+    }
+
+    console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"} | tipo_sessao: ${tipoConversa || "indefinido"}`);
 
     // Loop do agente: até 5 iterações de tool calling
     let messages: any[] = [
@@ -961,7 +995,7 @@ Deno.serve(async (req) => {
     let respostaFinal = "";
     let pdfEnviadoNesteTurno = false;
     let pdfCaptionEnviada = "";
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       const ai = await chamarIA(messages);
       const choice = ai.choices?.[0]?.message;
       if (!choice) break;
@@ -1090,6 +1124,28 @@ Deno.serve(async (req) => {
             };
           } else {
             toolResult = r;
+          }
+        } else if (fnName === "definir_tipo_cliente") {
+          const tc = String(args.tipo_cliente || "").toLowerCase();
+          const tcNorm: "porta_instalada" | "revenda" | null =
+            tc === "revenda" ? "revenda" : tc === "porta_instalada" ? "porta_instalada" : null;
+          if (!tcNorm) {
+            toolResult = { ok: false, error: "tipo_cliente inválido. Use 'porta_instalada' ou 'revenda'." };
+          } else {
+            // 1) atualiza conversa atual
+            await supabase
+              .from("leo_conversations")
+              .update({ tipo_cliente: tcNorm, ultima_mensagem_at: new Date().toISOString() })
+              .eq("id", conversa.id);
+            // 2) propaga para a tabela legada Clientes (silencioso, não bloqueia)
+            try { await atualizarTipoClienteLegado(telefone, tcNorm); } catch (_) {}
+            toolResult = {
+              ok: true,
+              tipo_cliente: tcNorm,
+              instrucao: tcNorm === "porta_instalada"
+                ? "Tipo gravado. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta."
+                : "Tipo gravado. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.",
+            };
           }
         } else if (fnName === "transferir_humano") {
           if (ticketId) await transferirParaHumano(ticketId);
