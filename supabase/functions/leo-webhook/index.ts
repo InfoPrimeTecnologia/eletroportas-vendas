@@ -17,9 +17,9 @@ const PRIMESYNC_TOKEN = Deno.env.get("PRIMESYNC_TOKEN")!;
 const DOCRYA_API_KEY = Deno.env.get("DOCRYA_API_KEY")!;
 
 const DOCRYA_URL = "https://www.docrya.com/api/v1/html-to-pdf";
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-// Modelo de alto nível para vendas (raciocínio + tool calling consistente)
-const AI_MODEL = "google/gemini-2.5-pro";
+const AI_GATEWAY_URL = "https://api.openai.com/v1/chat/completions";
+// Modelo OpenAI para vendas
+const AI_MODEL = "gpt-4o-mini";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
