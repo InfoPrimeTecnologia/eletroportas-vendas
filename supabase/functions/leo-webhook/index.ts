@@ -1027,6 +1027,7 @@ Deno.serve(async (req) => {
       .from("leo_conversations")
       .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
       .eq("id", conversa.id);
+    await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
 
     const historicoDb = await carregarHistorico(conversa.id);
     const historicoTemMensagemAtual = historicoDb.some(
@@ -1074,7 +1075,6 @@ Deno.serve(async (req) => {
       ];
       if (precisaFrete) {
         linhas.push(`cep=${v(c?.cep)}`);
-        linhas.push(`frete=${v(c?.frete)}`);
       }
       const pendentes = linhas.filter((l) => l.endsWith("=PENDENTE")).map((l) => l.split("=")[0]);
       const proximo = pendentes[0] || "TODOS_OK_CHAMAR_GERAR_ORCAMENTO";
