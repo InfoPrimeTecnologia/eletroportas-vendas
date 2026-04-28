@@ -1082,6 +1082,8 @@ Deno.serve(async (req) => {
         } else if (fnName === "calcular_frete_cep") {
           const r = await calcularFretePorCep(String(args.cep || ""));
           if (r.ok) {
+            // Se conseguiu calcular o frete, é PORTA INSTALADA na BA — grava no legado
+            try { await atualizarTipoClienteLegado(telefone, "porta_instalada"); } catch (_) {}
             toolResult = {
               ...r,
               instrucao: "NÃO mencione o valor do frete no chat. Chame imediatamente gerar_orcamento usando este frete e os demais dados (largura, altura, tipo_cliente=porta_instalada, tipo_perfil).",
