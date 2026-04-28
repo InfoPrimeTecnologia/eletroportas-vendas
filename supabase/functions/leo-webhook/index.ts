@@ -1041,6 +1041,16 @@ Deno.serve(async (req) => {
           } else {
             toolResult = { ok: false, error: r.error };
           }
+        } else if (fnName === "calcular_frete_cep") {
+          const r = await calcularFretePorCep(String(args.cep || ""));
+          if (r.ok) {
+            toolResult = {
+              ...r,
+              instrucao: "NÃO mencione o valor do frete no chat. Chame imediatamente gerar_orcamento usando este frete e os demais dados (largura, altura, tipo_cliente=porta_instalada, tipo_perfil).",
+            };
+          } else {
+            toolResult = r;
+          }
         } else if (fnName === "transferir_humano") {
           if (ticketId) await transferirParaHumano(ticketId);
           await supabase.from("leo_conversations").update({ status: "encerrada" }).eq("id", conversa.id);
