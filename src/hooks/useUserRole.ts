@@ -14,19 +14,21 @@ export function useUserRole() {
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
-        .eq('user_id', user.id)
-        .order('role', { ascending: true })
-        .limit(1)
-        .maybeSingle();
+        .eq('user_id', user.id);
       
-      console.log('[useUserRole] user', user.id, 'role:', data?.role, 'err:', error?.message);
+      console.log('[useUserRole] user', user.id, 'rows:', data, 'err:', error?.message);
       
       if (error) {
         console.warn('[useUserRole] erro:', error.message);
         return null;
       }
       
-      return (data?.role ?? null) as AppRole | null;
+      const roles = (data ?? []).map((r: any) => r.role as AppRole);
+      // Prioridade: super_admin > admin > user
+      if (roles.includes('super_admin')) return 'super_admin' as AppRole;
+      if (roles.includes('admin')) return 'admin' as AppRole;
+      if (roles.includes('user')) return 'user' as AppRole;
+      return null;
     },
     enabled: !!user?.id,
   });
