@@ -1295,10 +1295,13 @@ async function registrarOrcamentoEAvancarFunil(params: {
 function pareceAceite(texto: string): boolean {
   const t = (texto || "").toLowerCase().trim();
   if (!t) return false;
+  if (/^(fechada|fechado|lisa|liso|meia cana|transvision|oblongo|perfurada|perfurado|1|2|3)$/i.test(t)) {
+    return false;
+  }
   // Frases curtas claras de aceite
   const padroes = [
     /\baceito\b/, /\baceitar\b/, /\baceita?do\b/,
-    /\bfechad[oa]\b/, /\bfechar( o)? (orcamento|orçamento|pedido)\b/, /\bpode (fechar|seguir)\b/,
+    /\b(fechar|fechado|fechada) (o )?(orcamento|orçamento|pedido|negocio|negócio)\b/, /\bpode (fechar|seguir)\b/,
     /\bpode (gerar|emitir) (o )?pedido\b/, /\bquero (fechar|comprar)\b/,
     /\bconfirmo( o)? (orcamento|orçamento|pedido)\b/, /\bconcordo( com)? (o )?(orcamento|orçamento|pedido)\b/,
     /\baprovad[oa]\b/, /\baprovar( o)? (orcamento|orçamento)\b/,
