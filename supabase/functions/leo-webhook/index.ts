@@ -850,7 +850,17 @@ async function calcularFretePorCep(cepRaw: string) {
 async function withSchemaRetry<T extends { error: any }>(fn: () => Promise<T>, tentativas = 4): Promise<T> {
   let ultimo: T | undefined;
   for (let i = 0; i < tentativas; i++) {
-    const r = await fn();
+    let r: T;
+    try {
+      r = await fn();
+    } catch (e: any) {
+      const msg = String(e?.message || e || "");
+      if (/schema cache|Could not query the database|JWT|fetch failed|network|timeout/i.test(msg) && i < tentativas - 1) {
+        await new Promise((res) => setTimeout(res, 300 * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
     const err: any = r?.error;
     if (!err) return r;
     const msg = String(err?.message || "");
@@ -920,12 +930,50 @@ function inferirCepTexto(texto: string): string | null {
   return match ? match[0].replace(/\D/g, "") : null;
 }
 
+function aplicarInferenciasEmEstado(base: any, textos: string[]) {
+  const estado = { ...(base || {}) };
+  for (const txt of textos) {
+    const tipo = inferirTipoClienteTexto(txt);
+    if (tipo && (!estado.tipo_cliente || estado.tipo_cliente === "indefinido")) estado.tipo_cliente = tipo;
+
+    const medidas = inferirMedidasTexto(txt);
+    if (medidas && (estado.largura == null || estado.altura == null)) {
+      estado.largura = medidas.largura;
+      estado.altura = medidas.altura;
+    }
+
+    const lamina = inferirLaminaTexto(txt);
+    if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
+
+    const cep = inferirCepTexto(txt);
+    if (cep && estado.tipo_cliente === "porta_instalada" && !estado.cep) estado.cep = cep;
+  }
+  return estado;
+}
+
 async function aplicarExtracaoDeterministica(conversaId: string, telefone: string, texto: string) {
-  const { data: estado } = await supabase
-    .from("leo_conversations")
-    .select("tipo_cliente, largura, altura, tipo_perfil, cep")
-    .eq("id", conversaId)
-    .maybeSingle();
+  const estadoRes = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, endereco_instalacao")
+      .eq("id", conversaId)
+      .maybeSingle()
+  );
+  if (estadoRes.error) console.error("⚠️", descreverErroPg(estadoRes.error, "leitura estado determinístico falhou: "));
+
+  const histRes = await withSchemaRetry(() =>
+    supabase
+      .from("leo_messages")
+      .select("content")
+      .eq("conversation_id", conversaId)
+      .eq("role", "user")
+      .order("created_at", { ascending: false })
+      .limit(12)
+  );
+  if (histRes.error) console.error("⚠️", descreverErroPg(histRes.error, "leitura histórico determinístico falhou: "));
+
+  const textos = [texto, ...((histRes.data || []) as any[]).map((m) => String(m?.content || ""))].filter(Boolean);
+  const estado = aplicarInferenciasEmEstado(estadoRes.data || {}, textos);
 
   const patch: Record<string, unknown> = {};
   const tipo = inferirTipoClienteTexto(texto);
@@ -954,13 +1002,15 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
 
   if (Object.keys(patch).length > 0) {
     patch.ultima_mensagem_at = new Date().toISOString();
-    const { error } = await supabase.from("leo_conversations").update(patch).eq("id", conversaId);
-    if (error) console.error("⚠️ Falha na extração determinística:", error.message);
+    const { error } = await withSchemaRetry(() => supabase.from("leo_conversations").update(patch).eq("id", conversaId));
+    if (error) console.error("⚠️", descreverErroPg(error, "Falha na extração determinística: "));
     else console.log("✅ Estado atualizado por extração determinística:", JSON.stringify(patch));
     if (patch.tipo_cliente === "porta_instalada" || patch.tipo_cliente === "revenda") {
       try { await atualizarTipoClienteLegado(telefone, patch.tipo_cliente as any); } catch (_) {}
     }
   }
+
+  return { ...estado, ...patch };
 }
 
 async function carregarEstadoConversa(conversaId: string) {
