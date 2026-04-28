@@ -65,7 +65,7 @@ async function buscarClientePorTelefone(telefone: string) {
   for (const v of variacoes) {
     const { data } = await legacyDb
       .from("Clientes")
-      .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE")
+      .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE, tipo_cliente")
       .ilike("CLI_FONE", `%${v}%`)
       .limit(1)
       .maybeSingle();
