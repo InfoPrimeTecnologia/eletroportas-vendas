@@ -325,16 +325,21 @@ ${o.frete ? `<tr><td>Frete:</td><td style="text-align:right">${fmt(o.frete)}</td
 </table>
 
 <div class="box">
-<strong>💳 CONDIÇÕES DE PAGAMENTO</strong><br/>
+<strong>CONDIÇÕES DE PAGAMENTO</strong><br/>
 À VISTA (PIX/Boleto): ${fmt(desconto5)} (5% de desconto)<br/>
 CARTÃO até 3x sem juros: 3x de ${fmt(parc3x)}<br/>
 ENTRADA + SALDO: 50% entrada + 50% na entrega
 </div>
 
-<div class="section-title">Validade</div>
-<p>Este orçamento tem validade de 30 dias a partir da data de emissão.</p>
+<div class="section-title">Garantia e observações comerciais</div>
+<div class="terms">
+  <div class="term"><strong>Garantia</strong><span>Garantia conforme certificado emitido pela Eletroportas, válida para defeitos de fabricação e instalação quando contratada. Não cobre mau uso, danos elétricos externos, impactos ou alterações por terceiros.</span></div>
+  <div class="term"><strong>Instalação</strong><span>${o.tipo_cliente === "porta_instalada" ? "Inclui mão de obra quando indicada nos totais. Local deve estar liberado, nivelado e com ponto elétrico adequado." : "Orçamento para revenda/fornecimento, sem mão de obra de instalação e sem frete."}</span></div>
+  <div class="term"><strong>Validade</strong><span>Este orçamento tem validade de 30 dias a partir da data de emissão.</span></div>
+  <div class="term"><strong>Aprovação</strong><span>Produção iniciada após confirmação do pedido, assinatura/aceite comercial e pagamento conforme condição negociada.</span></div>
+</div>
 
-<p style="margin-top:24px; font-size:9px; color:#888">© Eletroportas — Documento gerado automaticamente pelo Agente Leo.</p>
+<div class="footer">© Eletroportas — Documento gerado automaticamente pelo Agente Leo. Valores sujeitos à conferência final por atendimento comercial.</div>
 
 </body></html>`;
 }
