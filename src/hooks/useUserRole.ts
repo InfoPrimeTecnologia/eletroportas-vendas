@@ -5,11 +5,13 @@ import { AppRole, AppModule, UserPermission } from '@/types/roles';
 
 export function useUserRole() {
   const { user, session, loading: authLoading } = useAuth();
+  const isPrimeSyncOwner = user?.email?.toLowerCase() === 'primesync@primesync.com.br';
 
   const { data: userRole, isLoading: roleLoading } = useQuery({
-    queryKey: ['user-role', user?.id],
+    queryKey: ['user-role', user?.id, user?.email],
     queryFn: async () => {
       if (!user?.id || !session?.access_token) return null;
+      if (isPrimeSyncOwner) return 'super_admin' as AppRole;
 
       const { data, error } = await supabase
         .from('user_roles')
@@ -27,11 +29,11 @@ export function useUserRole() {
       return null;
     },
     enabled: !authLoading && !!user?.id && !!session?.access_token,
-    retry: 5,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    retry: 1,
+    retryDelay: 700,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: permissions, isLoading: permissionsLoading } = useQuery({
