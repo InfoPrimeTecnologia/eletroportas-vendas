@@ -1505,9 +1505,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
+    const estadoLocalInferido = await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
 
-    const estadoAposExtracao = await carregarEstadoConversa(conversa.id);
+    const estadoAposExtracao = (await carregarEstadoConversa(conversa.id)) || estadoLocalInferido;
     const perguntaDeterministica = proximaPerguntaDeterministica(estadoAposExtracao);
     if (perguntaDeterministica) {
       await salvarMensagem(conversa.id, "assistant", perguntaDeterministica, { deterministic_flow: true });
