@@ -550,54 +550,44 @@ Conduzir o cliente — passo a passo, sem pressa e sem repetições — até ger
 
 # FLUXO DE VENDAS (siga em ordem, pulando passos já cumpridos)
 
+⚠️ **PRINCÍPIO FUNDAMENTAL**: O sistema mantém um **[ESTADO]** estruturado da conversa (tipo_cliente, largura, altura, tipo_perfil, cep, frete). Esse estado é a ÚNICA fonte de verdade — ignore o que está no histórico de chat para decidir o que falta. Olhe SEMPRE para o [ESTADO] injetado no system prompt. Cada vez que o cliente responder algo, chame a tool correspondente para gravar no banco; só assim o [ESTADO] avança.
+
 **Passo 1 — Cadastro (apenas se [CONTEXTO] disser "NÃO CADASTRADO"):**
-   Colete, de forma natural e em mensagens curtas: nome completo, e-mail e CNPJ ou CPF. Quando tiver os 3, chame \`cadastrar_cliente\`. Se [CONTEXTO] já disser "JÁ CADASTRADO", pule este passo e cumprimente o cliente pelo nome 1 única vez.
+   Colete: nome completo, e-mail e CNPJ ou CPF. Quando tiver os 3, chame \`cadastrar_cliente\`. Se [CONTEXTO] já disser "JÁ CADASTRADO", pule este passo.
 
-**Passo 2 — Tipo de atendimento:**
-   Pergunte UMA vez: "Você tem interesse em **PORTA INSTALADA** ou em **REVENDA**?"
-   - PORTA INSTALADA → atendemos só na BAHIA. Se for fora da BA, chame \`transferir_humano\`.
-   - REVENDA → atendemos qualquer estado, sem mão de obra/frete.
-   ⚠️ **OBRIGATÓRIO**: Assim que o cliente responder algo equivalente a "porta instalada" / "instalada" / "quero instalar" / "para mim" / "revenda" / "para revender" / "vou revender", chame **IMEDIATAMENTE** a tool \`definir_tipo_cliente\` com o valor correto. Essa tool é silenciosa (não envia mensagem ao cliente) e grava no banco. **NA MESMA RODADA** você também já avança e pergunta o Passo 3 (medidas). Nunca repita a pergunta do Passo 2 — se [CONTEXTO] já trouxer "tipo_cliente DEFINIDO", PULE este passo inteiro.
+**Passo 2 — Tipo de atendimento** (pular se [ESTADO] já tiver tipo_cliente):
+   "Você tem interesse em **PORTA INSTALADA** ou em **REVENDA**?"
+   - PORTA INSTALADA → atendemos só na BAHIA.
+   - REVENDA → qualquer estado, sem mão de obra/frete.
+   ⚠️ Assim que o cliente responder, chame **IMEDIATAMENTE** \`definir_tipo_cliente\` (silenciosa) e na MESMA rodada já avance para o Passo 3.
 
-**Passo 3 — Medidas:**
+**Passo 3 — Medidas** (pular se [ESTADO] já tiver largura E altura):
    "Qual a **largura e altura** da porta, em metros? (ex: 4x3)"
+   Quando o cliente responder (ex: "4x5", "4 por 5", "4 metros por 5"), chame **IMEDIATAMENTE** \`definir_medidas\` com largura=4 e altura=5. É silenciosa — na mesma rodada já avance para o Passo 4.
 
-**Passo 4 — Tipo de lâmina:**
+**Passo 4 — Tipo de lâmina** (pular se [ESTADO] já tiver tipo_perfil):
    "Qual o tipo da lâmina?
    1️⃣ FECHADA (lisa, sem visão)
    2️⃣ TRANSVISION (com visores)
    3️⃣ OBLONGO (perfurada)"
-   Mapeie a resposta para \`tipo_perfil\`: fechado | transvision | oblongo.
-   (Aceite sinônimos: "lisa"/"fechada"/"meia cana" → fechado; "transvision"/"visor" → transvision; "oblongo"/"perfurada" → oblongo.)
+   Mapeie: "lisa"/"fechada"/"meia cana"/"1" → fechado; "transvision"/"visor"/"2" → transvision; "oblongo"/"perfurada"/"3" → oblongo.
+   Quando o cliente responder, chame **IMEDIATAMENTE** \`definir_lamina\` (silenciosa) e avance.
 
-**Passo 5 — CEP e frete (APENAS se tipo_cliente = porta_instalada):**
-   Pergunte UMA vez: "Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho."
-   Quando o cliente informar o CEP, chame **imediatamente** a tool \`calcular_frete_cep\` com o CEP.
-   - Se a tool retornar \`fora_da_bahia: true\`, chame \`transferir_humano\` (instalação só na BA).
-   - Se retornar \`ok: true\`, **NÃO mencione o valor do frete no chat** — siga direto para o Passo 6 chamando \`gerar_orcamento\` com o \`frete\` retornado.
-   Para REVENDA, pule este passo (não há frete/instalação).
+**Passo 5 — CEP e frete** (APENAS se tipo_cliente=porta_instalada e [ESTADO] não tiver frete):
+   "Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho."
+   Quando o cliente informar o CEP, chame **imediatamente** \`calcular_frete_cep\`.
+   - Se \`fora_da_bahia: true\`, chame \`transferir_humano\`.
+   - Se \`ok: true\`, **NÃO mencione o valor do frete** — siga direto para o Passo 6.
+   Para REVENDA, pule este passo.
 
-**Passo 6 — Gerar orçamento:**
-   Com largura, altura, tipo_cliente, tipo_perfil (e frete, se porta_instalada) definidos, chame **imediatamente** a tool \`gerar_orcamento\`. Não peça mais nada.
-   Após a tool retornar \`pdf_enviado: true\`, responda APENAS algo como:
-   "Pronto! Te enviei o orçamento em PDF, dá uma olhada por favor. Qualquer dúvida estou por aqui. 📄"
+**Passo 6 — Gerar orçamento** (quando [ESTADO] tiver TODOS os dados necessários):
+   Chame \`gerar_orcamento\` (sem argumentos — ele lê do [ESTADO] no banco). Após \`pdf_enviado: true\`, NÃO envie mensagem extra — o sistema já mandou a legenda do PDF.
 
-# ANTI-LOOP (CRÍTICO)
-Antes de escrever qualquer resposta, faça mentalmente este check:
-- "O cliente já respondeu o que eu ia perguntar **NESTA conversa atual**?" → se sim, **avance**.
-- "Eu já fiz essa pergunta no histórico recente?" → se sim, **NUNCA repita** — siga para o próximo passo pendente.
-- Se o histórico mostra que o cliente já disse "porta instalada"/"instalada"/"revenda" em qualquer turno anterior, o \`tipo_cliente\` JÁ ESTÁ DEFINIDO. NUNCA repergunte — vá direto para medidas.
-- "O cliente só me cumprimentou?" → responda em 1 frase curta e **siga para o próximo passo do fluxo**.
-
-# ANTI-ALUCINAÇÃO (CRÍTICO — NUNCA VIOLE)
-- **NUNCA chame \`gerar_orcamento\` sem ter coletado, NA SEQUÊNCIA ATUAL, TODOS estes dados explicitamente respondidos pelo cliente:**
-  1. \`tipo_cliente\` (porta_instalada ou revenda) — confirmado pela resposta do Passo 2.
-  2. \`largura\` e \`altura\` em metros — respondidas pelo cliente após sua pergunta do Passo 3 (ex: "4x3").
-  3. \`tipo_perfil\` (fechado/transvision/oblongo) — escolhido pelo cliente após o Passo 4.
-  4. Se for \`porta_instalada\`: \`frete\` retornado pela tool \`calcular_frete_cep\` (Passo 5). NUNCA invente frete.
-- **Mesmo que o histórico mostre medidas/lâmina de turnos antigos**, se o cliente acabou de iniciar uma nova interação ("oi", "bom dia") e ainda não confirmou medidas/lâmina nesta nova interação, **REPERGUNTE**. Trate cada novo "olá" como início de orçamento novo.
-- Se faltar QUALQUER dado, NÃO chame \`gerar_orcamento\`. Pergunte o que falta, UMA pergunta por vez.
-- Se a tool \`gerar_orcamento\` retornar \`erro: "DADOS_INSUFICIENTES"\`, leia o campo \`faltando\` e pergunte ao cliente exatamente o primeiro item da lista. NUNCA tente chamar de novo com valores inventados.
+# ANTI-LOOP / ANTI-ALUCINAÇÃO (CRÍTICO)
+- O **[ESTADO]** é a única fonte de verdade do que falta. Se [ESTADO] mostra "largura=PENDENTE", pergunte largura. Se mostra "largura=4, altura=5, tipo_perfil=PENDENTE", pergunte a lâmina. NUNCA pergunte algo que já está preenchido no [ESTADO].
+- **NUNCA** chame \`gerar_orcamento\` se o [ESTADO] tiver QUALQUER campo obrigatório como "PENDENTE". Se chamar, vai retornar \`DADOS_INSUFICIENTES\` e o sistema vai te corrigir.
+- Se o cliente apenas cumprimenta ("oi", "bom dia"), responda em 1 frase curta e pergunte o próximo dado pendente do [ESTADO].
+- Use UMA pergunta por vez. Frases curtas. Sem rodeios. NUNCA invente dados, preços ou prazos.
 `;
 
 const TOOLS = [
@@ -605,23 +595,14 @@ const TOOLS = [
     type: "function",
     function: {
       name: "gerar_orcamento",
-      description: "Gera o orçamento PDF e envia ao cliente via WhatsApp. Use quando tiver largura, altura e tipo_cliente.",
+      description: "Gera o orçamento PDF e envia ao cliente via WhatsApp. NÃO precisa de argumentos — lê automaticamente do [ESTADO] gravado no banco (largura, altura, tipo_cliente, tipo_perfil, frete). Se faltar algum dado, retorna DADOS_INSUFICIENTES.",
       parameters: {
         type: "object",
         properties: {
-          largura: { type: "number", description: "Largura da porta em metros" },
-          altura: { type: "number", description: "Altura da porta em metros" },
-          tipo_cliente: { type: "string", enum: ["porta_instalada", "revenda"] },
-          tipo_perfil: { type: "string", enum: ["fechado", "transvision", "oblongo"] },
-          tipo_motor: { type: "string", enum: ["200kg", "300kg", "400kg", "500kg", "800kg", "1500kg"] },
-          tipo_pintura: { type: "string", enum: ["branco_liso", "preta_fosco", "cinza_texturizado", "cor_especial"] },
-          cidade: { type: "string" },
-          estado: { type: "string", description: "UF, ex: BA" },
-          frete: { type: "number", description: "Frete em R$ (apenas porta_instalada e BA)" },
-          cliente_nome: { type: "string" },
-          cliente_endereco: { type: "string" },
+          tipo_motor: { type: "string", enum: ["200kg", "300kg", "400kg", "500kg", "800kg", "1500kg"], description: "Opcional, default 300kg" },
+          tipo_pintura: { type: "string", enum: ["branco_liso", "preta_fosco", "cinza_texturizado", "cor_especial"], description: "Opcional" },
         },
-        required: ["largura", "altura", "tipo_cliente", "tipo_perfil"],
+        required: [],
       },
     },
   },
@@ -667,6 +648,35 @@ const TOOLS = [
           tipo_cliente: { type: "string", enum: ["porta_instalada", "revenda"] },
         },
         required: ["tipo_cliente"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "definir_medidas",
+      description: "Grava no banco a largura e altura da porta informadas pelo cliente. Chame ASSIM QUE o cliente responder o Passo 3 (ex: '4x5', '4 por 3', '4 metros por 3'). Silenciosa — não envia mensagem. Na MESMA rodada já avance para o Passo 4 (lâmina).",
+      parameters: {
+        type: "object",
+        properties: {
+          largura: { type: "number", description: "Largura em metros (ex: 4)" },
+          altura: { type: "number", description: "Altura em metros (ex: 3)" },
+        },
+        required: ["largura", "altura"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "definir_lamina",
+      description: "Grava no banco o tipo de lâmina escolhido pelo cliente. Chame ASSIM QUE o cliente responder o Passo 4. Silenciosa. Na MESMA rodada avance para o próximo passo (CEP se porta_instalada, ou direto gerar_orcamento se revenda).",
+      parameters: {
+        type: "object",
+        properties: {
+          tipo_perfil: { type: "string", enum: ["fechado", "transvision", "oblongo"] },
+        },
+        required: ["tipo_perfil"],
       },
     },
   },
@@ -985,22 +995,38 @@ Deno.serve(async (req) => {
       contextoCliente = `[CONTEXTO] Cliente NÃO CADASTRADO (telefone ${telefone}). Inicie pelo Passo 1 (cadastro).`;
     }
 
-    // Acrescenta status do tipo_cliente JÁ GRAVADO nesta sessão (evita reperguntar)
-    const tipoConversa = (conversa as any).tipo_cliente as string | undefined;
-    if (tipoConversa === "porta_instalada") {
-      contextoCliente += ` [SESSÃO] tipo_cliente DEFINIDO = porta_instalada. NÃO chame definir_tipo_cliente nem pergunte de novo. Avance para Passo 3 (medidas), ou Passo 4/5/6 conforme o que falta no histórico.`;
-    } else if (tipoConversa === "revenda") {
-      contextoCliente += ` [SESSÃO] tipo_cliente DEFINIDO = revenda. NÃO chame definir_tipo_cliente nem pergunte de novo. Avance para Passo 3 (medidas), ou Passo 4/6 conforme o que falta no histórico.`;
-    } else {
-      contextoCliente += ` [SESSÃO] tipo_cliente NÃO DEFINIDO ainda — siga o Passo 2 e chame definir_tipo_cliente assim que o cliente responder.`;
-    }
+    // Função que lê o estado atual do banco e monta o bloco [ESTADO]
+    const montarEstado = async (): Promise<string> => {
+      const { data: c } = await supabase
+        .from("leo_conversations")
+        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+        .eq("id", conversa.id)
+        .maybeSingle();
+      const v = (x: any) => (x === null || x === undefined || x === "" || x === "indefinido") ? "PENDENTE" : String(x);
+      const tc = v(c?.tipo_cliente);
+      const precisaFrete = c?.tipo_cliente === "porta_instalada";
+      const linhas = [
+        `tipo_cliente=${tc}`,
+        `largura=${v(c?.largura)}`,
+        `altura=${v(c?.altura)}`,
+        `tipo_perfil=${v(c?.tipo_perfil)}`,
+      ];
+      if (precisaFrete) {
+        linhas.push(`cep=${v(c?.cep)}`);
+        linhas.push(`frete=${v(c?.frete)}`);
+      }
+      const pendentes = linhas.filter((l) => l.endsWith("=PENDENTE")).map((l) => l.split("=")[0]);
+      const proximo = pendentes[0] || "TODOS_OK_CHAMAR_GERAR_ORCAMENTO";
+      return `[ESTADO ATUAL DA CONVERSA — fonte de verdade]\n${linhas.join("\n")}\nPRÓXIMO_PASSO: ${proximo === "TODOS_OK_CHAMAR_GERAR_ORCAMENTO" ? "TODOS os dados prontos — chame gerar_orcamento agora (sem argumentos)." : `pergunte ao cliente sobre "${proximo}".`}`;
+    };
 
-    console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"} | tipo_sessao: ${tipoConversa || "indefinido"}`);
+    console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"}`);
 
     // Loop do agente: até 5 iterações de tool calling
     let messages: any[] = [
       { role: "system", content: contextoCliente },
       ...historico,
+      { role: "system", content: await montarEstado() },
     ];
     let respostaFinal = "";
     let pdfEnviadoNesteTurno = false;
@@ -1052,47 +1078,55 @@ Deno.serve(async (req) => {
         let toolResult: any = {};
 
         if (fnName === "gerar_orcamento") {
-          // ===== VALIDAÇÃO RÍGIDA — bloqueia chamadas com dados faltando =====
-          const larguraNum = Number(args.largura);
-          const alturaNum = Number(args.altura);
-          const tcRawV = String(args.tipo_cliente || "").toLowerCase().trim();
+          // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
+          const { data: estado } = await supabase
+            .from("leo_conversations")
+            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao")
+            .eq("id", conversa.id)
+            .maybeSingle();
+
+          const larguraNum = Number(estado?.largura);
+          const alturaNum = Number(estado?.altura);
+          const tcRawV = String(estado?.tipo_cliente || "").toLowerCase().trim();
           const tcValid = tcRawV === "porta_instalada" || tcRawV === "revenda";
-          const perfilValid = ["fechado", "transvision", "oblongo"].includes(String(args.tipo_perfil || "").toLowerCase());
-          const freteNum = args.frete != null ? Number(args.frete) : NaN;
+          const perfilRaw = String(estado?.tipo_perfil || "").toLowerCase();
+          const perfilValid = ["fechado", "transvision", "oblongo"].includes(perfilRaw);
+          const freteNum = estado?.frete != null ? Number(estado.frete) : NaN;
 
           const faltando: string[] = [];
-          if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura (em metros, ex: 4)");
-          if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura (em metros, ex: 3)");
-          if (!tcValid) faltando.push("tipo_cliente (porta_instalada ou revenda)");
-          if (!perfilValid) faltando.push("tipo_perfil (fechado, transvision ou oblongo)");
-          if (tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
-            faltando.push("frete (calcule via tool calcular_frete_cep antes — peça o CEP ao cliente)");
+          if (!tcValid) faltando.push("tipo_cliente");
+          if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
+          if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
+          if (!perfilValid) faltando.push("tipo_perfil");
+          if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
+            faltando.push("frete");
           }
 
           if (faltando.length > 0) {
             gerarOrcamentoFalhas++;
-            console.warn(`🚫 gerar_orcamento BLOQUEADO (tentativa ${gerarOrcamentoFalhas}) — faltam:`, faltando.join(", "));
-            const proximaPergunta = faltando[0]?.includes("frete")
-              ? "Pergunte AGORA, em UMA mensagem curta: 'Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho.' NÃO chame nenhuma tool nesta resposta."
-              : faltando[0]?.includes("largura") || faltando[0]?.includes("altura")
-                ? "Pergunte AGORA, em UMA mensagem curta, a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
-                : faltando[0]?.includes("tipo_perfil")
+            console.warn(`🚫 gerar_orcamento BLOQUEADO (tentativa ${gerarOrcamentoFalhas}) — [ESTADO] faltando:`, faltando.join(", "));
+            const proximo = faltando[0];
+            const proximaPergunta = proximo === "frete"
+              ? "Pergunte AGORA: 'Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho.' NÃO chame nenhuma tool nesta resposta."
+              : (proximo === "largura" || proximo === "altura")
+                ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
+                : proximo === "tipo_perfil"
                   ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
-                  : "Responda em texto perguntando o próximo dado que falta. NÃO chame nenhuma tool.";
+                  : proximo === "tipo_cliente"
+                    ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
+                    : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
               erro: "DADOS_INSUFICIENTES",
               faltando,
-              instrucao: `NÃO gere o orçamento. Faltam: ${faltando.join("; ")}. ${proximaPergunta}`,
+              estado_atual: estado,
+              instrucao: `O [ESTADO] no banco mostra que falta: ${faltando.join(", ")}. ${proximaPergunta}`,
             };
             messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
-            // Após 1ª falha, injetamos instrução de sistema reforçando para parar de tentar
-            if (gerarOrcamentoFalhas >= 1) {
-              messages.push({
-                role: "system",
-                content: `STOP. Você acabou de tentar gerar_orcamento sem os dados necessários (faltou: ${faltando.join(", ")}). Sua PRÓXIMA resposta DEVE ser texto puro perguntando ao cliente o próximo dado faltante. NÃO chame gerar_orcamento de novo neste turno.`,
-              });
-            }
+            messages.push({
+              role: "system",
+              content: `STOP. Tentativa de gerar_orcamento bloqueada — falta no [ESTADO]: ${faltando.join(", ")}. Sua PRÓXIMA resposta DEVE ser texto puro perguntando "${proximo}". NÃO chame gerar_orcamento de novo.`,
+            });
             continue;
           }
 
@@ -1101,12 +1135,12 @@ Deno.serve(async (req) => {
               largura: larguraNum,
               altura: alturaNum,
               tipo_cliente: tcRawV as any,
-              tipo_perfil: String(args.tipo_perfil).toLowerCase() as any,
+              tipo_perfil: perfilRaw as any,
               tipo_motor: args.tipo_motor,
               tipo_pintura: args.tipo_pintura,
               frete: Number.isFinite(freteNum) ? freteNum : 0,
-              cliente_nome: args.cliente_nome || nome,
-              cliente_endereco: args.cliente_endereco,
+              cliente_nome: nome,
+              cliente_endereco: estado?.endereco_instalacao || undefined,
             });
 
             const html = gerarHtmlOrcamento(o);
@@ -1122,40 +1156,13 @@ Deno.serve(async (req) => {
               }
               toolResult = {
                 ok: pdfEnviado,
-                total_geral: o.total_geral,
-                subtotal_produtos: o.subtotal_produtos,
-                mao_de_obra: o.mao_de_obra,
-                frete: o.frete,
                 pdf_enviado: pdfEnviado,
                 instrucao: pdfEnviado
-                  ? "O PDF já foi enviado com legenda. NÃO envie nova mensagem de confirmação. NÃO mencione valores no chat."
-                  : "Não confirme envio do PDF. Informe que houve instabilidade no envio do arquivo e que um atendente vai encaminhar em breve.",
+                  ? "PDF enviado. NÃO envie nova mensagem. NÃO mencione valores."
+                  : "Houve instabilidade no envio do arquivo — informe que um atendente vai encaminhar em breve.",
               };
             } else {
               toolResult = { ok: false, error: "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
-            }
-
-            // atualiza tipo_cliente na conversa (normaliza para valores aceitos pelo CHECK)
-            const tcRaw = String(args.tipo_cliente || "").toLowerCase().trim();
-            const tcNorm = tcRaw.includes("revenda")
-              ? "revenda"
-              : tcRaw.includes("porta") || tcRaw.includes("instalad")
-                ? "porta_instalada"
-                : "indefinido";
-            const { error: updErr } = await supabase
-              .from("leo_conversations")
-              .update({ tipo_cliente: tcNorm, ultima_mensagem_at: new Date().toISOString() })
-              .eq("id", conversa.id);
-            if (updErr) {
-              console.error("⚠️ Falha ao atualizar tipo_cliente:", JSON.stringify(updErr), "valor recebido:", args.tipo_cliente);
-            }
-            // Persiste o tipo na tabela legada Clientes também
-            if (tcNorm === "porta_instalada" || tcNorm === "revenda") {
-              try {
-                await atualizarTipoClienteLegado(telefone, tcNorm);
-              } catch (e: any) {
-                console.error("⚠️ Erro ao propagar tipo_cliente para legado:", e?.message);
-              }
             }
           } catch (e: any) {
             console.error("❌ Erro em gerar_orcamento:", e?.message, e);
@@ -1181,15 +1188,87 @@ Deno.serve(async (req) => {
           } else {
             toolResult = { ok: false, error: r.error };
           }
-        } else if (fnName === "calcular_frete_cep") {
-          const r = await calcularFretePorCep(String(args.cep || ""));
+        } else if (fnName === "definir_medidas") {
+          const lg = Number(args.largura);
+          const al = Number(args.altura);
+          if (!Number.isFinite(lg) || lg <= 0 || lg > 20 || !Number.isFinite(al) || al <= 0 || al > 20) {
+            toolResult = { ok: false, error: "Medidas inválidas. Pergunte de novo ao cliente em metros (ex: 4x3)." };
+          } else {
+            await supabase
+              .from("leo_conversations")
+              .update({ largura: lg, altura: al, ultima_mensagem_at: new Date().toISOString() })
+              .eq("id", conversa.id);
+            toolResult = {
+              ok: true,
+              largura: lg,
+              altura: al,
+              instrucao: "Medidas gravadas no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 4 perguntando o tipo da lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO).",
+            };
+          }
+        } else if (fnName === "definir_lamina") {
+          const p = String(args.tipo_perfil || "").toLowerCase();
+          const pNorm = p === "fechado" || p === "transvision" || p === "oblongo" ? p : null;
+          if (!pNorm) {
+            toolResult = { ok: false, error: "tipo_perfil inválido. Use fechado, transvision ou oblongo." };
+          } else {
+            await supabase
+              .from("leo_conversations")
+              .update({ tipo_perfil: pNorm, ultima_mensagem_at: new Date().toISOString() })
+              .eq("id", conversa.id);
+            // Lê o tipo_cliente para decidir o próximo passo
+            const { data: cv } = await supabase
+              .from("leo_conversations")
+              .select("tipo_cliente")
+              .eq("id", conversa.id)
+              .maybeSingle();
+            const proxima = cv?.tipo_cliente === "porta_instalada"
+              ? "Lâmina gravada. NÃO confirme. Siga DIRETO ao Passo 5: pergunte o CEP do local da instalação."
+              : "Lâmina gravada. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
+            toolResult = { ok: true, tipo_perfil: pNorm, instrucao: proxima };
+          }
+          const r = await cadastrarCliente({
+            nome: String(args.nome || nome || "").trim(),
+            email: args.email ? String(args.email).trim() : undefined,
+            documento: String(args.documento || "").replace(/\D/g, ""),
+            telefone,
+            tipo_cliente: args.tipo_cliente,
+          });
           if (r.ok) {
-            // Se conseguiu calcular o frete, é PORTA INSTALADA na BA — grava no legado
+            await supabase
+              .from("leo_conversations")
+              .update({ nome_cliente: args.nome })
+              .eq("id", conversa.id);
+            toolResult = {
+              ok: true,
+              instrucao: "Cliente cadastrado. Agora pergunte se ele tem interesse na PORTA INSTALADA ou em REVENDA.",
+            };
+          } else {
+            toolResult = { ok: false, error: r.error };
+          }
+        } else if (fnName === "calcular_frete_cep") {
+          const r: any = await calcularFretePorCep(String(args.cep || ""));
+          if (r.ok) {
+            // Grava cep, frete e endereço resumido no [ESTADO] da conversa
+            const enderecoResumo = [r.logradouro, r.bairro, r.localidade, r.uf]
+              .filter((x: any) => x && String(x).trim())
+              .join(", ");
+            await supabase
+              .from("leo_conversations")
+              .update({
+                cep: r.cep,
+                frete: r.frete,
+                endereco_instalacao: enderecoResumo || null,
+                tipo_cliente: "porta_instalada",
+                ultima_mensagem_at: new Date().toISOString(),
+              })
+              .eq("id", conversa.id);
             try { await atualizarTipoClienteLegado(telefone, "porta_instalada"); } catch (_) {}
             toolResult = {
-              ...r,
-              instrucao: "NÃO mencione o valor do frete no chat. Chame imediatamente gerar_orcamento usando este frete e os demais dados (largura, altura, tipo_cliente=porta_instalada, tipo_perfil).",
+              ok: true,
+              instrucao: "CEP e frete gravados no [ESTADO]. NÃO mencione o valor do frete ao cliente. Chame IMEDIATAMENTE gerar_orcamento (sem argumentos).",
             };
+          } else if (r.fora_da_bahia) {
+            toolResult = { ...r, instrucao: "Cliente fora da BA para PORTA INSTALADA. Chame transferir_humano." };
           } else {
             toolResult = r;
           }
@@ -1200,19 +1279,15 @@ Deno.serve(async (req) => {
           if (!tcNorm) {
             toolResult = { ok: false, error: "tipo_cliente inválido. Use 'porta_instalada' ou 'revenda'." };
           } else {
-            // 1) atualiza conversa atual
             await supabase
               .from("leo_conversations")
               .update({ tipo_cliente: tcNorm, ultima_mensagem_at: new Date().toISOString() })
               .eq("id", conversa.id);
-            // 2) propaga para a tabela legada Clientes (silencioso, não bloqueia)
             try { await atualizarTipoClienteLegado(telefone, tcNorm); } catch (_) {}
             toolResult = {
               ok: true,
               tipo_cliente: tcNorm,
-              instrucao: tcNorm === "porta_instalada"
-                ? "Tipo gravado. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta."
-                : "Tipo gravado. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.",
+              instrucao: "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta (ex: 4x3).",
             };
           }
         } else if (fnName === "transferir_humano") {
@@ -1227,6 +1302,9 @@ Deno.serve(async (req) => {
           content: JSON.stringify(toolResult),
         });
       }
+      // Após processar todas as tool_calls, re-injeta [ESTADO] atualizado
+      // para que a próxima iteração da IA enxergue os dados recém-gravados.
+      messages.push({ role: "system", content: await montarEstado() });
     }
 
     try {
