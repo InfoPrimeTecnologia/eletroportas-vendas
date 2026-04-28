@@ -24,6 +24,79 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
+// Backend legado (onde estão Clientes, estoque, funil)
+const LEGACY_SUPABASE_URL = "https://pdwghmxolqiuyxunglon.supabase.co";
+const LEGACY_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkd2dobXhvbHFpdXl4dW5nbG9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyNjM1NTMsImV4cCI6MjA4NDgzOTU1M30.FmYvMO9HLz-AUUH29TwBbRYA2KMPdyczSjorq3vVDcM";
+const legacyDb = createClient(LEGACY_SUPABASE_URL, LEGACY_SUPABASE_KEY, {
+  auth: { persistSession: false },
+});
+
+// Saudação por horário (timezone Brasil)
+function saudacaoHorario(): string {
+  const hora = new Date().toLocaleString("en-US", {
+    timeZone: "America/Bahia",
+    hour: "2-digit",
+    hour12: false,
+  });
+  const h = parseInt(hora, 10);
+  if (h >= 5 && h < 12) return "Bom dia";
+  if (h >= 12 && h < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+// Normaliza telefone (remove tudo que não for dígito)
+function normalizarTelefone(t: string): string {
+  return (t || "").replace(/\D/g, "");
+}
+
+// Busca cliente no backend legado pelo telefone
+async function buscarClientePorTelefone(telefone: string) {
+  const tel = normalizarTelefone(telefone);
+  if (!tel) return null;
+  // tenta variações: completo, sem código país (55), últimos 11 dígitos
+  const variacoes = Array.from(new Set([
+    tel,
+    tel.startsWith("55") ? tel.slice(2) : tel,
+    tel.slice(-11),
+    tel.slice(-10),
+  ].filter(Boolean)));
+
+  for (const v of variacoes) {
+    const { data } = await legacyDb
+      .from("Clientes")
+      .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE")
+      .ilike("CLI_FONE", `%${v}%`)
+      .limit(1)
+      .maybeSingle();
+    if (data) return data;
+  }
+  return null;
+}
+
+// Cadastra um novo cliente no backend legado
+async function cadastrarCliente(input: {
+  nome: string;
+  email?: string;
+  documento: string; // CNPJ ou CPF
+  telefone: string;
+}) {
+  const { data, error } = await legacyDb
+    .from("Clientes")
+    .insert({
+      CLI_CNPJ: input.documento,
+      CLI_NOME: input.nome,
+      CLI_EMAIL: input.email || null,
+      CLI_FONE: normalizarTelefone(input.telefone),
+    })
+    .select()
+    .single();
+  if (error) {
+    console.error("Erro ao cadastrar cliente:", error);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, cliente: data };
+}
+
 // ===========================
 // CÁLCULO DE ORÇAMENTO
 // ===========================
@@ -299,14 +372,16 @@ async function gerarPdfDocrya(html: string, filename: string): Promise<string | 
 const SYSTEM_PROMPT = `Você é Leo, vendedor virtual da Eletroportas (porta de enrolar automática) em Salvador-BA.
 
 REGRAS DE NEGÓCIO:
-1. Logo no início, pergunte: "Você é cliente final (porta instalada) ou revendedor?"
-2. PORTA INSTALADA — só atende na BAHIA. Se o cliente for de outro estado, chame a tool "transferir_humano" imediatamente.
-3. PORTA INSTALADA na BA: pergunte largura, altura, cidade. Calcula com mão de obra. Frete só se cliente da BA.
-4. REVENDA: aceita qualquer estado. SEM mão de obra e SEM frete (só produtos).
-5. Para gerar orçamento você PRECISA de: largura (m), altura (m), tipo_cliente. Opcionais: motor, perfil, pintura, nome, endereço.
-6. Quando tiver os dados, chame a tool "gerar_orcamento". Depois confirme com o cliente.
-7. Seja cordial, direto, use poucas mensagens. Use emojis com moderação.
-8. NUNCA invente preços — sempre use a tool para calcular.
+1. APRESENTAÇÃO: na primeira mensagem da conversa você JÁ FOI APRESENTADO automaticamente pelo sistema. Não se apresente de novo.
+2. Se o sistema indicar que o cliente NÃO ESTÁ CADASTRADO, sua PRIMEIRA prioridade é coletar e cadastrar: peça nome completo, e-mail e CNPJ ou CPF. Quando tiver os 3 dados, chame a tool "cadastrar_cliente". Só depois siga para a próxima etapa.
+3. Se o cliente JÁ ESTÁ CADASTRADO (ou após cadastrá-lo), pergunte: "Você tem interesse na PORTA INSTALADA ou em REVENDA?"
+4. PORTA INSTALADA — só atende na BAHIA. Se o cliente for de outro estado, chame a tool "transferir_humano" imediatamente.
+5. PORTA INSTALADA na BA: pergunte largura, altura, cidade. Calcula com mão de obra. Frete só se cliente da BA.
+6. REVENDA: aceita qualquer estado. SEM mão de obra e SEM frete (só produtos).
+7. Para gerar orçamento você PRECISA de: largura (m), altura (m), tipo_cliente. Opcionais: motor, perfil, pintura, nome, endereço.
+8. Quando tiver os dados, chame a tool "gerar_orcamento". O orçamento será SEMPRE entregue como PDF anexo — NUNCA digite valores, totais ou condições de pagamento na mensagem de texto. Após gerar, apenas confirme: "Pronto! Te enviei o orçamento em PDF, dá uma olhada por favor."
+9. Seja cordial, direto, use poucas mensagens. Use emojis com moderação.
+10. NUNCA invente preços nem mencione valores no chat — todos os valores ficam exclusivamente no PDF.
 
 Você tem acesso ao histórico da conversa.`;
 
@@ -332,6 +407,22 @@ const TOOLS = [
           cliente_endereco: { type: "string" },
         },
         required: ["largura", "altura", "tipo_cliente"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "cadastrar_cliente",
+      description: "Cadastra um novo cliente no banco de dados. Use APENAS quando tiver coletado nome, e-mail e CNPJ/CPF do cliente novo.",
+      parameters: {
+        type: "object",
+        properties: {
+          nome: { type: "string", description: "Nome completo do cliente" },
+          email: { type: "string", description: "E-mail do cliente" },
+          documento: { type: "string", description: "CNPJ ou CPF (apenas números ou formatado)" },
+        },
+        required: ["nome", "documento"],
       },
     },
   },
@@ -383,7 +474,7 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
     .limit(1)
     .maybeSingle();
 
-  if (existing) return existing;
+  if (existing) return { conversa: existing, isNova: false };
 
   const { data, error } = await supabase
     .from("leo_conversations")
@@ -391,7 +482,7 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
     .select()
     .single();
   if (error) throw error;
-  return data;
+  return { conversa: data, isNova: true };
 }
 
 async function salvarMensagem(conversation_id: string, role: string, content: string, metadata: any = {}) {
@@ -460,7 +551,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const conversa = await getOuCriarConversa(telefone, nome);
+    const { conversa, isNova } = await getOuCriarConversa(telefone, nome);
 
     // Conversa encerrada (já foi transferida) → não responde
     if (conversa.status === "encerrada") {
@@ -469,11 +560,26 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Lookup do cliente no backend legado
+    const clienteExistente = await buscarClientePorTelefone(telefone);
+
+    // Em conversa nova, envia saudação fixa antes da IA
+    if (isNova) {
+      const saudacao = `Olá, sou o Leo da Eletroportas. ${saudacaoHorario()}!`;
+      await enviarTexto(telefone, saudacao);
+      await salvarMensagem(conversa.id, "assistant", saudacao);
+    }
+
     await salvarMensagem(conversa.id, "user", messageBody);
     const historico = await carregarHistorico(conversa.id);
 
+    // Contexto do cliente como mensagem de sistema dinâmica
+    const contextoCliente = clienteExistente
+      ? `[CONTEXTO] Cliente JÁ CADASTRADO: ${clienteExistente.CLI_NOME || "(sem nome)"} | CNPJ/CPF: ${clienteExistente.CLI_CNPJ} | Email: ${clienteExistente.CLI_EMAIL || "(não informado)"}. NÃO peça cadastro novamente — pergunte sobre porta instalada ou revenda.`
+      : `[CONTEXTO] Cliente NÃO CADASTRADO (telefone ${telefone}). Sua prioridade é coletar nome completo, e-mail e CNPJ ou CPF, e então chamar a tool cadastrar_cliente.`;
+
     // Loop de tools (até 3 chamadas)
-    let messages: any[] = [...historico];
+    let messages: any[] = [{ role: "system", content: contextoCliente }, ...historico];
     let respostaFinal = "";
     for (let i = 0; i < 3; i++) {
       const ai = await chamarIA(messages);
@@ -516,7 +622,7 @@ Deno.serve(async (req) => {
             const pdfB64 = await gerarPdfDocrya(html, filename);
 
             if (pdfB64) {
-              await enviarPdfBase64(telefone, pdfB64, filename, `Olá! Segue seu orçamento. Total: R$ ${o.total_geral.toFixed(2)}`);
+              await enviarPdfBase64(telefone, pdfB64, filename, "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄");
               toolResult = {
                 ok: true,
                 total_geral: o.total_geral,
@@ -524,6 +630,7 @@ Deno.serve(async (req) => {
                 mao_de_obra: o.mao_de_obra,
                 frete: o.frete,
                 pdf_enviado: true,
+                instrucao: "Apenas confirme ao cliente que o PDF foi enviado. NÃO mencione valores no chat.",
               };
             } else {
               toolResult = { ok: false, error: "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
@@ -536,6 +643,25 @@ Deno.serve(async (req) => {
               .eq("id", conversa.id);
           } catch (e: any) {
             toolResult = { ok: false, error: e.message };
+          }
+        } else if (fnName === "cadastrar_cliente") {
+          const r = await cadastrarCliente({
+            nome: String(args.nome || nome || "").trim(),
+            email: args.email ? String(args.email).trim() : undefined,
+            documento: String(args.documento || "").replace(/\D/g, ""),
+            telefone,
+          });
+          if (r.ok) {
+            await supabase
+              .from("leo_conversations")
+              .update({ nome_cliente: args.nome })
+              .eq("id", conversa.id);
+            toolResult = {
+              ok: true,
+              instrucao: "Cliente cadastrado. Agora pergunte se ele tem interesse na PORTA INSTALADA ou em REVENDA.",
+            };
+          } else {
+            toolResult = { ok: false, error: r.error };
           }
         } else if (fnName === "transferir_humano") {
           if (ticketId) await transferirParaHumano(ticketId);
