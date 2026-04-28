@@ -1556,7 +1556,11 @@ Deno.serve(async (req) => {
     // ➕ DASHBOARD: detecta aceite explícito do orçamento → gera pedido_venda e fecha o lead
     // Só aceita depois que o orçamento já foi enviado nesta conversa. Antes disso,
     // respostas como "fechada" são tratadas como tipo de lâmina, nunca como aceite.
-    if (estadoProntoParaOrcamento(estadoAntesAceite) && await pdfJaEnviadoConversa(conversa.id) && pareceAceite(messageBody)) {
+    const historicoParaAceite = await carregarHistorico(conversa.id);
+    const aceiteContextual = estadoProntoParaOrcamento(estadoAntesAceite) &&
+      await pdfJaEnviadoConversa(conversa.id) &&
+      await interpretarAceiteContextual({ texto: messageBody, historico: historicoParaAceite, estado: estadoAntesAceite });
+    if (aceiteContextual) {
       const r = await aceitarOrcamentoEGerarPedido(telefone);
       if (r?.pedido_numero) {
         const msg = `Perfeito! ✅ Orçamento ${r.orcamento_numero} aceito e pedido ${r.pedido_numero} aberto. Em breve um atendente confirma os próximos passos.`;
