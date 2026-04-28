@@ -303,24 +303,44 @@ async function enviarTexto(numero: string, texto: string) {
 }
 
 async function enviarPdfBase64(numero: string, base64: string, filename: string, caption?: string) {
-  const r = await fetch(PRIMESYNC_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${PRIMESYNC_TOKEN}`,
+  // Tentativa 1: payload padrão PrimeSync (campo "media" + "fileName")
+  const payloads = [
+    {
+      number: numero,
+      body: caption || "Segue seu orçamento em PDF.",
+      media: base64,
+      fileName: filename,
+      mediaType: "document",
+      mimeType: "application/pdf",
     },
-    body: JSON.stringify({
+    {
       number: numero,
       body: caption || "Segue seu orçamento em PDF.",
       mediaBase64: base64,
+      filename,
       mediaType: "document",
       mimeType: "application/pdf",
-      filename,
-    }),
-  });
-  const txt = await r.text();
-  if (!r.ok) console.error("PrimeSync pdf erro:", r.status, txt);
-  return r.ok;
+    },
+  ];
+
+  for (const [idx, payload] of payloads.entries()) {
+    try {
+      const r = await fetch(PRIMESYNC_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${PRIMESYNC_TOKEN}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const txt = await r.text();
+      console.log(`📎 PrimeSync PDF tentativa ${idx + 1}: status=${r.status} resp=${txt.substring(0, 300)}`);
+      if (r.ok) return true;
+    } catch (e) {
+      console.error(`📎 PrimeSync PDF tentativa ${idx + 1} exceção:`, e);
+    }
+  }
+  return false;
 }
 
 async function transferirParaHumano(ticketId: number) {
