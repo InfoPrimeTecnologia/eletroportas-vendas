@@ -73,8 +73,8 @@ const Dashboard = () => {
   const fetchData = async () => {
     try {
       const [{ data: orcamentos }, { data: pedidos }, { data: leads }] = await Promise.all([
-        supabase.from("orcamentos").select("id, numero, cliente_nome, cliente_telefone, status, data_criacao, valor_total"),
-        supabase.from("pedidos_venda").select("id, numero, cliente_nome, cliente_telefone, status, data_criacao, valor_total"),
+        (supabase as any).from("orcamentos").select("id, numero, cliente_nome, cliente_telefone, status, data_criacao, valor_total"),
+        (supabase as any).from("pedidos_venda").select("id, numero, cliente_nome, cliente_telefone, status, data_criacao, valor_total"),
         (supabase as any).from("funil_leads").select("id, nome, etapa_key, valor, created_at"),
       ]);
       setRawOrcamentos(orcamentos || []);

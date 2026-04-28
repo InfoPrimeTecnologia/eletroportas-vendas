@@ -23,7 +23,7 @@ export function useClientes() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['clientes', page, debouncedSearch],
     queryFn: async () => {
-      let query = supabase.from('Clientes').select('*', { count: 'exact' });
+      let query = (supabase as any).from('Clientes').select('*', { count: 'exact' });
 
       if (debouncedSearch.trim()) {
         query = query.or(
@@ -39,7 +39,7 @@ export function useClientes() {
         .range(from, to);
 
       if (error) throw error;
-      return { clientes: data as Cliente[], total: count ?? 0 };
+      return { clientes: data as unknown as Cliente[], total: count ?? 0 };
     },
   });
 

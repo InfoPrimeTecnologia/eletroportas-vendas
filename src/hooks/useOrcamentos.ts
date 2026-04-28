@@ -43,7 +43,7 @@ export function useOrcamentos() {
         .select('*')
         .order('data_criacao', { ascending: false });
       if (error) throw error;
-      return data as Orcamento[];
+      return data as unknown as Orcamento[];
     },
   });
 

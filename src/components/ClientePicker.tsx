@@ -31,7 +31,7 @@ export default function ClientePicker({ value, onChange }: ClientePickerProps) {
         .select("*")
         .or(`CLI_NOME.ilike.%${query}%,CLI_CNPJ.ilike.%${query}%,CLI_EMAIL.ilike.%${query}%,CLI_FONE.ilike.%${query}%`)
         .limit(10);
-      setResults((data as Cliente[]) || []);
+      setResults((data as unknown as Cliente[]) || []);
       setOpen(true);
       setLoading(false);
     }, 300);
