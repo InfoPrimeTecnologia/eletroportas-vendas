@@ -15,15 +15,18 @@ export function useUserRole() {
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
-        .single();
+        .order('role', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      
+      console.log('[useUserRole] user', user.id, 'role:', data?.role, 'err:', error?.message);
       
       if (error) {
-        // If no role found, return null
-        if (error.code === 'PGRST116') return null;
-        throw error;
+        console.warn('[useUserRole] erro:', error.message);
+        return null;
       }
       
-      return data?.role as AppRole | null;
+      return (data?.role ?? null) as AppRole | null;
     },
     enabled: !!user?.id,
   });
