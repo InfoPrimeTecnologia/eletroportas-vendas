@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OWNER_EMAIL = "primesync@primesync.com.br";
 
@@ -22,22 +23,42 @@ function json(body: unknown, status = 200) {
 }
 
 async function assertOwner(req: Request) {
-  const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
+  const authHeader = req.headers.get("Authorization");
+  const token = authHeader?.replace(/^Bearer\s+/i, "");
   if (!token) return { ok: false as const, response: json({ error: "Não autenticado." }, 401) };
 
-  // Decodifica o payload do JWT (validação de assinatura é feita pelo gateway via verify_jwt)
   let email: string | undefined;
+
+  // Try validating via Supabase Auth (works with both legacy JWT and signing-keys)
   try {
-    const [, payloadB64] = token.split(".");
-    const padded = payloadB64 + "=".repeat((4 - (payloadB64.length % 4)) % 4);
-    const json = JSON.parse(atob(padded.replace(/-/g, "+").replace(/_/g, "/")));
-    email = (json.email as string | undefined)?.toLowerCase();
-  } catch {
-    return { ok: false as const, response: json({ error: "Token inválido." }, 401) };
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false },
+    });
+    const { data, error } = await userClient.auth.getUser();
+    if (!error && data?.user?.email) {
+      email = data.user.email.toLowerCase();
+    }
+  } catch (e) {
+    console.warn("getUser falhou, tentando decode manual:", e);
   }
 
+  // Fallback: decode JWT payload manually
+  if (!email) {
+    try {
+      const [, payloadB64] = token.split(".");
+      const padded = payloadB64 + "=".repeat((4 - (payloadB64.length % 4)) % 4);
+      const payload = JSON.parse(atob(padded.replace(/-/g, "+").replace(/_/g, "/")));
+      email = (payload.email as string | undefined)?.toLowerCase();
+    } catch {
+      return { ok: false as const, response: json({ error: "Token inválido." }, 401) };
+    }
+  }
+
+  console.log("leo-admin assertOwner email:", email);
+
   if (email !== OWNER_EMAIL) {
-    return { ok: false as const, response: json({ error: "Acesso restrito ao usuário autorizado." }, 403) };
+    return { ok: false as const, response: json({ error: `Acesso restrito ao usuário autorizado. (${email ?? "sem email"})` }, 403) };
   }
   return { ok: true as const };
 }
