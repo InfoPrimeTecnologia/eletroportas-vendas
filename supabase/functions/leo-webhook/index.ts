@@ -909,6 +909,7 @@ Deno.serve(async (req) => {
             email: args.email ? String(args.email).trim() : undefined,
             documento: String(args.documento || "").replace(/\D/g, ""),
             telefone,
+            tipo_cliente: args.tipo_cliente,
           });
           if (r.ok) {
             await supabase
