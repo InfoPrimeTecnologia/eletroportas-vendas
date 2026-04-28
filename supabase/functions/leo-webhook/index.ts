@@ -732,14 +732,18 @@ async function chamarIA(messages: any[]) {
 const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
 
 async function getOuCriarConversa(telefone: string, nome?: string) {
-  const { data: existing } = await supabase
-    .from("leo_conversations")
-    .select("*")
-    .eq("telefone", telefone)
-    .eq("status", "ativa")
-    .order("ultima_mensagem_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const existingRes = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .select("*")
+      .eq("telefone", telefone)
+      .eq("status", "ativa")
+      .order("ultima_mensagem_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  );
+  if (existingRes.error) console.error("⚠️", descreverErroPg(existingRes.error, "getOuCriarConversa leitura: "));
+  const existing = existingRes.data;
 
   if (existing) {
     const ultima = new Date(existing.ultima_mensagem_at || existing.created_at).getTime();
@@ -747,19 +751,24 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
     if (!inativaHaMuito) return { conversa: existing, isNova: false };
 
     // Nova sessão de verdade: encerra a anterior para não reaproveitar estado/histórico antigo.
-    await supabase
-      .from("leo_conversations")
-      .update({ status: "encerrada", ultima_mensagem_at: new Date().toISOString() })
-      .eq("id", existing.id);
+    const encerrar = await withSchemaRetry(() =>
+      supabase
+        .from("leo_conversations")
+        .update({ status: "encerrada", ultima_mensagem_at: new Date().toISOString() })
+        .eq("id", existing.id)
+    );
+    if (encerrar.error) console.error("⚠️", descreverErroPg(encerrar.error, "getOuCriarConversa encerrar antiga: "));
   }
 
-  const { data, error } = await supabase
-    .from("leo_conversations")
-    .insert({ telefone, tipo_cliente: "indefinido", nome_cliente: nome })
-    .select()
-    .single();
-  if (error) throw error;
-  return { conversa: data, isNova: true };
+  const criar = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .insert({ telefone, tipo_cliente: "indefinido", nome_cliente: nome })
+      .select()
+      .single()
+  );
+  if (criar.error) throw criar.error;
+  return { conversa: criar.data, isNova: true };
 }
 
 // ===========================
