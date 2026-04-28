@@ -25,9 +25,18 @@ async function assertOwner(req: Request) {
   const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) return { ok: false as const, response: json({ error: "Não autenticado." }, 401) };
 
-  const { data, error } = await supabase.auth.getUser(token);
-  const email = data.user?.email?.toLowerCase();
-  if (error || email !== OWNER_EMAIL) {
+  // Decodifica o payload do JWT (validação de assinatura é feita pelo gateway via verify_jwt)
+  let email: string | undefined;
+  try {
+    const [, payloadB64] = token.split(".");
+    const padded = payloadB64 + "=".repeat((4 - (payloadB64.length % 4)) % 4);
+    const json = JSON.parse(atob(padded.replace(/-/g, "+").replace(/_/g, "/")));
+    email = (json.email as string | undefined)?.toLowerCase();
+  } catch {
+    return { ok: false as const, response: json({ error: "Token inválido." }, 401) };
+  }
+
+  if (email !== OWNER_EMAIL) {
     return { ok: false as const, response: json({ error: "Acesso restrito ao usuário autorizado." }, 403) };
   }
   return { ok: true as const };
