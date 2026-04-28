@@ -1020,6 +1020,229 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   return { ok: pdfEnviado, pdf_enviado: pdfEnviado, caption, error: pdfEnviado ? null : "Falha ao enviar PDF" };
 }
 
+// ===========================
+// INTEGRAÇÃO COM DASHBOARD (Funil / Orçamentos / Pedidos de Venda)
+// ===========================
+
+/** Cria/atualiza o lead no funil em "contato_inicial" assim que abre uma conversa nova. */
+async function registrarLeadContatoInicial(telefone: string, nomeBruto: string) {
+  try {
+    const nome = (nomeBruto || "").trim() || `Contato ${telefone}`;
+    // Tenta enriquecer com o cliente legado (se existir)
+    const cli = await buscarClientePorTelefone(telefone).catch(() => null);
+
+    // Evita duplicar leads ativos do mesmo telefone (não inserir se já houver lead aberto)
+    const { data: existente } = await supabase
+      .from("funil_leads")
+      .select("id, etapa_key")
+      .eq("telefone", telefone)
+      .not("etapa_key", "in", "(fechado,perdido)")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existente?.id) {
+      console.log("ℹ️ Lead já existe no funil — não duplica:", existente.id, existente.etapa_key);
+      return existente.id as string;
+    }
+
+    const payload: any = {
+      nome: cli?.CLI_NOME || nome,
+      telefone,
+      email: cli?.CLI_EMAIL || null,
+      etapa_key: "contato_inicial",
+      origem: "leo_agent",
+      valor: 0,
+      itens: [],
+      observacoes: "Lead criado automaticamente pelo agente Leo via WhatsApp.",
+    };
+    const { data, error } = await supabase
+      .from("funil_leads")
+      .insert(payload)
+      .select("id")
+      .single();
+    if (error) {
+      console.error("⚠️ Falha ao criar lead no funil:", error.message);
+      return null;
+    }
+    console.log("✅ Lead criado no funil (contato_inicial):", data?.id);
+    return data?.id as string;
+  } catch (e: any) {
+    console.error("⚠️ registrarLeadContatoInicial falhou:", e?.message);
+    return null;
+  }
+}
+
+/** Busca o lead aberto (não fechado/perdido) deste telefone. */
+async function buscarLeadAberto(telefone: string) {
+  const { data } = await supabase
+    .from("funil_leads")
+    .select("id, etapa_key, itens, anexo_pdf, valor")
+    .eq("telefone", telefone)
+    .not("etapa_key", "in", "(fechado,perdido)")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data || null;
+}
+
+/** Persiste o orçamento gerado pelo agente na tabela `orcamentos` (com PDF base64) e move o lead para "orcamento_enviado". */
+async function registrarOrcamentoEAvancarFunil(params: {
+  telefone: string;
+  nome: string;
+  orcamento: ReturnType<typeof calcularOrcamento>;
+  pdfBase64: string;
+  filename: string;
+}) {
+  const { telefone, nome, orcamento, pdfBase64, filename } = params;
+  try {
+    const itensJson = orcamento.itens.map((i: any) => ({
+      codigo: i.code,
+      descricao: i.description,
+      quantidade: i.qty,
+      unidade: i.unit,
+      preco_unitario: i.unit_price,
+      subtotal: i.subtotal,
+    }));
+    const observacoes = [
+      `Origem: Agente Leo (WhatsApp)`,
+      `Tipo: ${orcamento.tipo_cliente}`,
+      `Medidas: ${orcamento.largura}m x ${orcamento.altura}m`,
+      `Lâmina: ${orcamento.tipo_perfil}`,
+      orcamento.frete ? `Frete: R$ ${orcamento.frete.toFixed(2)}` : null,
+      orcamento.mao_de_obra ? `Mão de obra: R$ ${orcamento.mao_de_obra.toFixed(2)}` : null,
+    ].filter(Boolean).join(" | ");
+
+    const { data: orc, error: orcErr } = await supabase
+      .from("orcamentos")
+      .insert({
+        cliente_nome: nome || `Contato ${telefone}`,
+        cliente_telefone: telefone,
+        valor_total: orcamento.total_geral,
+        status: "pendente",
+        origem: "leo_agent",
+        itens: itensJson,
+        observacoes,
+      })
+      .select("id, numero")
+      .single();
+    if (orcErr) {
+      console.error("⚠️ Falha ao salvar orcamento:", orcErr.message);
+    } else {
+      console.log("✅ Orçamento registrado:", orc?.numero);
+    }
+
+    // Atualiza o lead no funil → orcamento_enviado, anexa PDF e itens
+    const lead = await buscarLeadAberto(telefone);
+    const anexo = `data:application/pdf;base64,${pdfBase64}`;
+    if (lead?.id) {
+      await supabase
+        .from("funil_leads")
+        .update({
+          etapa_key: "orcamento_enviado",
+          valor: orcamento.total_geral,
+          itens: itensJson,
+          anexo_pdf: anexo,
+          observacoes: `Orçamento ${orc?.numero || ""} gerado pelo agente Leo.`,
+        })
+        .eq("id", lead.id);
+      console.log("✅ Lead movido para orcamento_enviado:", lead.id);
+    } else {
+      // cria direto na etapa orcamento_enviado caso não exista
+      await supabase.from("funil_leads").insert({
+        nome: nome || `Contato ${telefone}`,
+        telefone,
+        valor: orcamento.total_geral,
+        etapa_key: "orcamento_enviado",
+        origem: "leo_agent",
+        itens: itensJson,
+        anexo_pdf: anexo,
+        observacoes: `Orçamento ${orc?.numero || ""} gerado pelo agente Leo.`,
+      });
+    }
+    return { orcamento_id: orc?.id, numero: orc?.numero };
+  } catch (e: any) {
+    console.error("⚠️ registrarOrcamentoEAvancarFunil falhou:", e?.message);
+    return null;
+  }
+}
+
+/** Detecta aceite explícito do cliente em texto livre. */
+function pareceAceite(texto: string): boolean {
+  const t = (texto || "").toLowerCase().trim();
+  if (!t) return false;
+  // Frases curtas claras de aceite
+  const padroes = [
+    /\baceito\b/, /\baceitar\b/, /\baceita?do\b/,
+    /\bfechad[oa]\b/, /\bfechar( o)? (orcamento|orçamento|pedido)\b/, /\bpode (fechar|seguir)\b/,
+    /\bpode (gerar|emitir) (o )?pedido\b/, /\bquero (fechar|comprar)\b/,
+    /\bconfirmo( o)? (orcamento|orçamento|pedido)\b/, /\bconcordo( com)? (o )?(orcamento|orçamento|pedido)\b/,
+    /\baprovad[oa]\b/, /\baprovar( o)? (orcamento|orçamento)\b/,
+    /\bok( pode (fechar|seguir))\b/,
+  ];
+  return padroes.some((re) => re.test(t));
+}
+
+/** Converte o último orçamento pendente em pedido de venda e move o lead para "fechado". */
+async function aceitarOrcamentoEGerarPedido(telefone: string) {
+  try {
+    const { data: orc } = await supabase
+      .from("orcamentos")
+      .select("id, numero, cliente_nome, cliente_telefone, valor_total, itens, observacoes, status")
+      .eq("cliente_telefone", telefone)
+      .eq("origem", "leo_agent")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!orc) {
+      console.warn("⚠️ aceitarOrcamento: nenhum orçamento encontrado para", telefone);
+      return null;
+    }
+    if (orc.status === "aceito") {
+      console.log("ℹ️ Orçamento já aceito anteriormente:", orc.numero);
+      return { orcamento_numero: orc.numero, ja_aceito: true };
+    }
+
+    // Cria o pedido de venda com base no orçamento
+    const { data: ped, error: pedErr } = await supabase
+      .from("pedidos_venda")
+      .insert({
+        cliente_nome: orc.cliente_nome,
+        cliente_telefone: orc.cliente_telefone,
+        valor_total: orc.valor_total,
+        status: "processando",
+        origem: "leo_agent",
+        itens: orc.itens,
+        observacoes: `Gerado a partir do orçamento ${orc.numero || orc.id}. ${orc.observacoes || ""}`.trim(),
+        orcamento_id: orc.id,
+      })
+      .select("id, numero")
+      .single();
+    if (pedErr) {
+      console.error("⚠️ Falha ao criar pedido_venda:", pedErr.message);
+      return null;
+    }
+    await supabase.from("orcamentos").update({ status: "aceito" }).eq("id", orc.id);
+
+    // Move o lead para "fechado"
+    const lead = await buscarLeadAberto(telefone);
+    if (lead?.id) {
+      await supabase
+        .from("funil_leads")
+        .update({
+          etapa_key: "fechado",
+          observacoes: `Orçamento ${orc.numero} aceito. Pedido ${ped?.numero} gerado pelo agente Leo.`,
+        })
+        .eq("id", lead.id);
+    }
+    console.log("✅ Pedido de venda criado:", ped?.numero, "a partir de", orc.numero);
+    return { orcamento_numero: orc.numero, pedido_numero: ped?.numero };
+  } catch (e: any) {
+    console.error("⚠️ aceitarOrcamentoEGerarPedido falhou:", e?.message);
+    return null;
+  }
+}
+
 async function mensagemJaProcessada(conversation_id: string, messageId?: string) {
   if (!messageId) return false;
   const { data } = await supabase
