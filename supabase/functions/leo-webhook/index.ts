@@ -1115,6 +1115,28 @@ Deno.serve(async (req) => {
           } else {
             toolResult = r;
           }
+        } else if (fnName === "definir_tipo_cliente") {
+          const tc = String(args.tipo_cliente || "").toLowerCase();
+          const tcNorm: "porta_instalada" | "revenda" | null =
+            tc === "revenda" ? "revenda" : tc === "porta_instalada" ? "porta_instalada" : null;
+          if (!tcNorm) {
+            toolResult = { ok: false, error: "tipo_cliente inválido. Use 'porta_instalada' ou 'revenda'." };
+          } else {
+            // 1) atualiza conversa atual
+            await supabase
+              .from("leo_conversations")
+              .update({ tipo_cliente: tcNorm, ultima_mensagem_at: new Date().toISOString() })
+              .eq("id", conversa.id);
+            // 2) propaga para a tabela legada Clientes (silencioso, não bloqueia)
+            try { await atualizarTipoClienteLegado(telefone, tcNorm); } catch (_) {}
+            toolResult = {
+              ok: true,
+              tipo_cliente: tcNorm,
+              instrucao: tcNorm === "porta_instalada"
+                ? "Tipo gravado. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta."
+                : "Tipo gravado. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.",
+            };
+          }
         } else if (fnName === "transferir_humano") {
           if (ticketId) await transferirParaHumano(ticketId);
           await supabase.from("leo_conversations").update({ status: "encerrada" }).eq("id", conversa.id);
