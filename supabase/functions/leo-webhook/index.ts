@@ -199,6 +199,15 @@ function calcularOrcamento(input: OrcamentoInput) {
   };
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ===========================
 // HTML do orçamento (Docrya/WeasyPrint friendly)
 // ===========================
@@ -213,8 +222,8 @@ function gerarHtmlOrcamento(o: ReturnType<typeof calcularOrcamento>) {
     .map((i) => {
       const qtyStr = Number.isInteger(i.qty) ? i.qty : i.qty.toFixed(2).replace(".", ",");
       return `<tr>
-        <td>${i.code}</td>
-        <td>${i.description}</td>
+        <td>${escapeHtml(i.code)}</td>
+        <td>${escapeHtml(i.description)}</td>
         <td>${qtyStr} ${i.unit}</td>
         <td>${fmt(i.unit_price)}</td>
         <td style="text-align:right">${fmt(i.subtotal)}</td>
@@ -225,40 +234,84 @@ function gerarHtmlOrcamento(o: ReturnType<typeof calcularOrcamento>) {
   return `<!DOCTYPE html>
 <html lang="pt-br"><head><meta charset="UTF-8"><title>Orçamento - Eletroportas</title>
 <style>
-@page { size: A4; margin: 18mm; }
-body { font-family: Helvetica, Arial, sans-serif; color: #333; font-size: 11px; }
-h1 { color: #004a99; margin: 0 0 4px 0; }
-.header { border-bottom: 3px solid #004a99; padding-bottom: 10px; margin-bottom: 18px; }
-.muted { color: #666; font-size: 10px; }
-.section-title { background: #e9ecef; padding: 6px 10px; font-weight: bold; text-transform: uppercase; margin: 18px 0 8px; font-size: 10px; }
-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-th { background:#004a99; color:#fff; padding:6px; text-align:left; font-size:10px; }
-td { border-bottom: 1px solid #eee; padding: 6px; font-size: 10px; }
-.totais { width: 280px; margin-left: auto; }
-.totais td { border: none; padding: 3px 8px; }
-.total-row { font-weight: bold; color: #004a99; border-top: 2px solid #004a99; font-size: 13px; }
-.box { background:#f8f9fa; border-left:3px solid #004a99; padding:10px; margin:12px 0; }
-.delivery { background:#e8f4e8; padding:8px; border-left:3px solid #28a745; margin: 10px 0; }
+@page { size: A4; margin: 14mm; }
+* { box-sizing: border-box; }
+body { font-family: Helvetica, Arial, sans-serif; color: #233142; font-size: 10px; line-height: 1.35; }
+h1 { color: #0f4c81; margin: 0; font-size: 22px; letter-spacing: 0; }
+h2 { color: #0f4c81; margin: 0 0 6px; font-size: 12px; text-transform: uppercase; }
+p { margin: 0 0 8px; }
+.header { display: table; width: 100%; border-bottom: 4px solid #f2a51a; padding-bottom: 12px; margin-bottom: 14px; }
+.brand, .doc-meta { display: table-cell; vertical-align: top; }
+.doc-meta { width: 170px; text-align: right; color: #526173; font-size: 9px; }
+.logo-row { display: table; width: 100%; }
+.logo-mark, .logo-copy { display: table-cell; vertical-align: middle; }
+.logo-mark { width: 54px; height: 54px; background: #0f4c81; color: #ffffff; border-radius: 8px; text-align: center; font-weight: bold; font-size: 20px; line-height: 54px; border-bottom: 6px solid #f2a51a; }
+.logo-copy { padding-left: 10px; }
+.tagline { color: #f2a51a; font-weight: bold; font-size: 10px; text-transform: uppercase; margin-top: 2px; }
+.muted { color: #526173; font-size: 9px; }
+.grid { display: table; width: 100%; margin-bottom: 10px; }
+.col { display: table-cell; vertical-align: top; width: 50%; padding-right: 8px; }
+.card { border: 1px solid #d7dde5; padding: 9px; background: #fbfcfd; page-break-inside: avoid; }
+.section-title { background: #0f4c81; color:#ffffff; padding: 6px 9px; font-weight: bold; text-transform: uppercase; margin: 12px 0 7px; font-size: 9px; page-break-after: avoid; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 10px; page-break-inside: auto; }
+thead { display: table-header-group; }
+tr { page-break-inside: avoid; }
+th { background:#233142; color:#fff; padding:5px; text-align:left; font-size:8.5px; }
+td { border-bottom: 1px solid #e6eaf0; padding: 5px; font-size: 8.8px; vertical-align: top; }
+.totais { width: 285px; margin-left: auto; page-break-inside: avoid; }
+.totais td { border: none; padding: 3px 8px; font-size: 10px; }
+.total-row td { font-weight: bold; color: #0f4c81; border-top: 2px solid #0f4c81; font-size: 13px; padding-top: 6px; }
+.box { background:#fbfcfd; border-left:4px solid #0f4c81; padding:9px; margin:10px 0; page-break-inside: avoid; }
+.delivery { background:#fff7e6; padding:8px; border-left:4px solid #f2a51a; margin: 9px 0; font-weight: bold; page-break-inside: avoid; }
+.terms { display: table; width: 100%; border-spacing: 0 8px; }
+.term { display: table-row; page-break-inside: avoid; }
+.term strong, .term span { display: table-cell; padding: 8px; border-top: 1px solid #d7dde5; border-bottom: 1px solid #d7dde5; }
+.term strong { width: 120px; color: #0f4c81; border-left: 4px solid #f2a51a; background: #fbfcfd; }
+.term span { border-right: 1px solid #d7dde5; }
+.footer { margin-top:18px; padding-top:8px; border-top:1px solid #d7dde5; font-size:8.5px; color:#66758a; }
 </style></head><body>
 
 <div class="header">
-  <h1>Eletroportas — Portas de Enrolar</h1>
-  <div class="muted">CNPJ: 12.345.678/0001-99 · vendas@eletroportas.com.br</div>
+  <div class="brand">
+    <div class="logo-row">
+      <div class="logo-mark">EP</div>
+      <div class="logo-copy">
+        <h1>Eletroportas</h1>
+        <div class="tagline">Portas de Enrolar Automáticas</div>
+        <div class="muted">Salvador-BA · Atendimento para instalação e revenda</div>
+      </div>
+    </div>
+  </div>
+  <div class="doc-meta">
+    <strong>ORÇAMENTO COMERCIAL</strong><br/>
+    Emissão: ${data}<br/>
+    Validade: 30 dias<br/>
+    Gerado pelo Agente Leo
+  </div>
 </div>
 
-<div class="section-title">Dados do Orçamento</div>
-<p><strong>Cliente:</strong> ${o.cliente_nome || "Não informado"}<br/>
-<strong>Endereço:</strong> ${o.cliente_endereco || "Não informado"}<br/>
-<strong>Tipo:</strong> ${o.tipo_cliente === "porta_instalada" ? "Porta Instalada" : "Revenda"}<br/>
-<strong>Data:</strong> ${data}</p>
+<div class="grid">
+  <div class="col">
+    <div class="card">
+      <h2>Dados do cliente</h2>
+      <strong>Cliente:</strong> ${escapeHtml(o.cliente_nome || "Não informado")}<br/>
+      <strong>Endereço:</strong> ${escapeHtml(o.cliente_endereco || "Não informado")}<br/>
+      <strong>Tipo:</strong> ${o.tipo_cliente === "porta_instalada" ? "Porta Instalada" : "Revenda"}
+    </div>
+  </div>
+  <div class="col" style="padding-right:0">
+    <div class="card">
+      <h2>Especificações</h2>
+      <strong>Dimensões:</strong> ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m<br/>
+      <strong>Área:</strong> ${o.area.toFixed(2).replace(".", ",")}m²<br/>
+      <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.tipo_pintura.replace("_", " "))}
+    </div>
+  </div>
+</div>
 
-<div class="delivery">📅 PREVISÃO DE ENTREGA: até 15 dias após assinatura do pedido</div>
+<div class="delivery">PREVISÃO DE ENTREGA: até 15 dias após assinatura do pedido, sujeito à confirmação comercial e disponibilidade.</div>
 
-<div class="section-title">Especificações</div>
-<p>📐 Dimensões: ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m = ${o.area.toFixed(2).replace(".", ",")}m²<br/>
-Perfil: ${o.tipo_perfil} · Motor: ${o.tipo_motor} · Pintura: ${o.tipo_pintura.replace("_", " ")}</p>
-
-<div class="section-title">Itens</div>
+<div class="section-title">Itens do orçamento</div>
 <table>
 <thead><tr><th>Código</th><th>Descrição</th><th>Qtd</th><th>Preço Unit.</th><th>Subtotal</th></tr></thead>
 <tbody>${linhas}</tbody>
@@ -272,16 +325,21 @@ ${o.frete ? `<tr><td>Frete:</td><td style="text-align:right">${fmt(o.frete)}</td
 </table>
 
 <div class="box">
-<strong>💳 CONDIÇÕES DE PAGAMENTO</strong><br/>
+<strong>CONDIÇÕES DE PAGAMENTO</strong><br/>
 À VISTA (PIX/Boleto): ${fmt(desconto5)} (5% de desconto)<br/>
 CARTÃO até 3x sem juros: 3x de ${fmt(parc3x)}<br/>
 ENTRADA + SALDO: 50% entrada + 50% na entrega
 </div>
 
-<div class="section-title">Validade</div>
-<p>Este orçamento tem validade de 30 dias a partir da data de emissão.</p>
+<div class="section-title">Garantia e observações comerciais</div>
+<div class="terms">
+  <div class="term"><strong>Garantia</strong><span>Garantia conforme certificado emitido pela Eletroportas, válida para defeitos de fabricação e instalação quando contratada. Não cobre mau uso, danos elétricos externos, impactos ou alterações por terceiros.</span></div>
+  <div class="term"><strong>Instalação</strong><span>${o.tipo_cliente === "porta_instalada" ? "Inclui mão de obra quando indicada nos totais. Local deve estar liberado, nivelado e com ponto elétrico adequado." : "Orçamento para revenda/fornecimento, sem mão de obra de instalação e sem frete."}</span></div>
+  <div class="term"><strong>Validade</strong><span>Este orçamento tem validade de 30 dias a partir da data de emissão.</span></div>
+  <div class="term"><strong>Aprovação</strong><span>Produção iniciada após confirmação do pedido, assinatura/aceite comercial e pagamento conforme condição negociada.</span></div>
+</div>
 
-<p style="margin-top:24px; font-size:9px; color:#888">© Eletroportas — Documento gerado automaticamente pelo Agente Leo.</p>
+<div class="footer">© Eletroportas — Documento gerado automaticamente pelo Agente Leo. Valores sujeitos à conferência final por atendimento comercial.</div>
 
 </body></html>`;
 }
@@ -559,6 +617,18 @@ async function salvarMensagem(conversation_id: string, role: string, content: st
   if (error) throw error;
 }
 
+async function mensagemJaProcessada(conversation_id: string, messageId?: string) {
+  if (!messageId) return false;
+  const { data } = await supabase
+    .from("leo_messages")
+    .select("id")
+    .eq("conversation_id", conversation_id)
+    .eq("role", "user")
+    .eq("metadata->>message_id", messageId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
 async function carregarHistorico(conversation_id: string) {
   const { data } = await supabase
     .from("leo_messages")
@@ -607,6 +677,7 @@ Deno.serve(async (req) => {
     }
 
     const messageBody: string = body?.messageBody || "";
+    const messageId: string | undefined = body?.messageId || body?.id;
     const contact = body?.contact || {};
     const telefone: string = contact?.phoneNumber || body?.from || "";
     const nome: string = contact?.name || contact?.pushname || "";
@@ -630,6 +701,25 @@ Deno.serve(async (req) => {
       });
     }
 
+    const rawTimestamp = Number(body?.timestamp || 0);
+    if (rawTimestamp && conversa.ultima_mensagem_at) {
+      const eventTime = rawTimestamp > 9999999999 ? rawTimestamp : rawTimestamp * 1000;
+      const lastTime = new Date(conversa.ultima_mensagem_at).getTime();
+      if (lastTime - eventTime > 30_000) {
+        console.log("⏭️ Ignorado: webhook antigo/reentregue", { messageId, eventTime, lastTime });
+        return new Response(JSON.stringify({ ignored: "stale_webhook" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    if (await mensagemJaProcessada(conversa.id, messageId)) {
+      console.log("⏭️ Ignorado: messageId já processado", messageId);
+      return new Response(JSON.stringify({ ignored: "duplicate_message_id" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Lookup do cliente no backend legado
     const clienteExistente = await buscarClientePorTelefone(telefone);
 
@@ -640,7 +730,7 @@ Deno.serve(async (req) => {
       await salvarMensagem(conversa.id, "assistant", saudacao);
     }
 
-    await salvarMensagem(conversa.id, "user", messageBody);
+    await salvarMensagem(conversa.id, "user", messageBody, { message_id: messageId || null, raw_timestamp: body?.timestamp || null });
     await supabase
       .from("leo_conversations")
       .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
@@ -667,6 +757,8 @@ Deno.serve(async (req) => {
       ...historico,
     ];
     let respostaFinal = "";
+    let pdfEnviadoNesteTurno = false;
+    let pdfCaptionEnviada = "";
     for (let i = 0; i < 5; i++) {
       const ai = await chamarIA(messages);
       const choice = ai.choices?.[0]?.message;
@@ -708,7 +800,12 @@ Deno.serve(async (req) => {
             const pdfB64 = await gerarPdfDocrya(html, filename);
 
             if (pdfB64) {
-              const pdfEnviado = await enviarPdfBase64(telefone, pdfB64, filename, "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄");
+              const captionPdf = "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
+              const pdfEnviado = await enviarPdfBase64(telefone, pdfB64, filename, captionPdf);
+              if (pdfEnviado) {
+                pdfEnviadoNesteTurno = true;
+                pdfCaptionEnviada = captionPdf;
+              }
               toolResult = {
                 ok: pdfEnviado,
                 total_geral: o.total_geral,
@@ -717,7 +814,7 @@ Deno.serve(async (req) => {
                 frete: o.frete,
                 pdf_enviado: pdfEnviado,
                 instrucao: pdfEnviado
-                  ? "Apenas confirme ao cliente que o PDF foi enviado. NÃO mencione valores no chat."
+                  ? "O PDF já foi enviado com legenda. NÃO envie nova mensagem de confirmação. NÃO mencione valores no chat."
                   : "Não confirme envio do PDF. Informe que houve instabilidade no envio do arquivo e que um atendente vai encaminhar em breve.",
               };
             } else {
@@ -765,7 +862,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (respostaFinal) {
+    if (pdfEnviadoNesteTurno) {
+      await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, { pdf_enviado: true });
+    } else if (respostaFinal) {
       await salvarMensagem(conversa.id, "assistant", respostaFinal);
       await enviarTexto(telefone, respostaFinal);
     }
