@@ -677,6 +677,7 @@ Deno.serve(async (req) => {
     }
 
     const messageBody: string = body?.messageBody || "";
+    const messageId: string | undefined = body?.messageId || body?.id;
     const contact = body?.contact || {};
     const telefone: string = contact?.phoneNumber || body?.from || "";
     const nome: string = contact?.name || contact?.pushname || "";
@@ -700,6 +701,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (await mensagemJaProcessada(conversa.id, messageId)) {
+      console.log("⏭️ Ignorado: messageId já processado", messageId);
+      return new Response(JSON.stringify({ ignored: "duplicate_message_id" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Lookup do cliente no backend legado
     const clienteExistente = await buscarClientePorTelefone(telefone);
 
@@ -710,7 +718,7 @@ Deno.serve(async (req) => {
       await salvarMensagem(conversa.id, "assistant", saudacao);
     }
 
-    await salvarMensagem(conversa.id, "user", messageBody);
+    await salvarMensagem(conversa.id, "user", messageBody, { message_id: messageId || null, raw_timestamp: body?.timestamp || null });
     await supabase
       .from("leo_conversations")
       .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
