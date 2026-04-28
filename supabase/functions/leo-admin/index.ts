@@ -31,8 +31,11 @@ async function withSchemaRetry<T extends { error: any }>(fn: () => Promise<T>, t
   let ultimo: T | undefined;
   for (let i = 0; i < tentativas; i++) {
     const r = await fn();
-    const msg = String(r?.error?.message || "");
-    if (r?.error && /schema cache|Could not query the database/i.test(msg)) {
+    const err: any = r?.error;
+    const msg = String(err?.message || "");
+    const code = String(err?.code || "");
+    const semInfo = Boolean(err) && !msg && !code && err?.details == null && err?.hint == null;
+    if (err && (semInfo || /schema cache|Could not query the database|fetch failed/i.test(msg))) {
       ultimo = r;
       await new Promise((res) => setTimeout(res, 300 * (i + 1)));
       continue;
@@ -132,11 +135,13 @@ Deno.serve(async (req) => {
 
     if (action === "messages") {
       if (!conversationId) return json({ error: "Conversa não informada." }, 400);
-      const { data, error } = await supabase
-        .from("leo_messages")
-        .select("id,role,content,created_at")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true });
+      const { data, error } = await withSchemaRetry(() =>
+        supabase
+          .from("leo_messages")
+          .select("id,role,content,created_at")
+          .eq("conversation_id", conversationId)
+          .order("created_at", { ascending: true })
+      );
       if (error) throw error;
       return json({ messages: data ?? [] });
     }
