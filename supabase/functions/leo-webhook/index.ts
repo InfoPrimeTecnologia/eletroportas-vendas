@@ -1352,10 +1352,10 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
   try {
     const { data: orc } = await dashboardDb
       .from("orcamentos")
-      .select("id, numero, cliente_nome, cliente_telefone, valor_total, itens, observacoes, status")
+      .select("id, numero, cliente_nome, valor_total, itens, observacoes, status")
       .eq("origem", "leo_agent")
       .ilike("observacoes", `%Telefone: ${telefone}%`)
-      .order("created_at", { ascending: false })
+      .order("data_criacao", { ascending: false })
       .limit(1)
       .maybeSingle();
     if (!orc) {
