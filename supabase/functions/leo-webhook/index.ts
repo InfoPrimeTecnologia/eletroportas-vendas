@@ -505,6 +505,9 @@ async function chamarIA(messages: any[]) {
 // ===========================
 // Conversa — DB
 // ===========================
+// Janela de inatividade: após 3h sem mensagem, considera "nova sessão" e re-saúda
+const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
+
 async function getOuCriarConversa(telefone: string, nome?: string) {
   const { data: existing } = await supabase
     .from("leo_conversations")
@@ -515,7 +518,12 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
     .limit(1)
     .maybeSingle();
 
-  if (existing) return { conversa: existing, isNova: false };
+  if (existing) {
+    const ultima = new Date(existing.ultima_mensagem_at || existing.created_at).getTime();
+    const inativaHaMuito = Date.now() - ultima > SESSION_GAP_MS;
+    // Reabre a mesma conversa, mas marca como "nova sessão" para re-saudar
+    return { conversa: existing, isNova: inativaHaMuito };
+  }
 
   const { data, error } = await supabase
     .from("leo_conversations")
