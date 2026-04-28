@@ -1005,7 +1005,9 @@ Deno.serve(async (req) => {
     let respostaFinal = "";
     let pdfEnviadoNesteTurno = false;
     let pdfCaptionEnviada = "";
-    for (let i = 0; i < 8; i++) {
+    let gerarOrcamentoFalhas = 0; // contador de DADOS_INSUFICIENTES
+    const MAX_ITER = 5;
+    for (let i = 0; i < MAX_ITER; i++) {
       const ai = await chamarIA(messages);
       const choice = ai.choices?.[0]?.message;
       if (!choice) break;
@@ -1024,6 +1026,18 @@ Deno.serve(async (req) => {
           const retry = await chamarIA(messages);
           respostaFinal = (retry.choices?.[0]?.message?.content || "").trim();
         }
+        break;
+      }
+
+      // Se na última iteração permitida ainda houver tool_calls, abortamos e forçamos resposta textual
+      if (i === MAX_ITER - 1) {
+        console.warn("⚠️ Loop atingiu MAX_ITER ainda chamando tools — forçando resposta textual");
+        messages.push({
+          role: "system",
+          content: "PARE de chamar ferramentas. Responda ao cliente AGORA em UMA mensagem curta em português, perguntando UMA pergunta sobre o próximo dado que falta no fluxo (medidas → lâmina → CEP). NÃO use tool_calls.",
+        });
+        const forced = await chamarIA(messages);
+        respostaFinal = (forced.choices?.[0]?.message?.content || "").trim();
         break;
       }
 
