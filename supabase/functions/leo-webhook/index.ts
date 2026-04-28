@@ -895,13 +895,23 @@ Deno.serve(async (req) => {
               toolResult = { ok: false, error: "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
             }
 
-            // atualiza tipo_cliente na conversa
-            await supabase
+            // atualiza tipo_cliente na conversa (normaliza para valores aceitos pelo CHECK)
+            const tcRaw = String(args.tipo_cliente || "").toLowerCase().trim();
+            const tcNorm = tcRaw.includes("revenda")
+              ? "revenda"
+              : tcRaw.includes("porta") || tcRaw.includes("instalad")
+                ? "porta_instalada"
+                : "indefinido";
+            const { error: updErr } = await supabase
               .from("leo_conversations")
-              .update({ tipo_cliente: args.tipo_cliente, ultima_mensagem_at: new Date().toISOString() })
+              .update({ tipo_cliente: tcNorm, ultima_mensagem_at: new Date().toISOString() })
               .eq("id", conversa.id);
+            if (updErr) {
+              console.error("⚠️ Falha ao atualizar tipo_cliente:", JSON.stringify(updErr), "valor recebido:", args.tipo_cliente);
+            }
           } catch (e: any) {
-            toolResult = { ok: false, error: e.message };
+            console.error("❌ Erro em gerar_orcamento:", e?.message, e);
+            toolResult = { ok: false, error: e?.message || "erro ao gerar orçamento" };
           }
         } else if (fnName === "cadastrar_cliente") {
           const r = await cadastrarCliente({
