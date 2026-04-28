@@ -304,21 +304,50 @@ async function enviarTexto(numero: string, texto: string) {
 }
 
 async function enviarPdfBase64(numero: string, base64: string, filename: string, caption?: string) {
-  // Tentativa 1: payload padrão PrimeSync (campo "media" + "fileName")
-  const payloads = [
+  const captionTxt = caption || "Segue seu orçamento em PDF.";
+  const dataUrl = `data:application/pdf;base64,${base64}`;
+
+  // Múltiplos formatos conhecidos de APIs estilo Whaticket/PrimeSync/Codechat para envio de documento
+  const payloads: Array<Record<string, unknown>> = [
+    // 1) Whaticket/PrimeSync — array "medias" com objeto file
     {
       number: numero,
-      body: caption || "Segue seu orçamento em PDF.",
-      media: base64,
+      body: captionTxt,
+      medias: [
+        {
+          name: filename,
+          fileName: filename,
+          mimetype: "application/pdf",
+          mediaType: "document",
+          data: base64,
+          base64,
+        },
+      ],
+    },
+    // 2) PrimeSync — campos planos com data URL
+    {
+      number: numero,
+      body: captionTxt,
+      mediaUrl: dataUrl,
       fileName: filename,
       mediaType: "document",
       mimeType: "application/pdf",
     },
+    // 3) Codechat/Evolution style
     {
       number: numero,
-      body: caption || "Segue seu orçamento em PDF.",
-      mediaBase64: base64,
-      filename,
+      caption: captionTxt,
+      fileName: filename,
+      mediatype: "document",
+      mimetype: "application/pdf",
+      media: base64,
+    },
+    // 4) Tentativa antiga (fallback)
+    {
+      number: numero,
+      body: captionTxt,
+      media: base64,
+      fileName: filename,
       mediaType: "document",
       mimeType: "application/pdf",
     },
@@ -335,8 +364,9 @@ async function enviarPdfBase64(numero: string, base64: string, filename: string,
         body: JSON.stringify(payload),
       });
       const txt = await r.text();
-      console.log(`📎 PrimeSync PDF tentativa ${idx + 1}: status=${r.status} resp=${txt.substring(0, 300)}`);
-      if (r.ok) return true;
+      const ok = r.ok && !/erro|error|invalid|missing/i.test(txt);
+      console.log(`📎 PrimeSync PDF tentativa ${idx + 1}: status=${r.status} ok=${ok} resp=${txt.substring(0, 300)}`);
+      if (ok) return true;
     } catch (e) {
       console.error(`📎 PrimeSync PDF tentativa ${idx + 1} exceção:`, e);
     }
