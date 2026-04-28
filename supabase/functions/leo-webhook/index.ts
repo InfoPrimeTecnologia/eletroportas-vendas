@@ -1335,7 +1335,7 @@ async function interpretarAceiteContextual(params: { texto: string; historico: a
           ultima_mensagem: params.texto,
         }),
       },
-    ]);
+    ], { tools: null, temperature: 0 });
     const raw = (ai.choices?.[0]?.message?.content || "").trim();
     const parsed = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/```$/i, ""));
     return parsed?.aceitou === true && Number(parsed?.confianca || 0) >= 0.75;
