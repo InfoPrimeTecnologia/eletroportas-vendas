@@ -63,12 +63,16 @@ async function buscarClientePorTelefone(telefone: string) {
   ].filter(Boolean)));
 
   for (const v of variacoes) {
-    const { data } = await legacyDb
+    const { data, error } = await legacyDb
       .from("Clientes")
-      .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE, tipo_cliente")
+      .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE")
       .ilike("CLI_FONE", `%${v}%`)
       .limit(1)
       .maybeSingle();
+    if (error) {
+      console.error("buscarClientePorTelefone erro:", error?.message || error);
+      continue;
+    }
     if (data) return data;
   }
   return null;
@@ -81,22 +85,61 @@ async function cadastrarCliente(input: {
   documento: string; // CNPJ ou CPF
   telefone: string;
 }) {
+  // Validações antes de tocar no DB para não bater erro de PK vazia / duplicate
+  const nome = (input.nome || "").trim();
+  const documento = (input.documento || "").replace(/\D/g, "");
+  const telefone = normalizarTelefone(input.telefone);
+
+  const faltando: string[] = [];
+  if (!nome) faltando.push("nome completo");
+  if (!documento) faltando.push("CNPJ ou CPF");
+  if (faltando.length) {
+    return { ok: false, error: `Dados faltando: ${faltando.join(", ")}. Peça ao cliente educadamente.` };
+  }
+  if (documento.length < 11) {
+    return { ok: false, error: "Documento inválido (mínimo 11 dígitos). Peça novamente ao cliente." };
+  }
+
+  // Verifica se já existe pelo CNPJ (PK) — evita duplicate key
+  const { data: existente } = await legacyDb
+    .from("Clientes")
+    .select("CLI_CNPJ")
+    .eq("CLI_CNPJ", documento)
+    .maybeSingle();
+  if (existente) {
+    // Atualiza dados em vez de duplicar
+    const { error: updErr } = await legacyDb
+      .from("Clientes")
+      .update({
+        CLI_NOME: nome,
+        CLI_EMAIL: input.email || null,
+        CLI_FONE: telefone,
+      })
+      .eq("CLI_CNPJ", documento);
+    if (updErr) {
+      console.error("Erro ao atualizar cliente:", updErr);
+      return { ok: false, error: updErr.message || "Falha ao atualizar cadastro." };
+    }
+    return { ok: true, cliente: { CLI_CNPJ: documento, CLI_NOME: nome }, atualizado: true };
+  }
+
   const { data, error } = await legacyDb
     .from("Clientes")
     .insert({
-      CLI_CNPJ: input.documento,
-      CLI_NOME: input.nome,
+      CLI_CNPJ: documento,
+      CLI_NOME: nome,
       CLI_EMAIL: input.email || null,
-      CLI_FONE: normalizarTelefone(input.telefone),
+      CLI_FONE: telefone,
     })
     .select()
     .single();
   if (error) {
     console.error("Erro ao cadastrar cliente:", error);
-    return { ok: false, error: error.message };
+    return { ok: false, error: error.message || "Falha ao cadastrar." };
   }
   return { ok: true, cliente: data };
 }
+
 
 // ===========================
 // CÁLCULO DE ORÇAMENTO
@@ -533,12 +576,12 @@ const TOOLS = [
     type: "function",
     function: {
       name: "cadastrar_cliente",
-      description: "Cadastra um novo cliente no banco de dados. Use APENAS quando tiver coletado nome, e-mail e CNPJ/CPF do cliente novo.",
+      description: "Cadastra um novo cliente no banco de dados. Use APENAS quando tiver coletado nome completo e CNPJ (ou CPF). Email é opcional — pode chamar sem se o cliente não quis informar.",
       parameters: {
         type: "object",
         properties: {
           nome: { type: "string", description: "Nome completo do cliente" },
-          email: { type: "string", description: "E-mail do cliente" },
+          email: { type: "string", description: "E-mail do cliente (opcional)" },
           documento: { type: "string", description: "CNPJ ou CPF (apenas números ou formatado)" },
         },
         required: ["nome", "documento"],
@@ -652,6 +695,7 @@ Deno.serve(async (req) => {
     });
   }
 
+  let telefoneFallback = "";
   try {
     const raw = await req.json();
     console.log("📨 Webhook recebido:", JSON.stringify(raw).substring(0, 800));
@@ -680,6 +724,7 @@ Deno.serve(async (req) => {
     const messageId: string | undefined = body?.messageId || body?.id;
     const contact = body?.contact || {};
     const telefone: string = contact?.phoneNumber || body?.from || "";
+    telefoneFallback = telefone;
     const nome: string = contact?.name || contact?.pushname || "";
     const ticketId: number | undefined = body?.ticket?.id;
 
@@ -905,8 +950,16 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
-    console.error("leo-webhook erro:", e);
-    return new Response(JSON.stringify({ error: e.message }), {
+    const errMsg = e?.message || e?.error_description || JSON.stringify(e) || "erro desconhecido";
+    console.error("leo-webhook erro:", errMsg, e);
+    // Tenta avisar o cliente mesmo em erro fatal — agente nunca pode ficar mudo
+    try {
+      const tel = normalizarTelefone(telefoneFallback);
+      if (tel) {
+        await enviarTexto(tel, "Tive uma instabilidade momentânea aqui. Pode reenviar sua última mensagem? 🙏");
+      }
+    } catch (_) { /* silencioso */ }
+    return new Response(JSON.stringify({ error: errMsg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
