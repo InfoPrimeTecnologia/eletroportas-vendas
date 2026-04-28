@@ -744,8 +744,13 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
   if (existing) {
     const ultima = new Date(existing.ultima_mensagem_at || existing.created_at).getTime();
     const inativaHaMuito = Date.now() - ultima > SESSION_GAP_MS;
-    // Reabre a mesma conversa, mas marca como "nova sessão" para re-saudar
-    return { conversa: existing, isNova: inativaHaMuito };
+    if (!inativaHaMuito) return { conversa: existing, isNova: false };
+
+    // Nova sessão de verdade: encerra a anterior para não reaproveitar estado/histórico antigo.
+    await supabase
+      .from("leo_conversations")
+      .update({ status: "encerrada", ultima_mensagem_at: new Date().toISOString() })
+      .eq("id", existing.id);
   }
 
   const { data, error } = await supabase
@@ -846,6 +851,62 @@ async function salvarMensagem(conversation_id: string, role: string, content: st
   if (error) throw error;
 }
 
+function inferirTipoClienteTexto(texto: string): "porta_instalada" | "revenda" | null {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/\b(revenda|revender|revendedor|fornecimento|sem instalacao)\b/.test(t)) return "revenda";
+  if (/\b(instalada|instalar|instalacao|com instalacao|porta instalada)\b/.test(t)) return "porta_instalada";
+  return null;
+}
+
+function inferirMedidasTexto(texto: string): { largura: number; altura: number } | null {
+  const t = (texto || "").toLowerCase().replace(/,/g, ".");
+  const match = t.match(/(\d+(?:\.\d+)?)\s*(?:x|×|por|\/|-)\s*(\d+(?:\.\d+)?)/i);
+  if (!match) return null;
+  const largura = Number(match[1]);
+  const altura = Number(match[2]);
+  if (!Number.isFinite(largura) || !Number.isFinite(altura) || largura <= 0 || altura <= 0 || largura > 20 || altura > 20) return null;
+  return { largura, altura };
+}
+
+function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo" | null {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/\b(1|fechada|fechado|lisa|liso|meia cana)\b/.test(t)) return "fechado";
+  if (/\b(2|transvision|transvisao|visor|visores)\b/.test(t)) return "transvision";
+  if (/\b(3|oblongo|perfurada|perfurado)\b/.test(t)) return "oblongo";
+  return null;
+}
+
+async function aplicarExtracaoDeterministica(conversaId: string, telefone: string, texto: string) {
+  const { data: estado } = await supabase
+    .from("leo_conversations")
+    .select("tipo_cliente, largura, altura, tipo_perfil")
+    .eq("id", conversaId)
+    .maybeSingle();
+
+  const patch: Record<string, unknown> = {};
+  const tipo = inferirTipoClienteTexto(texto);
+  if (tipo && (!estado?.tipo_cliente || estado.tipo_cliente === "indefinido")) patch.tipo_cliente = tipo;
+
+  const medidas = inferirMedidasTexto(texto);
+  if (medidas && (estado?.largura == null || estado?.altura == null)) {
+    patch.largura = medidas.largura;
+    patch.altura = medidas.altura;
+  }
+
+  const lamina = inferirLaminaTexto(texto);
+  if (lamina && !estado?.tipo_perfil) patch.tipo_perfil = lamina;
+
+  if (Object.keys(patch).length > 0) {
+    patch.ultima_mensagem_at = new Date().toISOString();
+    const { error } = await supabase.from("leo_conversations").update(patch).eq("id", conversaId);
+    if (error) console.error("⚠️ Falha na extração determinística:", error.message);
+    else console.log("✅ Estado atualizado por extração determinística:", JSON.stringify(patch));
+    if (patch.tipo_cliente === "porta_instalada" || patch.tipo_cliente === "revenda") {
+      try { await atualizarTipoClienteLegado(telefone, patch.tipo_cliente as any); } catch (_) {}
+    }
+  }
+}
+
 async function mensagemJaProcessada(conversation_id: string, messageId?: string) {
   if (!messageId) return false;
   const { data } = await supabase
@@ -863,9 +924,9 @@ async function carregarHistorico(conversation_id: string) {
     .from("leo_messages")
     .select("role, content")
     .eq("conversation_id", conversation_id)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(40);
-  return (data || []).map((m) => ({ role: m.role, content: m.content }));
+  return (data || []).reverse().map((m) => ({ role: m.role, content: m.content }));
 }
 
 // ===========================
@@ -932,18 +993,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    const rawTimestamp = Number(body?.timestamp || 0);
-    if (rawTimestamp && conversa.ultima_mensagem_at) {
-      const eventTime = rawTimestamp > 9999999999 ? rawTimestamp : rawTimestamp * 1000;
-      const lastTime = new Date(conversa.ultima_mensagem_at).getTime();
-      if (lastTime - eventTime > 30_000) {
-        console.log("⏭️ Ignorado: webhook antigo/reentregue", { messageId, eventTime, lastTime });
-        return new Response(JSON.stringify({ ignored: "stale_webhook" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    }
-
     if (await mensagemJaProcessada(conversa.id, messageId)) {
       console.log("⏭️ Ignorado: messageId já processado", messageId);
       return new Response(JSON.stringify({ ignored: "duplicate_message_id" }), {
@@ -966,6 +1015,7 @@ Deno.serve(async (req) => {
       .from("leo_conversations")
       .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
       .eq("id", conversa.id);
+    await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
 
     const historicoDb = await carregarHistorico(conversa.id);
     const historicoTemMensagemAtual = historicoDb.some(
@@ -1013,7 +1063,6 @@ Deno.serve(async (req) => {
       ];
       if (precisaFrete) {
         linhas.push(`cep=${v(c?.cep)}`);
-        linhas.push(`frete=${v(c?.frete)}`);
       }
       const pendentes = linhas.filter((l) => l.endsWith("=PENDENTE")).map((l) => l.split("=")[0]);
       const proximo = pendentes[0] || "TODOS_OK_CHAMAR_GERAR_ORCAMENTO";
