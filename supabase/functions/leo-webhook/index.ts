@@ -1799,8 +1799,22 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
-    const errMsg = e?.message || e?.error_description || e?.details || e?.hint || e?.code || JSON.stringify(e) || "erro desconhecido";
-    console.error("leo-webhook erro:", errMsg, "stack:", e?.stack, "raw:", JSON.stringify(e, Object.getOwnPropertyNames(e || {})));
+    // Captura defensiva: PostgrestError costuma ter message/details/hint/code,
+    // mas em alguns recarregamentos do schema cache vem tudo em branco.
+    const partes = [
+      e?.message,
+      e?.error_description,
+      e?.details,
+      e?.hint,
+      e?.code ? `code=${e.code}` : null,
+      e?.status ? `status=${e.status}` : null,
+      e?.statusText,
+      e?.name,
+    ].filter(Boolean);
+    const errMsg = partes.join(" | ") || (typeof e === "string" ? e : "") || "erro desconhecido (objeto vazio)";
+    let raw = "";
+    try { raw = JSON.stringify(e, Object.getOwnPropertyNames(e || {})); } catch { raw = String(e); }
+    console.error("leo-webhook erro:", errMsg, "| stack:", e?.stack || "n/a", "| raw:", raw, "| typeof:", typeof e, "| ctor:", e?.constructor?.name);
     // Não retorna 500 nem envia texto genérico: isso fazia o provedor reentregar webhooks antigos
     // e o cliente recebia "instabilidade" duplicada mesmo quando o próximo passo já tinha sido enviado.
     return new Response(JSON.stringify({ ok: false, handled: true, error: errMsg }), {
