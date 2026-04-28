@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/contexts/AuthContext";
@@ -73,6 +73,7 @@ export default function AgenteLeo() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [loading, setLoading] = useState(true);
+  const selectedConvIdRef = useRef<string | null>(null);
 
   const callLeoAdmin = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("leo-admin", { body });
@@ -80,8 +81,8 @@ export default function AgenteLeo() {
     return data as any;
   }, []);
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
+  const fetchAll = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await callLeoAdmin({ action: "list" });
       const convs = (data.conversations || []) as Conversation[];
@@ -91,11 +92,14 @@ export default function AgenteLeo() {
       const map: Record<string, string> = {};
       keys.forEach((k: ApiKey) => (map[k.key_name] = k.key_value || ""));
       setEditKeys(map);
-      setSelectedConv((current) => current ?? convs.find((c) => c.status === "ativa") ?? convs[0] ?? null);
+      setSelectedConv((current) => {
+        if (!current) return convs.find((c) => c.status === "ativa") ?? convs[0] ?? null;
+        return convs.find((c) => c.id === current.id) ?? current;
+      });
     } catch (error) {
       toast({ title: "Erro ao carregar Agente Leo", description: error instanceof Error ? error.message : "Falha ao buscar conversas.", variant: "destructive" });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [callLeoAdmin]);
 
