@@ -151,8 +151,17 @@ Deno.serve(async (req) => {
     }
 
     return json({ error: "Ação inválida." }, 400);
-  } catch (error) {
-    console.error("leo-admin erro:", error);
-    return json({ error: error instanceof Error ? error.message : "Erro interno." }, 500);
+  } catch (error: any) {
+    const detalhe =
+      error?.message ||
+      error?.error_description ||
+      error?.details ||
+      error?.hint ||
+      error?.code ||
+      (typeof error === "string" ? error : "") ||
+      JSON.stringify(error, Object.getOwnPropertyNames(error || {})) ||
+      "Erro interno.";
+    console.error("leo-admin erro:", detalhe, "raw:", JSON.stringify(error));
+    return json({ error: detalhe, action }, 500);
   }
 });
