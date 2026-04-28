@@ -1630,6 +1630,14 @@ Deno.serve(async (req) => {
               if (pdfEnviado) {
                 pdfEnviadoNesteTurno = true;
                 pdfCaptionEnviada = captionPdf;
+                // ➕ DASHBOARD: salva orçamento + anexo PDF e move lead para "orcamento_enviado"
+                await registrarOrcamentoEAvancarFunil({
+                  telefone,
+                  nome: conversa.nome_cliente || nome || "",
+                  orcamento: o,
+                  pdfBase64: pdfB64,
+                  filename,
+                });
               }
               toolResult = {
                 ok: pdfEnviado,
