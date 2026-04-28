@@ -111,32 +111,40 @@ export default function AgenteLeo() {
     if (!authLoading && (!roleLoading || isPrimeSyncOwner)) setLoading(false);
   }, [authLoading, canManageAgent, fetchAll, isPrimeSyncOwner, roleLoading]);
 
+  useEffect(() => {
+    selectedConvIdRef.current = selectedConv?.id ?? null;
+  }, [selectedConv?.id]);
+
+  const loadMessages = useCallback(async (convId: string, silent = false) => {
+    if (!silent) setLoadingMsgs(true);
+    try {
+      const data = await callLeoAdmin({ action: "messages", conversationId: convId });
+      setMessages((data.messages as Message[]) || []);
+    } catch (error) {
+      if (!silent) {
+        toast({ title: "Erro ao abrir conversa", description: error instanceof Error ? error.message : "Falha ao buscar mensagens.", variant: "destructive" });
+      }
+    } finally {
+      if (!silent) setLoadingMsgs(false);
+    }
+  }, [callLeoAdmin]);
+
   // Realtime
   useEffect(() => {
     if (!canManageAgent) return;
     const channel = supabase
       .channel("leo-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "leo_conversations" }, () => fetchAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "leo_conversations" }, () => fetchAll(true))
       .on("postgres_changes", { event: "*", schema: "public", table: "leo_messages" }, () => {
-        if (selectedConv) loadMessages(selectedConv.id);
+        fetchAll(true);
+        const convId = selectedConvIdRef.current;
+        if (convId) loadMessages(convId, true);
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [canManageAgent, fetchAll, selectedConv]);
-
-  const loadMessages = async (convId: string) => {
-    setLoadingMsgs(true);
-    try {
-      const data = await callLeoAdmin({ action: "messages", conversationId: convId });
-      setMessages((data.messages as Message[]) || []);
-    } catch (error) {
-      toast({ title: "Erro ao abrir conversa", description: error instanceof Error ? error.message : "Falha ao buscar mensagens.", variant: "destructive" });
-    } finally {
-      setLoadingMsgs(false);
-    }
-  };
+  }, [canManageAgent, fetchAll, loadMessages]);
 
   const openConversation = (conv: Conversation) => {
     setSelectedConv(conv);
