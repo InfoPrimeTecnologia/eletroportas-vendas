@@ -744,8 +744,13 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
   if (existing) {
     const ultima = new Date(existing.ultima_mensagem_at || existing.created_at).getTime();
     const inativaHaMuito = Date.now() - ultima > SESSION_GAP_MS;
-    // Reabre a mesma conversa, mas marca como "nova sessão" para re-saudar
-    return { conversa: existing, isNova: inativaHaMuito };
+    if (!inativaHaMuito) return { conversa: existing, isNova: false };
+
+    // Nova sessão de verdade: encerra a anterior para não reaproveitar estado/histórico antigo.
+    await supabase
+      .from("leo_conversations")
+      .update({ status: "encerrada", ultima_mensagem_at: new Date().toISOString() })
+      .eq("id", existing.id);
   }
 
   const { data, error } = await supabase
