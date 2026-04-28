@@ -74,28 +74,29 @@ export default function AgenteLeo() {
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const callLeoAdmin = async (body: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke("leo-admin", { body });
+    if (error) throw error;
+    return data as any;
+  };
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    const [convRes, keysRes] = await Promise.all([
-      supabase
-        .from("leo_conversations" as any)
-        .select("id,telefone,tipo_cliente,nome_cliente,status,ultima_mensagem_at,created_at")
-        .order("ultima_mensagem_at", { ascending: false })
-        .limit(100),
-      supabase
-        .from("leo_api_keys" as any)
-        .select("id,key_name,key_value,description,updated_at")
-        .order("key_name"),
-    ]);
-    if (!convRes.error) setConversations((convRes.data as any) || []);
-    if (!keysRes.error) {
-      const keys = (keysRes.data as any) || [];
+    try {
+      const data = await callLeoAdmin({ action: "list" });
+      const convs = (data.conversations || []) as Conversation[];
+      const keys = (data.apiKeys || []) as ApiKey[];
+      setConversations(convs);
       setApiKeys(keys);
       const map: Record<string, string> = {};
       keys.forEach((k: ApiKey) => (map[k.key_name] = k.key_value || ""));
       setEditKeys(map);
+      setSelectedConv((current) => current ?? convs.find((c) => c.status === "ativa") ?? convs[0] ?? null);
+    } catch (error) {
+      toast({ title: "Erro ao carregar Agente Leo", description: error instanceof Error ? error.message : "Falha ao buscar conversas.", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -123,13 +124,14 @@ export default function AgenteLeo() {
 
   const loadMessages = async (convId: string) => {
     setLoadingMsgs(true);
-    const { data, error } = await supabase
-      .from("leo_messages" as any)
-      .select("*")
-      .eq("conversation_id", convId)
-      .order("created_at", { ascending: true });
-    if (!error) setMessages((data as any) || []);
-    setLoadingMsgs(false);
+    try {
+      const data = await callLeoAdmin({ action: "messages", conversationId: convId });
+      setMessages((data.messages as Message[]) || []);
+    } catch (error) {
+      toast({ title: "Erro ao abrir conversa", description: error instanceof Error ? error.message : "Falha ao buscar mensagens.", variant: "destructive" });
+    } finally {
+      setLoadingMsgs(false);
+    }
   };
 
   const openConversation = (conv: Conversation) => {
