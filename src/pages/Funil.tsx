@@ -178,7 +178,7 @@ const Funil = () => {
     const phones = rawLeads.map((l: LeadFunil) => l.telefone).filter(Boolean) as string[];
     if (phones.length > 0) {
       const uniquePhones = [...new Set(phones)];
-      const { data: clientes } = await supabase
+      const { data: clientes } = await (supabase as any)
         .from('Clientes')
         .select('CLI_FONE, CLI_NOME, CLI_EMAIL, CLI_CNPJ')
         .in('CLI_FONE', uniquePhones);
@@ -256,7 +256,7 @@ const Funil = () => {
           let clienteNome = orc.cliente_nome || 'Cliente';
           let clienteEmail: string | null = null;
           if (orc.cliente_telefone) {
-            const { data: cliData } = await supabase
+            const { data: cliData } = await (supabase as any)
               .from('Clientes')
               .select('CLI_NOME, CLI_EMAIL')
               .eq('CLI_FONE', orc.cliente_telefone)
@@ -295,7 +295,7 @@ const Funil = () => {
           let clienteNome = pedido.cliente_nome || 'Cliente';
           let clienteEmail: string | null = null;
           if (pedido.cliente_telefone) {
-            const { data: cliData } = await supabase
+            const { data: cliData } = await (supabase as any)
               .from('Clientes')
               .select('CLI_NOME, CLI_EMAIL')
               .eq('CLI_FONE', pedido.cliente_telefone)

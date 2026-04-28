@@ -49,7 +49,7 @@ export function useClientes() {
 
   const createCliente = useMutation({
     mutationFn: async (cliente: ClienteInsert) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('Clientes')
         .insert(cliente)
         .select()
@@ -68,7 +68,7 @@ export function useClientes() {
 
   const updateCliente = useMutation({
     mutationFn: async ({ cnpj, updates }: { cnpj: string; updates: Partial<ClienteInsert> }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('Clientes')
         .update(updates)
         .eq('CLI_CNPJ', cnpj)
@@ -88,7 +88,7 @@ export function useClientes() {
 
   const deleteCliente = useMutation({
     mutationFn: async (cnpj: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('Clientes')
         .delete()
         .eq('CLI_CNPJ', cnpj);

@@ -26,7 +26,7 @@ export default function ClientePicker({ value, onChange }: ClientePickerProps) {
     setLoading(true);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("Clientes")
         .select("*")
         .or(`CLI_NOME.ilike.%${query}%,CLI_CNPJ.ilike.%${query}%,CLI_EMAIL.ilike.%${query}%,CLI_FONE.ilike.%${query}%`)

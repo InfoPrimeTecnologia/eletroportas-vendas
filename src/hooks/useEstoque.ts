@@ -9,7 +9,7 @@ export function useEstoque() {
   const { data: items = [], isLoading, error } = useQuery({
     queryKey: ['estoque'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('estoque')
         .select('*')
         .order('produto_nome');
@@ -21,7 +21,7 @@ export function useEstoque() {
 
   const createItem = useMutation({
     mutationFn: async (item: EstoqueInsert) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('estoque')
         .insert(item)
         .select()
@@ -41,7 +41,7 @@ export function useEstoque() {
 
   const updateItem = useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: EstoqueUpdate }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('estoque')
         .update({ ...updates, data_atualizacao: new Date().toISOString() })
         .eq('id', id)
@@ -62,7 +62,7 @@ export function useEstoque() {
 
   const deleteItem = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('estoque')
         .delete()
         .eq('id', id);
