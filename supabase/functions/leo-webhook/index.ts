@@ -630,6 +630,7 @@ Deno.serve(async (req) => {
                 mao_de_obra: o.mao_de_obra,
                 frete: o.frete,
                 pdf_enviado: true,
+                instrucao: "Apenas confirme ao cliente que o PDF foi enviado. NÃO mencione valores no chat.",
               };
             } else {
               toolResult = { ok: false, error: "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
