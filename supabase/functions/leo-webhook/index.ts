@@ -32,6 +32,10 @@ const legacyDb = createClient(LEGACY_SUPABASE_URL, LEGACY_SUPABASE_KEY, {
   auth: { persistSession: false },
 });
 
+// A dashboard atual lê/grava no backend legado; qualquer dado comercial
+// gerado pelo Leo precisa ir para este cliente para aparecer nas telas.
+const dashboardDb = legacyDb;
+
 // Saudação por horário (timezone Brasil)
 function saudacaoHorario(): string {
   const hora = new Date().toLocaleString("en-US", {
