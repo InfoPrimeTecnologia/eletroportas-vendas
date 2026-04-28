@@ -1317,7 +1317,7 @@ function pareceAceite(texto: string): boolean {
 /** Converte o último orçamento pendente em pedido de venda e move o lead para "fechado". */
 async function aceitarOrcamentoEGerarPedido(telefone: string) {
   try {
-    const { data: orc } = await supabase
+    const { data: orc } = await dashboardDb
       .from("orcamentos")
       .select("id, numero, cliente_nome, cliente_telefone, valor_total, itens, observacoes, status")
       .eq("cliente_telefone", telefone)
@@ -1335,7 +1335,7 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
     }
 
     // Cria o pedido de venda com base no orçamento
-    const { data: ped, error: pedErr } = await supabase
+    const { data: ped, error: pedErr } = await dashboardDb
       .from("pedidos_venda")
       .insert({
         cliente_nome: orc.cliente_nome,
@@ -1353,12 +1353,12 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
       console.error("⚠️ Falha ao criar pedido_venda:", pedErr.message);
       return null;
     }
-    await supabase.from("orcamentos").update({ status: "aceito" }).eq("id", orc.id);
+    await dashboardDb.from("orcamentos").update({ status: "aceito" }).eq("id", orc.id);
 
     // Move o lead para "fechado"
     const lead = await buscarLeadAberto(telefone);
     if (lead?.id) {
-      await supabase
+      await dashboardDb
         .from("funil_leads")
         .update({
           etapa_key: "fechado",
