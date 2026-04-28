@@ -233,8 +233,8 @@ const Funil = () => {
   const syncPendentes = useCallback(async () => {
     try {
       const [orcRes, pedRes] = await Promise.all([
-        supabase.from('orcamentos').select('*').ilike('status', '%pendente%'),
-        supabase.from('pedidos_venda').select('*').ilike('status', '%pendente%'),
+        (supabase as any).from('orcamentos').select('*').ilike('status', '%pendente%'),
+        (supabase as any).from('pedidos_venda').select('*').ilike('status', '%pendente%'),
       ]);
 
       const existingLeads = await (supabase as any).from('funil_leads').select('id');

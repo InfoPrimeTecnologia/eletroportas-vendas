@@ -15,7 +15,7 @@ export function useEstoque() {
         .order('produto_nome');
       
       if (error) throw error;
-      return data as Estoque[];
+      return data as unknown as Estoque[];
     },
   });
 

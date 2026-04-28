@@ -64,10 +64,10 @@ export default function Relatorios() {
     setLoading(true);
     try {
       const [orcRes, pedRes, allClientes, estRes] = await Promise.all([
-        supabase.from('orcamentos').select('id, numero, cliente_nome, cliente_telefone, status, valor_total, data_criacao, origem').order('data_criacao', { ascending: false }),
-        supabase.from('pedidos_venda').select('id, numero, cliente_nome, cliente_telefone, status, valor_total, data_criacao, origem').order('data_criacao', { ascending: false }),
+        (supabase as any).from('orcamentos').select('id, numero, cliente_nome, cliente_telefone, status, valor_total, data_criacao, origem').order('data_criacao', { ascending: false }),
+        (supabase as any).from('pedidos_venda').select('id, numero, cliente_nome, cliente_telefone, status, valor_total, data_criacao, origem').order('data_criacao', { ascending: false }),
         fetchAllClientes(),
-        supabase.from('estoque').select('id, produto_nome, codigo_sku, tipo_laminas, quantidade, quantidade_minima, preco_custo, preco_venda'),
+        (supabase as any).from('estoque').select('id, produto_nome, codigo_sku, tipo_laminas, quantidade, quantidade_minima, preco_custo, preco_venda'),
       ]);
       setOrcamentos(orcRes.data || []);
       setPedidos(pedRes.data || []);
