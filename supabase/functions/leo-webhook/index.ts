@@ -965,6 +965,32 @@ async function mensagemJaProcessada(conversation_id: string, messageId?: string)
   return Boolean(data);
 }
 
+async function mensagemForaDeOrdem(conversation_id: string, rawTimestamp?: string | number | null) {
+  const incomingTs = Number(rawTimestamp || 0);
+  if (!Number.isFinite(incomingTs) || incomingTs <= 0) return false;
+
+  const { data, error } = await supabase
+    .from("leo_messages")
+    .select("metadata")
+    .eq("conversation_id", conversation_id)
+    .eq("role", "user")
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.error("⚠️ Falha ao verificar ordem da mensagem:", error.message || error);
+    return false;
+  }
+
+  const latestTs = (data || [])
+    .map((m: any) => Number(m?.metadata?.raw_timestamp || 0))
+    .filter((ts: number) => Number.isFinite(ts) && ts > 0)
+    .sort((a: number, b: number) => b - a)[0];
+
+  // Ignora reentregas antigas do provedor. Mantém 2s de tolerância para pequenas variações.
+  return Boolean(latestTs && incomingTs < latestTs - 2000);
+}
+
 async function carregarHistorico(conversation_id: string) {
   const { data } = await supabase
     .from("leo_messages")
