@@ -975,7 +975,17 @@ Deno.serve(async (req) => {
       contextoCliente = `[CONTEXTO] Cliente NÃO CADASTRADO (telefone ${telefone}). Inicie pelo Passo 1 (cadastro).`;
     }
 
-    console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"}`);
+    // Acrescenta status do tipo_cliente JÁ GRAVADO nesta sessão (evita reperguntar)
+    const tipoConversa = (conversa as any).tipo_cliente as string | undefined;
+    if (tipoConversa === "porta_instalada") {
+      contextoCliente += ` [SESSÃO] tipo_cliente DEFINIDO = porta_instalada. NÃO chame definir_tipo_cliente nem pergunte de novo. Avance para Passo 3 (medidas), ou Passo 4/5/6 conforme o que falta no histórico.`;
+    } else if (tipoConversa === "revenda") {
+      contextoCliente += ` [SESSÃO] tipo_cliente DEFINIDO = revenda. NÃO chame definir_tipo_cliente nem pergunte de novo. Avance para Passo 3 (medidas), ou Passo 4/6 conforme o que falta no histórico.`;
+    } else {
+      contextoCliente += ` [SESSÃO] tipo_cliente NÃO DEFINIDO ainda — siga o Passo 2 e chame definir_tipo_cliente assim que o cliente responder.`;
+    }
+
+    console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"} | tipo_sessao: ${tipoConversa || "indefinido"}`);
 
     // Loop do agente: até 5 iterações de tool calling
     let messages: any[] = [
