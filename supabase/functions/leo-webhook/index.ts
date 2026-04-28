@@ -1046,6 +1046,16 @@ Deno.serve(async (req) => {
       .eq("id", conversa.id);
     await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
 
+    const estadoAposExtracao = await carregarEstadoConversa(conversa.id);
+    const perguntaDeterministica = proximaPerguntaDeterministica(estadoAposExtracao);
+    if (perguntaDeterministica) {
+      await salvarMensagem(conversa.id, "assistant", perguntaDeterministica, { deterministic_flow: true });
+      await enviarTexto(telefone, perguntaDeterministica);
+      return new Response(JSON.stringify({ ok: true, deterministic_flow: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const historicoDb = await carregarHistorico(conversa.id);
     const historicoTemMensagemAtual = historicoDb.some(
       (m) => m.role === "user" && m.content.trim().toLowerCase() === messageBody.trim().toLowerCase()
