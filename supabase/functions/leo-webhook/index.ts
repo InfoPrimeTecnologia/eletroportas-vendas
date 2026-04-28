@@ -876,10 +876,15 @@ function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo
   return null;
 }
 
+function inferirCepTexto(texto: string): string | null {
+  const match = (texto || "").match(/\b\d{5}-?\d{3}\b/);
+  return match ? match[0].replace(/\D/g, "") : null;
+}
+
 async function aplicarExtracaoDeterministica(conversaId: string, telefone: string, texto: string) {
   const { data: estado } = await supabase
     .from("leo_conversations")
-    .select("tipo_cliente, largura, altura, tipo_perfil")
+    .select("tipo_cliente, largura, altura, tipo_perfil, cep")
     .eq("id", conversaId)
     .maybeSingle();
 
@@ -895,6 +900,18 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
 
   const lamina = inferirLaminaTexto(texto);
   if (lamina && !estado?.tipo_perfil) patch.tipo_perfil = lamina;
+
+  const cep = inferirCepTexto(texto);
+  if (cep && estado?.tipo_cliente === "porta_instalada" && !estado?.cep) {
+    const frete: any = await calcularFretePorCep(cep);
+    if (frete.ok) {
+      patch.cep = frete.cep;
+      patch.frete = frete.frete;
+      patch.endereco_instalacao = [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
+        .filter((x: any) => x && String(x).trim())
+        .join(", ") || null;
+    }
+  }
 
   if (Object.keys(patch).length > 0) {
     patch.ultima_mensagem_at = new Date().toISOString();
