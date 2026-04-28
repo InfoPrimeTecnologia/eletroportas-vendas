@@ -16,7 +16,7 @@ export function useUserRole() {
         .select('role')
         .eq('user_id', user.id);
 
-      if (error) return null;
+      if (error) throw error;
 
       const roles = (data ?? []).map((r) => r.role as AppRole);
 
@@ -27,6 +27,11 @@ export function useUserRole() {
       return null;
     },
     enabled: !authLoading && !!user?.id && !!session?.access_token,
+    retry: 5,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const { data: permissions, isLoading: permissionsLoading } = useQuery({
