@@ -701,6 +701,18 @@ Deno.serve(async (req) => {
       });
     }
 
+    const rawTimestamp = Number(body?.timestamp || 0);
+    if (rawTimestamp && conversa.ultima_mensagem_at) {
+      const eventTime = rawTimestamp > 9999999999 ? rawTimestamp : rawTimestamp * 1000;
+      const lastTime = new Date(conversa.ultima_mensagem_at).getTime();
+      if (lastTime - eventTime > 30_000) {
+        console.log("⏭️ Ignorado: webhook antigo/reentregue", { messageId, eventTime, lastTime });
+        return new Response(JSON.stringify({ ignored: "stale_webhook" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     if (await mensagemJaProcessada(conversa.id, messageId)) {
       console.log("⏭️ Ignorado: messageId já processado", messageId);
       return new Response(JSON.stringify({ ignored: "duplicate_message_id" }), {
