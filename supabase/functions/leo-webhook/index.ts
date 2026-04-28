@@ -143,6 +143,36 @@ async function cadastrarCliente(input: {
   return { ok: true, cliente: data };
 }
 
+// Atualiza o tipo_cliente na tabela legada Clientes (procurando pelo telefone)
+async function atualizarTipoClienteLegado(telefone: string, tipo: "porta_instalada" | "revenda") {
+  const tel = normalizarTelefone(telefone);
+  if (!tel) return;
+  const valor = tipo === "porta_instalada" ? "Porta Instalada" : "Revenda";
+  const variacoes = Array.from(new Set([
+    tel,
+    tel.startsWith("55") ? tel.slice(2) : tel,
+    tel.slice(-11),
+    tel.slice(-10),
+  ].filter(Boolean)));
+  for (const v of variacoes) {
+    const { data: found } = await legacyDb
+      .from("Clientes")
+      .select("CLI_CNPJ")
+      .ilike("CLI_FONE", `%${v}%`)
+      .limit(1)
+      .maybeSingle();
+    if (found?.CLI_CNPJ) {
+      const { error } = await legacyDb
+        .from("Clientes")
+        .update({ tipo_cliente: valor })
+        .eq("CLI_CNPJ", found.CLI_CNPJ);
+      if (error) console.error("⚠️ Falha ao atualizar tipo_cliente legado:", error.message);
+      else console.log(`✅ tipo_cliente legado atualizado para "${valor}" (CNPJ ${found.CLI_CNPJ})`);
+      return;
+    }
+  }
+  console.warn(`⚠️ Cliente ${tel} não encontrado no legado para atualizar tipo_cliente`);
+}
 
 // ===========================
 // CÁLCULO DE ORÇAMENTO
@@ -1017,6 +1047,14 @@ Deno.serve(async (req) => {
             if (updErr) {
               console.error("⚠️ Falha ao atualizar tipo_cliente:", JSON.stringify(updErr), "valor recebido:", args.tipo_cliente);
             }
+            // Persiste o tipo na tabela legada Clientes também
+            if (tcNorm === "porta_instalada" || tcNorm === "revenda") {
+              try {
+                await atualizarTipoClienteLegado(telefone, tcNorm);
+              } catch (e: any) {
+                console.error("⚠️ Erro ao propagar tipo_cliente para legado:", e?.message);
+              }
+            }
           } catch (e: any) {
             console.error("❌ Erro em gerar_orcamento:", e?.message, e);
             toolResult = { ok: false, error: e?.message || "erro ao gerar orçamento" };
@@ -1044,6 +1082,8 @@ Deno.serve(async (req) => {
         } else if (fnName === "calcular_frete_cep") {
           const r = await calcularFretePorCep(String(args.cep || ""));
           if (r.ok) {
+            // Se conseguiu calcular o frete, é PORTA INSTALADA na BA — grava no legado
+            try { await atualizarTipoClienteLegado(telefone, "porta_instalada"); } catch (_) {}
             toolResult = {
               ...r,
               instrucao: "NÃO mencione o valor do frete no chat. Chame imediatamente gerar_orcamento usando este frete e os demais dados (largura, altura, tipo_cliente=porta_instalada, tipo_perfil).",
