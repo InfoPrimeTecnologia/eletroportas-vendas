@@ -12,14 +12,15 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const PRIMESYNC_URL = Deno.env.get("PRIMESYNC_URL")!;
 const PRIMESYNC_TOKEN = Deno.env.get("PRIMESYNC_TOKEN")!;
 const DOCRYA_API_KEY = Deno.env.get("DOCRYA_API_KEY")!;
 
 const DOCRYA_URL = "https://www.docrya.com/api/v1/html-to-pdf";
-const AI_GATEWAY_URL = "https://api.openai.com/v1/chat/completions";
-// Modelo OpenAI para vendas
-const AI_MODEL = "gpt-4o-mini";
+const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+// Modelo Lovable AI para agente de vendas com tool calling
+const AI_MODEL = "google/gemini-3-flash-preview";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
@@ -710,7 +711,7 @@ async function chamarIA(messages: any[], options: { tools?: any[] | null; temper
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY || OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: AI_MODEL,
@@ -723,6 +724,8 @@ async function chamarIA(messages: any[], options: { tools?: any[] | null; temper
     });
     if (!r.ok) {
       const t = await r.text();
+      if (r.status === 429) throw new Error("Lovable AI: limite de requisições atingido. Tente novamente em instantes.");
+      if (r.status === 402) throw new Error("Lovable AI: créditos insuficientes no workspace.");
       console.error("IA erro:", r.status, t);
       throw new Error(`IA ${r.status}: ${t}`);
     }
@@ -1642,29 +1645,29 @@ Deno.serve(async (req) => {
       const pareceNovoPedido = /\b(orcamento|orçamento|cotacao|cotação|preco|preço|valor|nova|novo|outra|outro)\b/i.test(messageBody);
       if (jaEnviouPdf && !pareceNovoPedido) {
         console.log("💬 PDF já enviado — seguindo para IA responder sem gerar duplicado");
-      }
-
-      const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
-      if (resultadoPdf.pdf_enviado) {
-        await salvarMensagem(conversa.id, "assistant", resultadoPdf.caption, { pdf_enviado: true, deterministic_flow: true });
-        // ➕ DASHBOARD: salva orçamento + anexo PDF e move lead para "orcamento_enviado"
-        if (resultadoPdf.pdfBase64 && resultadoPdf.orcamento) {
-          await registrarOrcamentoEAvancarFunil({
-            telefone,
-            nome: conversa.nome_cliente || nome || "",
-            orcamento: resultadoPdf.orcamento,
-            pdfBase64: resultadoPdf.pdfBase64,
-            filename: resultadoPdf.filename || `orcamento_${Date.now()}.pdf`,
-          });
-        }
       } else {
-        const aviso = "Consegui levantar os dados, mas tive uma falha ao gerar o PDF. Vou deixar um atendente finalizar o envio por aqui.";
-        await salvarMensagem(conversa.id, "assistant", aviso, { deterministic_flow: true, pdf_error: resultadoPdf.error || resultadoPdf.faltando || null });
-        await enviarTexto(telefone, aviso);
+        const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
+        if (resultadoPdf.pdf_enviado) {
+          await salvarMensagem(conversa.id, "assistant", resultadoPdf.caption, { pdf_enviado: true, deterministic_flow: true });
+          // ➕ DASHBOARD: salva orçamento + anexo PDF e move lead para "orcamento_enviado"
+          if (resultadoPdf.pdfBase64 && resultadoPdf.orcamento) {
+            await registrarOrcamentoEAvancarFunil({
+              telefone,
+              nome: conversa.nome_cliente || nome || "",
+              orcamento: resultadoPdf.orcamento,
+              pdfBase64: resultadoPdf.pdfBase64,
+              filename: resultadoPdf.filename || `orcamento_${Date.now()}.pdf`,
+            });
+          }
+        } else {
+          const aviso = "Consegui levantar os dados, mas tive uma falha ao gerar o PDF. Vou deixar um atendente finalizar o envio por aqui.";
+          await salvarMensagem(conversa.id, "assistant", aviso, { deterministic_flow: true, pdf_error: resultadoPdf.error || resultadoPdf.faltando || null });
+          await enviarTexto(telefone, aviso);
+        }
+        return new Response(JSON.stringify({ ok: true, deterministic_pdf: true, pdf_enviado: Boolean(resultadoPdf.pdf_enviado) }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      return new Response(JSON.stringify({ ok: true, deterministic_pdf: true, pdf_enviado: Boolean(resultadoPdf.pdf_enviado) }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     const historicoDb = await carregarHistorico(conversa.id);
@@ -1721,7 +1724,7 @@ Deno.serve(async (req) => {
 
     console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"}`);
 
-    // Loop do agente: até 5 iterações de tool calling
+    // Loop do agente: LLM + tools, com histórico completo e limite de segurança
     let messages: any[] = [
       { role: "system", content: contextoCliente },
       ...historico,
@@ -1737,7 +1740,7 @@ Deno.serve(async (req) => {
     let pdfEnviadoNesteTurno = false;
     let pdfCaptionEnviada = "";
     let gerarOrcamentoFalhas = 0; // contador de DADOS_INSUFICIENTES
-    const MAX_ITER = 5;
+    const MAX_ITER = 8;
     for (let i = 0; i < MAX_ITER; i++) {
       const ai = await chamarIA(messages);
       const choice = ai.choices?.[0]?.message;
