@@ -1783,6 +1783,23 @@ Deno.serve(async (req) => {
         let toolResult: any = {};
 
         if (fnName === "gerar_orcamento") {
+          const jaExistePdf = await pdfJaEnviadoConversa(conversa.id);
+          const pediuNovoOrcamento = /\b(novo|nova|outro|outra|refazer|alterar|alteração|mudar|trocar|corrigir|atualizar|recalcular|novo orçamento|nova cotação)\b/i.test(messageBody);
+          if (jaExistePdf && !pediuNovoOrcamento) {
+            console.warn("🚫 gerar_orcamento bloqueado — PDF já enviado e cliente fez pergunta geral");
+            toolResult = {
+              ok: false,
+              erro: "PDF_JA_ENVIADO_DUVIDA_GERAL",
+              instrucao: "O PDF já foi enviado e o cliente fez uma dúvida geral. Responda em texto, de forma útil e consultiva. NÃO chame gerar_orcamento e NÃO reenvie PDF.",
+            };
+            messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
+            messages.push({
+              role: "system",
+              content: "STOP. Responda a dúvida do cliente em texto agora. Se a dúvida for prazo de entrega/instalação, explique que depende da confirmação do pedido, agenda de produção/instalação e disponibilidade, e que um atendente confirma o prazo exato após aprovação. NÃO gere PDF.",
+            });
+            continue;
+          }
+
           // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
           const { data: estado } = await supabase
             .from("leo_conversations")
