@@ -724,6 +724,8 @@ async function chamarIA(messages: any[], options: { tools?: any[] | null; temper
     });
     if (!r.ok) {
       const t = await r.text();
+      if (r.status === 429) throw new Error("Lovable AI: limite de requisições atingido. Tente novamente em instantes.");
+      if (r.status === 402) throw new Error("Lovable AI: créditos insuficientes no workspace.");
       console.error("IA erro:", r.status, t);
       throw new Error(`IA ${r.status}: ${t}`);
     }
