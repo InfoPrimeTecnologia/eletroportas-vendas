@@ -732,14 +732,18 @@ async function chamarIA(messages: any[]) {
 const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
 
 async function getOuCriarConversa(telefone: string, nome?: string) {
-  const { data: existing } = await supabase
-    .from("leo_conversations")
-    .select("*")
-    .eq("telefone", telefone)
-    .eq("status", "ativa")
-    .order("ultima_mensagem_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const existingRes = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .select("*")
+      .eq("telefone", telefone)
+      .eq("status", "ativa")
+      .order("ultima_mensagem_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  );
+  if (existingRes.error) console.error("⚠️", descreverErroPg(existingRes.error, "getOuCriarConversa leitura: "));
+  const existing = existingRes.data;
 
   if (existing) {
     const ultima = new Date(existing.ultima_mensagem_at || existing.created_at).getTime();
@@ -747,19 +751,24 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
     if (!inativaHaMuito) return { conversa: existing, isNova: false };
 
     // Nova sessão de verdade: encerra a anterior para não reaproveitar estado/histórico antigo.
-    await supabase
-      .from("leo_conversations")
-      .update({ status: "encerrada", ultima_mensagem_at: new Date().toISOString() })
-      .eq("id", existing.id);
+    const encerrar = await withSchemaRetry(() =>
+      supabase
+        .from("leo_conversations")
+        .update({ status: "encerrada", ultima_mensagem_at: new Date().toISOString() })
+        .eq("id", existing.id)
+    );
+    if (encerrar.error) console.error("⚠️", descreverErroPg(encerrar.error, "getOuCriarConversa encerrar antiga: "));
   }
 
-  const { data, error } = await supabase
-    .from("leo_conversations")
-    .insert({ telefone, tipo_cliente: "indefinido", nome_cliente: nome })
-    .select()
-    .single();
-  if (error) throw error;
-  return { conversa: data, isNova: true };
+  const criar = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .insert({ telefone, tipo_cliente: "indefinido", nome_cliente: nome })
+      .select()
+      .single()
+  );
+  if (criar.error) throw criar.error;
+  return { conversa: criar.data, isNova: true };
 }
 
 // ===========================
@@ -850,7 +859,17 @@ async function calcularFretePorCep(cepRaw: string) {
 async function withSchemaRetry<T extends { error: any }>(fn: () => Promise<T>, tentativas = 4): Promise<T> {
   let ultimo: T | undefined;
   for (let i = 0; i < tentativas; i++) {
-    const r = await fn();
+    let r: T;
+    try {
+      r = await fn();
+    } catch (e: any) {
+      const msg = String(e?.message || e || "");
+      if (/schema cache|Could not query the database|JWT|fetch failed|network|timeout/i.test(msg) && i < tentativas - 1) {
+        await new Promise((res) => setTimeout(res, 300 * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
     const err: any = r?.error;
     if (!err) return r;
     const msg = String(err?.message || "");
@@ -920,28 +939,60 @@ function inferirCepTexto(texto: string): string | null {
   return match ? match[0].replace(/\D/g, "") : null;
 }
 
+function aplicarInferenciasEmEstado(base: any, textos: string[]) {
+  const estado = { ...(base || {}) };
+  for (const txt of textos) {
+    const tipo = inferirTipoClienteTexto(txt);
+    if (tipo && (!estado.tipo_cliente || estado.tipo_cliente === "indefinido")) estado.tipo_cliente = tipo;
+
+    const medidas = inferirMedidasTexto(txt);
+    if (medidas && (estado.largura == null || estado.altura == null)) {
+      estado.largura = medidas.largura;
+      estado.altura = medidas.altura;
+    }
+
+    const lamina = inferirLaminaTexto(txt);
+    if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
+
+    const cep = inferirCepTexto(txt);
+    if (cep && estado.tipo_cliente === "porta_instalada" && !estado.cep) estado.cep = cep;
+  }
+  return estado;
+}
+
 async function aplicarExtracaoDeterministica(conversaId: string, telefone: string, texto: string) {
-  const { data: estado } = await supabase
-    .from("leo_conversations")
-    .select("tipo_cliente, largura, altura, tipo_perfil, cep")
-    .eq("id", conversaId)
-    .maybeSingle();
+  const estadoRes = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, endereco_instalacao")
+      .eq("id", conversaId)
+      .maybeSingle()
+  );
+  if (estadoRes.error) console.error("⚠️", descreverErroPg(estadoRes.error, "leitura estado determinístico falhou: "));
+
+  const histRes = await withSchemaRetry(() =>
+    supabase
+      .from("leo_messages")
+      .select("content")
+      .eq("conversation_id", conversaId)
+      .eq("role", "user")
+      .order("created_at", { ascending: false })
+      .limit(12)
+  );
+  if (histRes.error) console.error("⚠️", descreverErroPg(histRes.error, "leitura histórico determinístico falhou: "));
+
+  const baseEstado = estadoRes.data || {};
+  const textos = [texto, ...((histRes.data || []) as any[]).map((m) => String(m?.content || ""))].filter(Boolean);
+  const estado = aplicarInferenciasEmEstado(baseEstado, textos);
 
   const patch: Record<string, unknown> = {};
-  const tipo = inferirTipoClienteTexto(texto);
-  if (tipo && (!estado?.tipo_cliente || estado.tipo_cliente === "indefinido")) patch.tipo_cliente = tipo;
-
-  const medidas = inferirMedidasTexto(texto);
-  if (medidas && (estado?.largura == null || estado?.altura == null)) {
-    patch.largura = medidas.largura;
-    patch.altura = medidas.altura;
-  }
-
-  const lamina = inferirLaminaTexto(texto);
-  if (lamina && !estado?.tipo_perfil) patch.tipo_perfil = lamina;
+  if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
+  if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
+  if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
+  if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
 
   const cep = inferirCepTexto(texto);
-  if (cep && estado?.tipo_cliente === "porta_instalada" && !estado?.cep) {
+  if (cep && estado?.tipo_cliente === "porta_instalada" && !baseEstado?.cep) {
     const frete: any = await calcularFretePorCep(cep);
     if (frete.ok) {
       patch.cep = frete.cep;
@@ -954,22 +1005,29 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
 
   if (Object.keys(patch).length > 0) {
     patch.ultima_mensagem_at = new Date().toISOString();
-    const { error } = await supabase.from("leo_conversations").update(patch).eq("id", conversaId);
-    if (error) console.error("⚠️ Falha na extração determinística:", error.message);
+    const { error } = await withSchemaRetry(() => supabase.from("leo_conversations").update(patch).eq("id", conversaId));
+    if (error) console.error("⚠️", descreverErroPg(error, "Falha na extração determinística: "));
     else console.log("✅ Estado atualizado por extração determinística:", JSON.stringify(patch));
     if (patch.tipo_cliente === "porta_instalada" || patch.tipo_cliente === "revenda") {
       try { await atualizarTipoClienteLegado(telefone, patch.tipo_cliente as any); } catch (_) {}
     }
   }
+
+  return { ...estado, ...patch };
 }
 
 async function carregarEstadoConversa(conversaId: string) {
-  const { data, error } = await supabase
-    .from("leo_conversations")
-    .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete")
-    .eq("id", conversaId)
-    .maybeSingle();
-  if (error) throw error;
+  const { data, error } = await withSchemaRetry(() =>
+    supabase
+      .from("leo_conversations")
+      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+      .eq("id", conversaId)
+      .maybeSingle()
+  );
+  if (error) {
+    console.error("⚠️", descreverErroPg(error, "carregarEstadoConversa falhou: "));
+    return null;
+  }
   return data;
 }
 
@@ -1447,9 +1505,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
+    const estadoLocalInferido = await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
 
-    const estadoAposExtracao = await carregarEstadoConversa(conversa.id);
+    const estadoAposExtracao = (await carregarEstadoConversa(conversa.id)) || estadoLocalInferido;
     const perguntaDeterministica = proximaPerguntaDeterministica(estadoAposExtracao);
     if (perguntaDeterministica) {
       await salvarMensagem(conversa.id, "assistant", perguntaDeterministica, { deterministic_flow: true });
