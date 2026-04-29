@@ -1866,13 +1866,14 @@ Deno.serve(async (req) => {
 
         if (fnName === "gerar_orcamento") {
           const jaExistePdf = await pdfJaEnviadoConversa(conversa.id);
-          const pediuNovoOrcamento = /\b(novo|nova|outro|outra|refazer|alterar|alteração|mudar|trocar|corrigir|atualizar|recalcular|novo orçamento|nova cotação)\b/i.test(messageBody);
-          if (jaExistePdf && !pediuNovoOrcamento) {
-            console.warn("🚫 gerar_orcamento bloqueado — PDF já enviado e cliente fez pergunta geral");
+          // Bloqueio CONTEXTUAL: só bloqueia se PDF já existe E as medidas/perfil/cep continuam IGUAIS.
+          const medidasMudaramTool = jaExistePdf ? await medidasMudaramDesdeUltimoPdf(conversa.id) : true;
+          if (jaExistePdf && !medidasMudaramTool) {
+            console.warn("🚫 gerar_orcamento bloqueado — PDF já enviado e medidas inalteradas");
             toolResult = {
               ok: false,
               erro: "PDF_JA_ENVIADO_DUVIDA_GERAL",
-              instrucao: "O PDF já foi enviado e o cliente fez uma dúvida geral. Responda em texto, de forma útil e consultiva. NÃO chame gerar_orcamento e NÃO reenvie PDF.",
+              instrucao: "O PDF já foi enviado com estes mesmos dados. Responda em texto, de forma útil e consultiva. NÃO chame gerar_orcamento e NÃO reenvie PDF.",
             };
             messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
             messages.push({
