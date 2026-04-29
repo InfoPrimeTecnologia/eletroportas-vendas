@@ -1650,8 +1650,9 @@ Deno.serve(async (req) => {
       await registrarLeadContatoInicial(telefone, conversa.nome_cliente || nome || "");
     }
 
-    const userMsgSavedAt = new Date().toISOString();
     await salvarMensagem(conversa.id, "user", messageBody, { message_id: messageId || null, raw_timestamp: body?.timestamp || null });
+    // Captura o timestamp APÓS salvar a própria mensagem, para não contá-la no buffer
+    const userMsgSavedAt = new Date().toISOString();
     await supabase
       .from("leo_conversations")
       .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
