@@ -162,7 +162,7 @@ const Funil = () => {
     }
     const rawLeads = (data || []).map((l: any) => ({
       id: l.id,
-      nome: l.nome,
+      nome: (l.nome && String(l.nome).trim()) || (l.telefone ? `Contato ${l.telefone}` : 'Lead sem nome'),
       empresa: l.empresa || undefined,
       telefone: l.telefone || undefined,
       email: l.email || undefined,
