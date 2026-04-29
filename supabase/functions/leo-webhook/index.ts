@@ -1719,27 +1719,11 @@ Deno.serve(async (req) => {
 
     if (estadoProntoParaOrcamento(estadoAposExtracao)) {
       const jaEnviouPdf = await pdfJaEnviadoConversa(conversa.id);
-      const pediuNovoOrcamento = /\b(novo|nova|outro|outra|outra medida|outras medidas|mais um|mais uma|recalcular|atualizar|alterar|mudar|trocar|cotar (outra|outro|mais)|outro estabelecimento|outra obra|outra loja)\b/i.test(messageBody);
-      const pareceNovoPedido = /\b(orcamento|orçamento|cotacao|cotação|preco|preço|valor)\b/i.test(messageBody) || pediuNovoOrcamento;
+      // CONTEXTO (não palavras-chave): se as medidas/perfil/cep mudaram desde o último PDF, é OUTRO orçamento.
+      const medidasMudaram = jaEnviouPdf ? await medidasMudaramDesdeUltimoPdf(conversa.id) : true;
 
-      // Se já enviou PDF e o cliente está pedindo OUTRO orçamento (novas medidas/condições),
-      // RESETA o estado para forçar nova coleta — não reenvia o PDF antigo com os mesmos dados.
-      if (jaEnviouPdf && pediuNovoOrcamento) {
-        console.log("🔄 Cliente pediu novo orçamento — resetando medidas para nova coleta");
-        await supabase
-          .from("leo_conversations")
-          .update({ largura: null, altura: null, tipo_perfil: null, frete: null, cep: null, endereco_instalacao: null })
-          .eq("id", conversa.id);
-        const aviso = "Claro! Vamos montar um novo orçamento. 🙂\n\nMe passe por favor:\n• A *largura* (em metros)\n• A *altura* (em metros)\n• O *tipo de perfil* (fechado, transvision ou oblongo)";
-        await salvarMensagem(conversa.id, "assistant", aviso, { reset_orcamento: true });
-        await enviarTexto(telefone, aviso);
-        return new Response(JSON.stringify({ ok: true, reset_orcamento: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      if (jaEnviouPdf && !pareceNovoPedido) {
-        console.log("💬 PDF já enviado — seguindo para IA responder sem gerar duplicado");
+      if (jaEnviouPdf && !medidasMudaram) {
+        console.log("💬 PDF já enviado e medidas IGUAIS — IA responde sem gerar duplicado");
       } else {
         const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
         if (resultadoPdf.pdf_enviado) {
