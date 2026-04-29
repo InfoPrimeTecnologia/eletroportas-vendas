@@ -1319,10 +1319,12 @@ async function registrarOrcamentoEAvancarFunil(params: {
     // Atualiza o lead no funil → orcamento_enviado, anexa PDF e itens
     const lead = await buscarLeadAberto(telefone);
     const anexo = `data:application/pdf;base64,${pdfBase64}`;
+    const nomeFinal = (nome || "").trim() || `Contato ${telefone}`;
     if (lead?.id) {
       await dashboardDb
         .from("funil_leads")
         .update({
+          nome: nomeFinal,
           etapa_key: "orcamento_enviado",
           valor: orcamento.total_geral,
           itens: itensJson,
@@ -1330,7 +1332,7 @@ async function registrarOrcamentoEAvancarFunil(params: {
           observacoes: `Orçamento ${orc?.numero || ""} gerado pelo agente Leo.`,
         })
         .eq("id", lead.id);
-      console.log("✅ Lead movido para orcamento_enviado:", lead.id);
+      console.log("✅ Lead movido para orcamento_enviado:", lead.id, "nome:", nomeFinal);
     } else {
       // cria direto na etapa orcamento_enviado caso não exista
       await dashboardDb.from("funil_leads").insert({
