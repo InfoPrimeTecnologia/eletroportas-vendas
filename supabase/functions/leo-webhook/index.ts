@@ -1302,13 +1302,13 @@ async function registrarLeadContatoInicial(telefone: string, nomeBruto: string) 
   }
 }
 
-/** Busca o lead aberto (não fechado/perdido) deste telefone. */
+/** Busca o lead aberto (ainda não finalizado) deste telefone. */
 async function buscarLeadAberto(telefone: string) {
   const { data } = await dashboardDb
     .from("funil_leads")
     .select("id, etapa_key, itens, anexo_pdf, valor")
     .eq("telefone", telefone)
-    .not("etapa_key", "in", "(fechado,perdido)")
+    .not("etapa_key", "in", "(venda_finalizada)")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
