@@ -276,7 +276,7 @@ const Orcamentos = () => {
                   <Badge variant="outline" className={statusColors[selectedOrc.status] || ""}>{statusLabels[selectedOrc.status]}</Badge>
                 </div>
               )}
-              <div className="border rounded-md overflow-hidden">
+              <div className="border rounded-md overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
