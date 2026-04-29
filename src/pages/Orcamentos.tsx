@@ -243,89 +243,96 @@ const Orcamentos = () => {
 
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-3xl flex-col overflow-hidden p-0 sm:max-w-3xl">
+          <DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" /> {selectedOrc?.numero}
             </DialogTitle>
           </DialogHeader>
           {selectedOrc && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><p className="text-muted-foreground text-xs">Cliente</p><p className="font-medium">{selectedOrc.cliente_nome}</p></div>
-                <div><p className="text-muted-foreground text-xs">Telefone</p><p className="font-medium font-mono text-xs">{selectedOrc.cliente_telefone || "—"}</p></div>
-                <div><p className="text-muted-foreground text-xs">Data</p><p className="font-medium">{new Date(selectedOrc.data_criacao).toLocaleDateString("pt-BR")}</p></div>
-                <div><p className="text-muted-foreground text-xs">Origem</p><p className="font-medium">{selectedOrc.origem === "robo" ? "🤖 Robô" : "✋ Manual"}</p></div>
-              </div>
-              {canEdit && (
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Status</Label>
-                  <Select value={selectedOrc.status} onValueChange={handleStatusChange}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {allStatuses.map((s) => (
-                        <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+                <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                  <div><p className="text-muted-foreground text-xs">Cliente</p><p className="font-medium break-words">{selectedOrc.cliente_nome}</p></div>
+                  <div><p className="text-muted-foreground text-xs">Telefone</p><p className="font-medium font-mono text-xs break-all">{selectedOrc.cliente_telefone || "—"}</p></div>
+                  <div><p className="text-muted-foreground text-xs">Data</p><p className="font-medium">{new Date(selectedOrc.data_criacao).toLocaleDateString("pt-BR")}</p></div>
+                  <div><p className="text-muted-foreground text-xs">Origem</p><p className="font-medium">{selectedOrc.origem === "robo" ? "🤖 Robô" : "✋ Manual"}</p></div>
                 </div>
-              )}
-              {!canEdit && (
-                <div>
-                  <p className="text-muted-foreground text-xs">Status</p>
-                  <Badge variant="outline" className={statusColors[selectedOrc.status] || ""}>{statusLabels[selectedOrc.status]}</Badge>
-                </div>
-              )}
-              <div className="border rounded-md overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Produto</TableHead>
-                      <TableHead className="text-xs text-center">Qtd</TableHead>
-                      <TableHead className="text-xs text-right">Unit.</TableHead>
-                      <TableHead className="text-xs text-right">Subtotal</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(selectedOrc.itens as any[])?.map((item: any, idx: number) => (
-                      <TableRow key={idx}>
-                        <TableCell className="text-xs">
-                          <p className="font-medium">{item.produto_nome}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">{item.codigo_sku}</p>
-                        </TableCell>
-                        <TableCell className="text-xs text-center">{item.quantidade}</TableCell>
-                        <TableCell className="text-xs text-right font-mono">R$ {Number(item.preco_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
-                        <TableCell className="text-xs text-right font-mono">R$ {(Number(item.preco_unitario) * Number(item.quantidade)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="flex justify-between items-center pt-2 border-t">
-                <span className="font-semibold">Total</span>
-                <span className="font-mono font-bold text-lg">R$ {selectedOrc.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
-              </div>
-              {selectedOrc.observacoes && (
-                <div><p className="text-muted-foreground text-xs">Observações</p><p className="text-sm whitespace-pre-wrap break-words">{selectedOrc.observacoes}</p></div>
-              )}
-              <div className="flex gap-2 pt-2">
                 {canEdit && (
-                  <Button variant="outline" className="flex-1" onClick={() => handleEdit(selectedOrc)}>
-                    <Pencil className="h-4 w-4 mr-2" /> Editar
-                  </Button>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Status</Label>
+                    <Select value={selectedOrc.status} onValueChange={handleStatusChange}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {allStatuses.map((s) => (
+                          <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
-                {canDelete && (
-                  <Button variant="destructive" className="flex-1" onClick={() => { setDeletingId(selectedOrc.id); setDeleteDialogOpen(true); }}>
-                    <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                {!canEdit && (
+                  <div>
+                    <p className="text-muted-foreground text-xs">Status</p>
+                    <Badge variant="outline" className={statusColors[selectedOrc.status] || ""}>{statusLabels[selectedOrc.status]}</Badge>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <p className="text-muted-foreground text-xs">Itens</p>
+                  <div className="max-h-[32vh] overflow-auto rounded-md border">
+                    <Table>
+                      <TableHeader className="sticky top-0 z-10 bg-background">
+                        <TableRow>
+                          <TableHead className="min-w-52 text-xs">Produto</TableHead>
+                          <TableHead className="w-20 text-center text-xs">Qtd</TableHead>
+                          <TableHead className="w-28 text-right text-xs">Unit.</TableHead>
+                          <TableHead className="w-32 text-right text-xs">Subtotal</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(selectedOrc.itens as any[])?.map((item: any, idx: number) => (
+                          <TableRow key={idx}>
+                            <TableCell className="text-xs">
+                              <p className="font-medium break-words">{item.produto_nome}</p>
+                              <p className="text-[10px] text-muted-foreground font-mono break-all">{item.codigo_sku}</p>
+                            </TableCell>
+                            <TableCell className="text-xs text-center">{item.quantidade}</TableCell>
+                            <TableCell className="text-xs text-right font-mono whitespace-nowrap">R$ {Number(item.preco_unitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
+                            <TableCell className="text-xs text-right font-mono whitespace-nowrap">R$ {(Number(item.preco_unitario) * Number(item.quantidade)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="font-semibold">Total</span>
+                  <span className="font-mono font-bold text-lg">R$ {selectedOrc.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                </div>
+                {selectedOrc.observacoes && (
+                  <div><p className="text-muted-foreground text-xs">Observações</p><p className="max-h-28 overflow-y-auto text-sm whitespace-pre-wrap break-words rounded-md border p-3">{selectedOrc.observacoes}</p></div>
+                )}
+              </div>
+              <div className="shrink-0 space-y-2 border-t px-6 py-4">
+                <div className="flex gap-2">
+                  {canEdit && (
+                    <Button variant="outline" className="flex-1" onClick={() => handleEdit(selectedOrc)}>
+                      <Pencil className="h-4 w-4 mr-2" /> Editar
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button variant="destructive" className="flex-1" onClick={() => { setDeletingId(selectedOrc.id); setDeleteDialogOpen(true); }}>
+                      <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                    </Button>
+                  )}
+                </div>
+                {selectedOrc.status === "aceito" && canEdit && (
+                  <Button onClick={handleConvertToPedido} className="w-full" disabled={converting}>
+                    {converting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-2" />}
+                    Converter em Pedido de Venda
                   </Button>
                 )}
               </div>
-              {selectedOrc.status === "aceito" && canEdit && (
-                <Button onClick={handleConvertToPedido} className="w-full" disabled={converting}>
-                  {converting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-2" />}
-                  Converter em Pedido de Venda
-                </Button>
-              )}
             </div>
           )}
         </DialogContent>
