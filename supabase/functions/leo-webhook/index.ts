@@ -1156,6 +1156,53 @@ async function pdfJaEnviadoConversa(conversation_id: string) {
   return Boolean((data || []).some((m: any) => m?.metadata?.pdf_enviado === true));
 }
 
+/** Retorna o snapshot (largura/altura/perfil/cliente/cep) do ÚLTIMO PDF enviado, ou null. */
+async function ultimoPdfSnapshot(conversation_id: string): Promise<any | null> {
+  const { data } = await supabase
+    .from("leo_messages")
+    .select("metadata, created_at")
+    .eq("conversation_id", conversation_id)
+    .eq("role", "assistant")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  for (const m of (data || [])) {
+    if (m?.metadata?.pdf_enviado === true) return m?.metadata?.snapshot || null;
+  }
+  return null;
+}
+
+/** Compara estado atual da conversa com o snapshot do último PDF — se algo mudou, é OUTRO orçamento. */
+async function medidasMudaramDesdeUltimoPdf(conversation_id: string): Promise<boolean> {
+  const snap = await ultimoPdfSnapshot(conversation_id);
+  if (!snap) return true; // nenhum PDF salvo com snapshot → tratar como mudança/permitir
+  const { data: c } = await supabase
+    .from("leo_conversations")
+    .select("tipo_cliente, largura, altura, tipo_perfil, cep")
+    .eq("id", conversation_id)
+    .maybeSingle();
+  if (!c) return false;
+  const eq = (a: any, b: any) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+  const num = (a: any, b: any) => Number(a) === Number(b);
+  return !(
+    eq(c.tipo_cliente, snap.tipo_cliente) &&
+    num(c.largura, snap.largura) &&
+    num(c.altura, snap.altura) &&
+    eq(c.tipo_perfil, snap.tipo_perfil) &&
+    eq(c.cep, snap.cep)
+  );
+}
+
+/** Conta quantas mensagens user chegaram após `since` — usado para debounce de buffer. */
+async function contarMensagensUserApos(conversation_id: string, sinceIso: string): Promise<number> {
+  const { count } = await supabase
+    .from("leo_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("conversation_id", conversation_id)
+    .eq("role", "user")
+    .gt("created_at", sinceIso);
+  return count || 0;
+}
+
 async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone: string, nome: string) {
   const r = await withSchemaRetry(() =>
     supabase
