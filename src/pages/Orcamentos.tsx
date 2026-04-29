@@ -243,7 +243,7 @@ const Orcamentos = () => {
 
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" /> {selectedOrc?.numero}
@@ -276,7 +276,7 @@ const Orcamentos = () => {
                   <Badge variant="outline" className={statusColors[selectedOrc.status] || ""}>{statusLabels[selectedOrc.status]}</Badge>
                 </div>
               )}
-              <div className="border rounded-md overflow-hidden">
+              <div className="border rounded-md overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -306,7 +306,7 @@ const Orcamentos = () => {
                 <span className="font-mono font-bold text-lg">R$ {selectedOrc.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
               </div>
               {selectedOrc.observacoes && (
-                <div><p className="text-muted-foreground text-xs">Observações</p><p className="text-sm">{selectedOrc.observacoes}</p></div>
+                <div><p className="text-muted-foreground text-xs">Observações</p><p className="text-sm whitespace-pre-wrap break-words">{selectedOrc.observacoes}</p></div>
               )}
               <div className="flex gap-2 pt-2">
                 {canEdit && (
