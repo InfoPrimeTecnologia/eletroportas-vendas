@@ -1265,7 +1265,7 @@ async function registrarLeadContatoInicial(telefone: string, nomeBruto: string) 
       .from("funil_leads")
       .select("id, etapa_key")
       .eq("telefone", telefone)
-      .not("etapa_key", "in", "(fechado,perdido)")
+      .not("etapa_key", "in", "(venda_finalizada)")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
