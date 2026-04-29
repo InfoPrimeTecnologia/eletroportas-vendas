@@ -306,7 +306,7 @@ const Orcamentos = () => {
                 <span className="font-mono font-bold text-lg">R$ {selectedOrc.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
               </div>
               {selectedOrc.observacoes && (
-                <div><p className="text-muted-foreground text-xs">Observações</p><p className="text-sm">{selectedOrc.observacoes}</p></div>
+                <div><p className="text-muted-foreground text-xs">Observações</p><p className="text-sm whitespace-pre-wrap break-words">{selectedOrc.observacoes}</p></div>
               )}
               <div className="flex gap-2 pt-2">
                 {canEdit && (
