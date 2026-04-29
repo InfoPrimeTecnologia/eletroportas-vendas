@@ -2104,7 +2104,8 @@ Deno.serve(async (req) => {
 
     try {
       if (pdfEnviadoNesteTurno) {
-        await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, { pdf_enviado: true });
+        const snapAg = await supabase.from("leo_conversations").select("tipo_cliente, largura, altura, tipo_perfil, cep").eq("id", conversa.id).maybeSingle();
+        await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, { pdf_enviado: true, snapshot: snapAg.data || null });
       } else {
         const textoFinal = (respostaFinal || "").trim() ||
           "Desculpe, tive uma instabilidade aqui. Pode repetir sua última mensagem, por favor? 🙏";
