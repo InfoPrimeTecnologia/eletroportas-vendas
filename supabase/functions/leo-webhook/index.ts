@@ -1491,21 +1491,21 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
     }
     await dashboardDb.from("orcamentos").update({ status: "aceito" }).eq("id", orc.id);
 
-    // Move o lead para "acompanhamento" (pedido em andamento — só vai para "fechado" quando concluído manualmente)
+    // Move o lead para "Pedido de Venda" (cliente aceitou e o pedido foi gerado)
     const lead = await buscarLeadAberto(telefone);
     if (lead?.id) {
       await dashboardDb
         .from("funil_leads")
         .update({
-          etapa_key: "acompanhamento",
+          etapa_key: "pedido_venda",
           valor: orc.valor_total,
           itens: orc.itens,
           observacoes: `Pedido ${ped?.numero} gerado a partir do orçamento ${orc.numero} (aceito pelo cliente via Leo).`,
         })
         .eq("id", lead.id);
-      console.log("✅ Lead movido para acompanhamento:", lead.id);
+      console.log("✅ Lead movido para pedido_venda:", lead.id);
     } else {
-      // Se não houver lead aberto, cria um novo já em acompanhamento
+      // Se não houver lead aberto, cria um novo já em pedido_venda
       const { data: cliRow } = await dashboardDb
         .from("Clientes")
         .select("CLI_NOME, CLI_EMAIL")
@@ -1516,12 +1516,12 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
         telefone,
         email: cliRow?.CLI_EMAIL || null,
         valor: orc.valor_total,
-        etapa_key: "acompanhamento",
+        etapa_key: "pedido_venda",
         origem: "leo_agent",
         itens: orc.itens,
         observacoes: `Pedido ${ped?.numero} gerado a partir do orçamento ${orc.numero} (aceito pelo cliente via Leo).`,
       });
-      console.log("✅ Lead criado em acompanhamento para pedido", ped?.numero);
+      console.log("✅ Lead criado em pedido_venda para pedido", ped?.numero);
     }
     console.log("✅ Pedido de venda criado:", ped?.numero, "a partir de", orc.numero);
     return { orcamento_numero: orc.numero, pedido_numero: ped?.numero };
