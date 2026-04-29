@@ -1650,13 +1650,41 @@ Deno.serve(async (req) => {
       await registrarLeadContatoInicial(telefone, conversa.nome_cliente || nome || "");
     }
 
+    const userMsgSavedAt = new Date().toISOString();
     await salvarMensagem(conversa.id, "user", messageBody, { message_id: messageId || null, raw_timestamp: body?.timestamp || null });
     await supabase
       .from("leo_conversations")
       .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
       .eq("id", conversa.id);
 
+    // ===== BUFFER DE 10s =====
+    // Aguarda 10s. Se nesse intervalo chegou OUTRA mensagem do mesmo cliente,
+    // este turno aborta e deixa o webhook MAIS RECENTE responder com o contexto completo.
+    // Isso evita respostas fragmentadas quando o cliente envia mensagens em sequência.
+    const BUFFER_MS = 10000;
+    await new Promise((r) => setTimeout(r, BUFFER_MS));
+    const novasMsgs = await contarMensagensUserApos(conversa.id, userMsgSavedAt);
+    if (novasMsgs > 0) {
+      console.log(`⏸️ Buffer: chegaram ${novasMsgs} mensagem(ns) novas em ${BUFFER_MS}ms — abortando este turno (último webhook responde).`);
+      return new Response(JSON.stringify({ ok: true, buffered: true, novas_mensagens: novasMsgs }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Recarrega a conversa após o buffer (pode ter sido atualizada pelas mensagens em sequência)
+    const conversaAtual = await supabase
+      .from("leo_conversations")
+      .select("id, nome_cliente, status, tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+      .eq("id", conversa.id)
+      .maybeSingle();
+    if (conversaAtual.data?.status === "encerrada") {
+      return new Response(JSON.stringify({ ignored: "encerrada_apos_buffer" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const estadoAntesAceite = await carregarEstadoConversa(conversa.id);
+
 
     // ➕ DASHBOARD: detecta aceite explícito do orçamento → gera pedido_venda e fecha o lead
     // Só aceita depois que o orçamento já foi enviado nesta conversa. Antes disso,
