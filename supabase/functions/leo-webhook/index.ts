@@ -1477,7 +1477,7 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
         cliente_nome: orc.cliente_nome,
         cliente_cnpj: null,
         valor_total: orc.valor_total,
-        status: "processando",
+        status: "pendente",
         origem: "leo_agent",
         itens: orc.itens,
         observacoes: `Gerado a partir do orçamento ${orc.numero || orc.id}. ${orc.observacoes || ""}`.trim(),
