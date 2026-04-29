@@ -1156,6 +1156,53 @@ async function pdfJaEnviadoConversa(conversation_id: string) {
   return Boolean((data || []).some((m: any) => m?.metadata?.pdf_enviado === true));
 }
 
+/** Retorna o snapshot (largura/altura/perfil/cliente/cep) do ÚLTIMO PDF enviado, ou null. */
+async function ultimoPdfSnapshot(conversation_id: string): Promise<any | null> {
+  const { data } = await supabase
+    .from("leo_messages")
+    .select("metadata, created_at")
+    .eq("conversation_id", conversation_id)
+    .eq("role", "assistant")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  for (const m of (data || [])) {
+    if (m?.metadata?.pdf_enviado === true) return m?.metadata?.snapshot || null;
+  }
+  return null;
+}
+
+/** Compara estado atual da conversa com o snapshot do último PDF — se algo mudou, é OUTRO orçamento. */
+async function medidasMudaramDesdeUltimoPdf(conversation_id: string): Promise<boolean> {
+  const snap = await ultimoPdfSnapshot(conversation_id);
+  if (!snap) return true; // nenhum PDF salvo com snapshot → tratar como mudança/permitir
+  const { data: c } = await supabase
+    .from("leo_conversations")
+    .select("tipo_cliente, largura, altura, tipo_perfil, cep")
+    .eq("id", conversation_id)
+    .maybeSingle();
+  if (!c) return false;
+  const eq = (a: any, b: any) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+  const num = (a: any, b: any) => Number(a) === Number(b);
+  return !(
+    eq(c.tipo_cliente, snap.tipo_cliente) &&
+    num(c.largura, snap.largura) &&
+    num(c.altura, snap.altura) &&
+    eq(c.tipo_perfil, snap.tipo_perfil) &&
+    eq(c.cep, snap.cep)
+  );
+}
+
+/** Conta quantas mensagens user chegaram após `since` — usado para debounce de buffer. */
+async function contarMensagensUserApos(conversation_id: string, sinceIso: string): Promise<number> {
+  const { count } = await supabase
+    .from("leo_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("conversation_id", conversation_id)
+    .eq("role", "user")
+    .gt("created_at", sinceIso);
+  return count || 0;
+}
+
 async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone: string, nome: string) {
   const r = await withSchemaRetry(() =>
     supabase
@@ -1603,13 +1650,41 @@ Deno.serve(async (req) => {
       await registrarLeadContatoInicial(telefone, conversa.nome_cliente || nome || "");
     }
 
+    const userMsgSavedAt = new Date().toISOString();
     await salvarMensagem(conversa.id, "user", messageBody, { message_id: messageId || null, raw_timestamp: body?.timestamp || null });
     await supabase
       .from("leo_conversations")
       .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
       .eq("id", conversa.id);
 
+    // ===== BUFFER DE 10s =====
+    // Aguarda 10s. Se nesse intervalo chegou OUTRA mensagem do mesmo cliente,
+    // este turno aborta e deixa o webhook MAIS RECENTE responder com o contexto completo.
+    // Isso evita respostas fragmentadas quando o cliente envia mensagens em sequência.
+    const BUFFER_MS = 10000;
+    await new Promise((r) => setTimeout(r, BUFFER_MS));
+    const novasMsgs = await contarMensagensUserApos(conversa.id, userMsgSavedAt);
+    if (novasMsgs > 0) {
+      console.log(`⏸️ Buffer: chegaram ${novasMsgs} mensagem(ns) novas em ${BUFFER_MS}ms — abortando este turno (último webhook responde).`);
+      return new Response(JSON.stringify({ ok: true, buffered: true, novas_mensagens: novasMsgs }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Recarrega a conversa após o buffer (pode ter sido atualizada pelas mensagens em sequência)
+    const conversaAtual = await supabase
+      .from("leo_conversations")
+      .select("id, nome_cliente, status, tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+      .eq("id", conversa.id)
+      .maybeSingle();
+    if (conversaAtual.data?.status === "encerrada") {
+      return new Response(JSON.stringify({ ignored: "encerrada_apos_buffer" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const estadoAntesAceite = await carregarEstadoConversa(conversa.id);
+
 
     // ➕ DASHBOARD: detecta aceite explícito do orçamento → gera pedido_venda e fecha o lead
     // Só aceita depois que o orçamento já foi enviado nesta conversa. Antes disso,
@@ -1644,31 +1719,16 @@ Deno.serve(async (req) => {
 
     if (estadoProntoParaOrcamento(estadoAposExtracao)) {
       const jaEnviouPdf = await pdfJaEnviadoConversa(conversa.id);
-      const pediuNovoOrcamento = /\b(novo|nova|outro|outra|outra medida|outras medidas|mais um|mais uma|recalcular|atualizar|alterar|mudar|trocar|cotar (outra|outro|mais)|outro estabelecimento|outra obra|outra loja)\b/i.test(messageBody);
-      const pareceNovoPedido = /\b(orcamento|orçamento|cotacao|cotação|preco|preço|valor)\b/i.test(messageBody) || pediuNovoOrcamento;
+      // CONTEXTO (não palavras-chave): se as medidas/perfil/cep mudaram desde o último PDF, é OUTRO orçamento.
+      const medidasMudaram = jaEnviouPdf ? await medidasMudaramDesdeUltimoPdf(conversa.id) : true;
 
-      // Se já enviou PDF e o cliente está pedindo OUTRO orçamento (novas medidas/condições),
-      // RESETA o estado para forçar nova coleta — não reenvia o PDF antigo com os mesmos dados.
-      if (jaEnviouPdf && pediuNovoOrcamento) {
-        console.log("🔄 Cliente pediu novo orçamento — resetando medidas para nova coleta");
-        await supabase
-          .from("leo_conversations")
-          .update({ largura: null, altura: null, tipo_perfil: null, frete: null, cep: null, endereco_instalacao: null })
-          .eq("id", conversa.id);
-        const aviso = "Claro! Vamos montar um novo orçamento. 🙂\n\nMe passe por favor:\n• A *largura* (em metros)\n• A *altura* (em metros)\n• O *tipo de perfil* (fechado, transvision ou oblongo)";
-        await salvarMensagem(conversa.id, "assistant", aviso, { reset_orcamento: true });
-        await enviarTexto(telefone, aviso);
-        return new Response(JSON.stringify({ ok: true, reset_orcamento: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      if (jaEnviouPdf && !pareceNovoPedido) {
-        console.log("💬 PDF já enviado — seguindo para IA responder sem gerar duplicado");
+      if (jaEnviouPdf && !medidasMudaram) {
+        console.log("💬 PDF já enviado e medidas IGUAIS — IA responde sem gerar duplicado");
       } else {
         const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
         if (resultadoPdf.pdf_enviado) {
-          await salvarMensagem(conversa.id, "assistant", resultadoPdf.caption, { pdf_enviado: true, deterministic_flow: true });
+          const snapDet = await supabase.from("leo_conversations").select("tipo_cliente, largura, altura, tipo_perfil, cep").eq("id", conversa.id).maybeSingle();
+          await salvarMensagem(conversa.id, "assistant", resultadoPdf.caption, { pdf_enviado: true, deterministic_flow: true, snapshot: snapDet.data || null });
           // ➕ DASHBOARD: salva orçamento + anexo PDF e move lead para "orcamento_enviado"
           if (resultadoPdf.pdfBase64 && resultadoPdf.orcamento) {
             await registrarOrcamentoEAvancarFunil({
@@ -1807,13 +1867,14 @@ Deno.serve(async (req) => {
 
         if (fnName === "gerar_orcamento") {
           const jaExistePdf = await pdfJaEnviadoConversa(conversa.id);
-          const pediuNovoOrcamento = /\b(novo|nova|outro|outra|refazer|alterar|alteração|mudar|trocar|corrigir|atualizar|recalcular|novo orçamento|nova cotação)\b/i.test(messageBody);
-          if (jaExistePdf && !pediuNovoOrcamento) {
-            console.warn("🚫 gerar_orcamento bloqueado — PDF já enviado e cliente fez pergunta geral");
+          // Bloqueio CONTEXTUAL: só bloqueia se PDF já existe E as medidas/perfil/cep continuam IGUAIS.
+          const medidasMudaramTool = jaExistePdf ? await medidasMudaramDesdeUltimoPdf(conversa.id) : true;
+          if (jaExistePdf && !medidasMudaramTool) {
+            console.warn("🚫 gerar_orcamento bloqueado — PDF já enviado e medidas inalteradas");
             toolResult = {
               ok: false,
               erro: "PDF_JA_ENVIADO_DUVIDA_GERAL",
-              instrucao: "O PDF já foi enviado e o cliente fez uma dúvida geral. Responda em texto, de forma útil e consultiva. NÃO chame gerar_orcamento e NÃO reenvie PDF.",
+              instrucao: "O PDF já foi enviado com estes mesmos dados. Responda em texto, de forma útil e consultiva. NÃO chame gerar_orcamento e NÃO reenvie PDF.",
             };
             messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
             messages.push({
@@ -2043,7 +2104,8 @@ Deno.serve(async (req) => {
 
     try {
       if (pdfEnviadoNesteTurno) {
-        await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, { pdf_enviado: true });
+        const snapAg = await supabase.from("leo_conversations").select("tipo_cliente, largura, altura, tipo_perfil, cep").eq("id", conversa.id).maybeSingle();
+        await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, { pdf_enviado: true, snapshot: snapAg.data || null });
       } else {
         const textoFinal = (respostaFinal || "").trim() ||
           "Desculpe, tive uma instabilidade aqui. Pode repetir sua última mensagem, por favor? 🙏";
