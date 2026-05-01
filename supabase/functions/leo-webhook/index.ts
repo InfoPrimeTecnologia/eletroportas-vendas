@@ -211,6 +211,8 @@ const PRECOS = {
   controle_remoto: 89.90,
   central_comando: 180.50,
   mao_de_obra_padrao: 800.00,
+  portinhola: 883.84,
+  alcapao: 649.94,
 };
 
 interface OrcamentoInput {
@@ -225,6 +227,7 @@ interface OrcamentoInput {
   frete?: number;
   cliente_nome?: string;
   cliente_endereco?: string;
+  adicionais?: { portinhola?: boolean; alcapao?: boolean };
 }
 
 function calcularOrcamento(input: OrcamentoInput) {
