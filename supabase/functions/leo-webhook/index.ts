@@ -263,7 +263,7 @@ function calcularOrcamento(input: OrcamentoInput) {
     add("ADIC-001", `PORTINHOLA (porta de acesso integrada)`, 1, "UN", PRECOS.portinhola);
   }
   if (input.adicionais?.alcapao) {
-    add("ADIC-002", `ALÇAPÃO (acesso superior)`, 1, "UN", PRECOS.alcapao);
+    add("ADIC-002", `ALÇAPÃO (acesso na porta)`, 1, "UN", PRECOS.alcapao);
   }
 
   const subtotal_produtos = itens.reduce((s, i) => s + i.subtotal, 0);
@@ -602,7 +602,7 @@ Atender o cliente 24h por dia: tirar dúvidas, explicar produtos/processos e con
    Pergunte de forma natural se ele quer incluir algum dos itens opcionais:
    "Antes de seguir, você gostaria de adicionar algum desses itens opcionais?
    • **Portinhola** — porta de acesso integrada
-   • **Alçapão** — acesso superior
+   • **Alçapão** — acesso na própria porta
    Pode ser os dois, só um, ou nenhum. Como prefere?"
    Quando o cliente responder (mesmo que seja "nenhum", "só portinhola", "os dois", "alçapão", "não, obrigado"), chame **IMEDIATAMENTE** \`definir_adicionais\` com os booleanos certos. É silenciosa — siga adiante na mesma rodada.
 
@@ -1053,6 +1053,24 @@ function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo
   return null;
 }
 
+function inferirAdicionaisTexto(texto: string): { portinhola: boolean; alcapao: boolean } | null {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!t.trim()) return null;
+
+  const querNenhum = /\b(nenhum|nenhuma|nao|não|sem|dispenso|obrigado|obrigada)\b/.test(t)
+    && !/\b(portinhola|alcapao|alcapão|alcapa|os dois|ambos|duas|dois)\b/.test(t);
+  if (querNenhum) return { portinhola: false, alcapao: false };
+
+  const ambos = /\b(os dois|ambos|duas|dois|todos|todas)\b/.test(t);
+  const negaPortinhola = /\b(sem|nao|dispenso|recuso)\s+(a\s+)?portinhola\b/.test(t);
+  const negaAlcapao = /\b(sem|nao|dispenso|recuso)\s+(o\s+)?(alcapao|alcapa)\b/.test(t);
+  const portinhola = (ambos || /\b(portinhola|porta de acesso)\b/.test(t)) && !negaPortinhola;
+  const alcapao = (ambos || /\b(alcapao|alcapa)\b/.test(t)) && !negaAlcapao;
+
+  if (portinhola || alcapao) return { portinhola, alcapao };
+  return null;
+}
+
 function inferirCepTexto(texto: string): string | null {
   const match = (texto || "").match(/\b\d{5}-?\d{3}\b/);
   return match ? match[0].replace(/\D/g, "") : null;
@@ -1072,6 +1090,12 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
 
     const lamina = inferirLaminaTexto(txt);
     if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
+
+    const adicionais = inferirAdicionaisTexto(txt);
+    if (adicionais && estado.tipo_perfil && !estado.adicionais_perguntado) {
+      estado.adicionais = adicionais;
+      estado.adicionais_perguntado = true;
+    }
 
     const cep = inferirCepTexto(txt);
     if (cep && estado.tipo_cliente === "porta_instalada" && !estado.cep) estado.cep = cep;
@@ -1109,6 +1133,10 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
   if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
   if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
+  if (estado.adicionais_perguntado && !baseEstado?.adicionais_perguntado) {
+    patch.adicionais = estado.adicionais || { portinhola: false, alcapao: false };
+    patch.adicionais_perguntado = true;
+  }
 
   const cep = inferirCepTexto(texto);
   if (cep && estado?.tipo_cliente === "porta_instalada" && !baseEstado?.cep) {
@@ -1169,7 +1197,7 @@ function proximaPerguntaDeterministica(estado: any): string | null {
     return "Qual o tipo da lâmina?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
   }
   if (!estado?.adicionais_perguntado) {
-    return "Antes de seguir, você gostaria de adicionar algum item opcional?\n\n• *Portinhola* (porta de acesso integrada)\n• *Alçapão* (acesso superior)\n\nPode ser os dois, só um, ou nenhum. Como prefere?";
+    return "Antes de seguir, você gostaria de adicionar algum item opcional?\n\n• *Portinhola* (porta de acesso integrada)\n• *Alçapão* (acesso na própria porta)\n\nPode ser os dois, só um, ou nenhum. Como prefere?";
   }
   if (tipo === "porta_instalada" && !estado?.cep) {
     return "Por último, qual o *CEP do local da instalação*? Assim calculo o frete certinho.";
