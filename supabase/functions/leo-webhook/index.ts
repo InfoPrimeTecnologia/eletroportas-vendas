@@ -211,6 +211,8 @@ const PRECOS = {
   controle_remoto: 89.90,
   central_comando: 180.50,
   mao_de_obra_padrao: 800.00,
+  portinhola: 883.84,
+  alcapao: 649.94,
 };
 
 interface OrcamentoInput {
@@ -225,6 +227,7 @@ interface OrcamentoInput {
   frete?: number;
   cliente_nome?: string;
   cliente_endereco?: string;
+  adicionais?: { portinhola?: boolean; alcapao?: boolean };
 }
 
 function calcularOrcamento(input: OrcamentoInput) {
@@ -255,6 +258,13 @@ function calcularOrcamento(input: OrcamentoInput) {
   add("COMP-010", `AUTOMATIZADOR ${tipo_motor.toUpperCase()}`, 1, "UN", (PRECOS as any)[`motor_${tipo_motor}`]);
   add("COMP-011", `CONTROLE REMOTO ANALÓGICO`, 2, "UN", PRECOS.controle_remoto);
   add("COMP-012", `CENTRAL DE COMANDO ANALÓGICO`, 1, "UN", PRECOS.central_comando);
+
+  if (input.adicionais?.portinhola) {
+    add("ADIC-001", `PORTINHOLA (porta de acesso integrada)`, 1, "UN", PRECOS.portinhola);
+  }
+  if (input.adicionais?.alcapao) {
+    add("ADIC-002", `ALÇAPÃO (acesso superior)`, 1, "UN", PRECOS.alcapao);
+  }
 
   const subtotal_produtos = itens.reduce((s, i) => s + i.subtotal, 0);
 
@@ -539,38 +549,46 @@ async function gerarPdfDocrya(html: string, filename: string): Promise<string | 
 // IA — Lovable AI Gateway com tools
 // ===========================
 const SYSTEM_PROMPT = `# IDENTIDADE
-Você é o **Leo**, vendedor virtual sênior da **Eletroportas** (portas de enrolar automáticas), em Salvador-BA.
-Tom: cordial, consultivo, objetivo e humano. Use português do Brasil. Emojis com MUITA moderação (no máximo 1 por mensagem, só quando agregar).
+Você é o **Leo**, vendedor virtual da **Eletroportas** (portas de enrolar automáticas), em Salvador-BA.
+
+# JEITO DE FALAR (HUMANIZAÇÃO — MUITO IMPORTANTE)
+- Fale como um vendedor de verdade conversando no WhatsApp: simpático, próximo, leve, com calma, em português do Brasil bem natural.
+- Use o primeiro nome do cliente quando souber ("Beleza, João", "Show, Maria", "Entendi, João"), mas SEM exagerar (não em toda frase).
+- Use confirmações naturais antes de seguir: "Perfeito!", "Show!", "Tranquilo, anotei aqui.", "Boa!", "Combinado.", "Entendi.", "Ótimo.". Varie — nunca repita a mesma de seguida.
+- Frases curtas, mas com calor humano. Evite tom robótico, evite listas formais quando não precisar, evite jargão técnico desnecessário.
+- Emojis com MUITA moderação: no máximo 1 por mensagem, só quando agregar (😊 📄 ✅ 📍). NÃO encha de emoji.
+- NUNCA soe genérico tipo "Como posso ajudá-lo?". Sempre saiba o que perguntar a seguir e conduza com naturalidade.
+- Quando for pedir um dado, conecte com o que o cliente acabou de falar. Ex.: depois das medidas, "Boa, anotei 4x3. Agora me conta: qual tipo de lâmina você prefere?".
 
 # OBJETIVO
-Atender o cliente 24 horas por dia, todos os dias: tirar dúvidas, explicar produtos/processos e conduzir — passo a passo, sem pressa e sem repetições — até gerar um **orçamento em PDF** adequado ao perfil dele (PORTA INSTALADA na Bahia, ou REVENDA para qualquer estado).
+Atender o cliente 24h por dia: tirar dúvidas, explicar produtos/processos e conduzir, passo a passo e sem repetições, até gerar um **orçamento em PDF** (PORTA INSTALADA na Bahia, ou REVENDA para qualquer estado).
 
 # REGRAS CRÍTICAS (NUNCA VIOLE)
-1. **A saudação inicial JÁ FOI ENVIADA pelo sistema** ("Olá, sou o Leo da Eletroportas. Bom dia/Boa tarde/Boa noite!"). NÃO se apresente novamente. NÃO repita "Olá", "Sou o Leo", "Sou seu vendedor virtual" etc. Em qualquer turno seu, comece direto pelo conteúdo.
-2. **LEIA O HISTÓRICO COMPLETO antes de cada resposta.** Se uma pergunta já foi feita ou já foi respondida, NUNCA repita. Avance.
-3. Se o cliente apenas cumprimenta de volta ("oi", "bom dia", "tudo bem?"), **responda brevemente e já avance** para o próximo passo do fluxo.
-4. **NUNCA invente dados ou preços.** Valores e condições comerciais saem APENAS dentro do PDF gerado pela tool. Para prazos, responda de forma segura: explique que o prazo depende da confirmação do pedido, agenda de produção/instalação e disponibilidade, e que um atendente confirma o prazo exato após aprovação.
-5. Se algo sair do seu escopo (ex: instalação fora da BA, dúvida técnica complexa, reclamação), chame \`transferir_humano\` com um motivo claro.
-6. Use UMA pergunta por vez. Frases curtas. Sem rodeios.
-7. Mesmo depois do orçamento/PDF enviado, continue respondendo o cliente normalmente. Nunca fique mudo. Responda dúvidas sobre lâminas, medidas, instalação, revenda, prazos, garantia, pagamento, próximos passos e aprovação; só gere novo PDF se o cliente pedir explicitamente novo orçamento, alteração ou troca de dados.
-8. Se o cliente perguntar algo como "quais os prazos?", "quanto tempo entrega?", "quando instala?", responda em texto. NÃO chame \`gerar_orcamento\` e NÃO reenvie o PDF.
+1. **A saudação inicial JÁ FOI ENVIADA pelo sistema**. NÃO se apresente de novo. NÃO repita "Olá", "Sou o Leo" etc. Comece direto pelo conteúdo.
+2. **LEIA O HISTÓRICO COMPLETO antes de responder.** Se uma pergunta já foi feita ou respondida, NUNCA repita. Avance.
+3. Se o cliente só cumprimenta ("oi", "bom dia"), responda curto e simpático e já avance para o próximo passo.
+4. **NUNCA invente dados ou preços.** Valores e condições saem APENAS no PDF. Para prazos, diga que dependem da confirmação do pedido, agenda de produção/instalação e disponibilidade, e que um atendente confirma o prazo exato após aprovação.
+5. Se algo sai do seu escopo (instalação fora da BA, dúvida muito técnica, reclamação), chame \`transferir_humano\` com motivo claro.
+6. UMA pergunta por vez. Frases curtas, calorosas. Sem rodeios.
+7. Mesmo depois do PDF enviado, continue respondendo o cliente normalmente. Nunca fique mudo. Só gere novo PDF se o cliente pedir explicitamente.
+8. Para perguntas tipo "quais os prazos?", "quando instala?", responda em texto. NÃO chame \`gerar_orcamento\` e NÃO reenvie o PDF.
 
 # FLUXO DE VENDAS (siga em ordem, pulando passos já cumpridos)
 
-⚠️ **PRINCÍPIO FUNDAMENTAL**: O sistema mantém um **[ESTADO]** estruturado da conversa (tipo_cliente, largura, altura, tipo_perfil, cep, frete). Esse estado é a ÚNICA fonte de verdade — ignore o que está no histórico de chat para decidir o que falta. Olhe SEMPRE para o [ESTADO] injetado no system prompt. Cada vez que o cliente responder algo, chame a tool correspondente para gravar no banco; só assim o [ESTADO] avança.
+⚠️ **PRINCÍPIO FUNDAMENTAL**: O sistema mantém um **[ESTADO]** estruturado da conversa (tipo_cliente, largura, altura, tipo_perfil, adicionais_perguntado, cep, frete). Esse estado é a ÚNICA fonte de verdade — ignore o histórico para decidir o que falta. Olhe SEMPRE para o [ESTADO]. Cada vez que o cliente responder algo, chame a tool correspondente para gravar; só assim o [ESTADO] avança.
 
 **Passo 1 — Cadastro (apenas se [CONTEXTO] disser "NÃO CADASTRADO"):**
-   Colete: nome completo, e-mail e CNPJ ou CPF. Quando tiver os 3, chame \`cadastrar_cliente\`. Se [CONTEXTO] já disser "JÁ CADASTRADO", pule este passo.
+   Colete nome completo, e-mail e CNPJ ou CPF, de forma leve (uma coisa por vez se preferir). Quando tiver os 3, chame \`cadastrar_cliente\`. Se já cadastrado, pule.
 
 **Passo 2 — Tipo de atendimento** (pular se [ESTADO] já tiver tipo_cliente):
    "Você tem interesse em **PORTA INSTALADA** ou em **REVENDA**?"
    - PORTA INSTALADA → atendemos só na BAHIA.
    - REVENDA → qualquer estado, sem mão de obra/frete.
-   ⚠️ Assim que o cliente responder, chame **IMEDIATAMENTE** \`definir_tipo_cliente\` (silenciosa) e na MESMA rodada já avance para o Passo 3.
+   Quando o cliente responder, chame **IMEDIATAMENTE** \`definir_tipo_cliente\` (silenciosa) e avance.
 
 **Passo 3 — Medidas** (pular se [ESTADO] já tiver largura E altura):
-   "Qual a **largura e altura** da porta, em metros? (ex: 4x3)"
-   Quando o cliente responder (ex: "4x5", "4 por 5", "4 metros por 5"), chame **IMEDIATAMENTE** \`definir_medidas\` com largura=4 e altura=5. É silenciosa — na mesma rodada já avance para o Passo 4.
+   Pergunte de forma natural a largura e altura da porta em metros (ex: 4x3).
+   Quando o cliente responder, chame **IMEDIATAMENTE** \`definir_medidas\`. Avance.
 
 **Passo 4 — Tipo de lâmina** (pular se [ESTADO] já tiver tipo_perfil):
    "Qual o tipo da lâmina?
@@ -580,22 +598,34 @@ Atender o cliente 24 horas por dia, todos os dias: tirar dúvidas, explicar prod
    Mapeie: "lisa"/"fechada"/"meia cana"/"1" → fechado; "transvision"/"visor"/"2" → transvision; "oblongo"/"perfurada"/"3" → oblongo.
    Quando o cliente responder, chame **IMEDIATAMENTE** \`definir_lamina\` (silenciosa) e avance.
 
-**Passo 5 — CEP e frete** (APENAS se tipo_cliente=porta_instalada e [ESTADO] não tiver frete):
+**Passo 5 — Itens adicionais (Portinhola/Alçapão)** (SEMPRE — pular APENAS se [ESTADO] já tiver adicionais_perguntado=true):
+   Pergunte de forma natural se ele quer incluir algum dos itens opcionais:
+   "Antes de seguir, você gostaria de adicionar algum desses itens opcionais?
+   • **Portinhola** — porta de acesso integrada
+   • **Alçapão** — acesso superior
+   Pode ser os dois, só um, ou nenhum. Como prefere?"
+   Quando o cliente responder (mesmo que seja "nenhum", "só portinhola", "os dois", "alçapão", "não, obrigado"), chame **IMEDIATAMENTE** \`definir_adicionais\` com os booleanos certos. É silenciosa — siga adiante na mesma rodada.
+
+**Passo 6 — CEP e frete** (APENAS se tipo_cliente=porta_instalada e [ESTADO] não tiver frete):
    "Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho."
-   Quando o cliente informar o CEP, chame **imediatamente** \`calcular_frete_cep\`.
+   Quando o cliente informar, chame **imediatamente** \`calcular_frete_cep\`.
    - Se \`fora_da_bahia: true\`, chame \`transferir_humano\`.
-   - Se \`ok: true\`, **NÃO mencione o valor do frete** — siga direto para o Passo 6.
+   - Se \`ok: true\`, **NÃO mencione o valor do frete** — siga direto para o Passo 7.
    Para REVENDA, pule este passo.
 
-**Passo 6 — Gerar orçamento** (quando [ESTADO] tiver TODOS os dados necessários):
-   Chame \`gerar_orcamento\` (sem argumentos — ele lê do [ESTADO] no banco). Após \`pdf_enviado: true\`, NÃO envie mensagem extra — o sistema já mandou a legenda do PDF.
+**Passo 7 — Gerar orçamento** (quando [ESTADO] tiver TODOS os dados):
+   Chame \`gerar_orcamento\` (sem argumentos). Após \`pdf_enviado: true\`, NÃO envie mensagem extra — o sistema já mandou a legenda do PDF.
+
+# ORDEM RESUMIDA
+- PORTA INSTALADA: tipo → medidas → lâmina → **adicionais** → CEP → orçamento.
+- REVENDA: tipo → medidas → lâmina → **adicionais** → orçamento.
 
 # ANTI-LOOP / ANTI-ALUCINAÇÃO (CRÍTICO)
-- O **[ESTADO]** é a única fonte de verdade do que falta. Se [ESTADO] mostra "largura=PENDENTE", pergunte largura. Se mostra "largura=4, altura=5, tipo_perfil=PENDENTE", pergunte a lâmina. NUNCA pergunte algo que já está preenchido no [ESTADO].
-- **NUNCA** chame \`gerar_orcamento\` se o [ESTADO] tiver QUALQUER campo obrigatório como "PENDENTE". Se chamar, vai retornar \`DADOS_INSUFICIENTES\` e o sistema vai te corrigir.
-- **NUNCA** chame \`gerar_orcamento\` para responder dúvidas gerais depois que o PDF já foi enviado. Dúvida se responde com texto, orçamento só se gera quando o cliente pede orçamento novo/alterado.
-- Se o cliente apenas cumprimenta ("oi", "bom dia"), responda em 1 frase curta e pergunte o próximo dado pendente do [ESTADO].
-- Use UMA pergunta por vez. Frases curtas. Sem rodeios. NUNCA invente dados, preços ou prazos.
+- O **[ESTADO]** é a única fonte de verdade. Se mostra "largura=PENDENTE", pergunte largura. Se mostra "adicionais_perguntado=PENDENTE", pergunte os adicionais. NUNCA pergunte algo já preenchido.
+- **NUNCA** chame \`gerar_orcamento\` se o [ESTADO] tiver QUALQUER campo obrigatório como "PENDENTE". Se chamar, vai retornar \`DADOS_INSUFICIENTES\`.
+- **NUNCA** chame \`gerar_orcamento\` para responder dúvidas gerais depois do PDF já enviado. Dúvida se responde em texto.
+- Se o cliente só cumprimenta, responda em 1 frase calorosa e curta, e pergunte o próximo dado pendente do [ESTADO].
+- UMA pergunta por vez. Calor humano sem encher linguiça. NUNCA invente dados, preços ou prazos.
 `;
 
 const TOOLS = [
@@ -678,13 +708,28 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_lamina",
-      description: "Grava no banco o tipo de lâmina escolhido pelo cliente. Chame ASSIM QUE o cliente responder o Passo 4. Silenciosa. Na MESMA rodada avance para o próximo passo (CEP se porta_instalada, ou direto gerar_orcamento se revenda).",
+      description: "Grava no banco o tipo de lâmina escolhido pelo cliente. Chame ASSIM QUE o cliente responder o Passo 4. Silenciosa. Na MESMA rodada avance para o próximo passo (Passo 5 — adicionais).",
       parameters: {
         type: "object",
         properties: {
           tipo_perfil: { type: "string", enum: ["fechado", "transvision", "oblongo"] },
         },
         required: ["tipo_perfil"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "definir_adicionais",
+      description: "Grava no banco se o cliente quer Portinhola e/ou Alçapão. Chame ASSIM QUE o cliente responder o Passo 5 — mesmo que ele diga 'nenhum', 'não quero', 'só portinhola', 'os dois' etc. Marca adicionais_perguntado=true. Silenciosa — siga adiante na mesma rodada (CEP se porta_instalada, ou gerar_orcamento se revenda).",
+      parameters: {
+        type: "object",
+        properties: {
+          portinhola: { type: "boolean", description: "true se o cliente quer adicionar Portinhola" },
+          alcapao: { type: "boolean", description: "true se o cliente quer adicionar Alçapão" },
+        },
+        required: ["portinhola", "alcapao"],
       },
     },
   },
@@ -1038,7 +1083,7 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const estadoRes = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, endereco_instalacao")
+      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1099,7 +1144,7 @@ async function carregarEstadoConversa(conversaId: string) {
   const { data, error } = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1123,6 +1168,9 @@ function proximaPerguntaDeterministica(estado: any): string | null {
   if (!estado?.tipo_perfil) {
     return "Qual o tipo da lâmina?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
   }
+  if (!estado?.adicionais_perguntado) {
+    return "Antes de seguir, você gostaria de adicionar algum item opcional?\n\n• *Portinhola* (porta de acesso integrada)\n• *Alçapão* (acesso superior)\n\nPode ser os dois, só um, ou nenhum. Como prefere?";
+  }
   if (tipo === "porta_instalada" && !estado?.cep) {
     return "Por último, qual o *CEP do local da instalação*? Assim calculo o frete certinho.";
   }
@@ -1141,6 +1189,7 @@ function estadoProntoParaOrcamento(estado: any): boolean {
     Number.isFinite(largura) && largura > 0 && largura <= 20 &&
     Number.isFinite(altura) && altura > 0 && altura <= 20 &&
     perfilValido &&
+    Boolean(estado?.adicionais_perguntado) &&
     (tipo !== "porta_instalada" || Boolean(estado?.cep))
   );
 }
@@ -1207,7 +1256,7 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   const r = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao")
+      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1228,6 +1277,7 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
   if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
   if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
+  if (!estado?.adicionais_perguntado) faltando.push("adicionais");
   if (tipoCliente === "porta_instalada" && (!Number.isFinite(frete) || frete <= 0)) faltando.push("frete");
   if (faltando.length) return { ok: false, faltando };
 
@@ -1239,6 +1289,10 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
     frete,
     cliente_nome: nome,
     cliente_endereco: estado?.endereco_instalacao || undefined,
+    adicionais: {
+      portinhola: Boolean(estado?.adicionais?.portinhola),
+      alcapao: Boolean(estado?.adicionais?.alcapao),
+    },
   });
   const filename = `orcamento_${Date.now()}.pdf`;
   const pdfB64 = await gerarPdfDocrya(gerarHtmlOrcamento(orcamento), filename);
@@ -1804,17 +1858,21 @@ Deno.serve(async (req) => {
     const montarEstado = async (): Promise<string> => {
       const { data: c } = await supabase
         .from("leo_conversations")
-        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado")
         .eq("id", conversa.id)
         .maybeSingle();
       const v = (x: any) => (x === null || x === undefined || x === "" || x === "indefinido") ? "PENDENTE" : String(x);
       const tc = v(c?.tipo_cliente);
       const precisaFrete = c?.tipo_cliente === "porta_instalada";
+      const adicionaisStr = c?.adicionais_perguntado
+        ? `portinhola=${Boolean((c?.adicionais as any)?.portinhola)}, alcapao=${Boolean((c?.adicionais as any)?.alcapao)}`
+        : "PENDENTE";
       const linhas = [
         `tipo_cliente=${tc}`,
         `largura=${v(c?.largura)}`,
         `altura=${v(c?.altura)}`,
         `tipo_perfil=${v(c?.tipo_perfil)}`,
+        `adicionais_perguntado=${adicionaisStr}`,
       ];
       if (precisaFrete) {
         linhas.push(`cep=${v(c?.cep)}`);
@@ -1909,7 +1967,7 @@ Deno.serve(async (req) => {
           // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
           const { data: estado } = await supabase
             .from("leo_conversations")
-            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao")
+            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado")
             .eq("id", conversa.id)
             .maybeSingle();
 
@@ -1926,6 +1984,7 @@ Deno.serve(async (req) => {
           if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
           if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
           if (!perfilValid) faltando.push("tipo_perfil");
+          if (!estado?.adicionais_perguntado) faltando.push("adicionais");
           if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
             faltando.push("frete");
           }
@@ -1936,13 +1995,15 @@ Deno.serve(async (req) => {
             const proximo = faltando[0];
             const proximaPergunta = proximo === "frete"
               ? "Pergunte AGORA: 'Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho.' NÃO chame nenhuma tool nesta resposta."
-              : (proximo === "largura" || proximo === "altura")
-                ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
-                : proximo === "tipo_perfil"
-                  ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
-                  : proximo === "tipo_cliente"
-                    ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
-                    : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
+              : proximo === "adicionais"
+                ? "Pergunte AGORA, de forma natural, se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando ele responder, chame definir_adicionais. NÃO chame gerar_orcamento agora."
+                : (proximo === "largura" || proximo === "altura")
+                  ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
+                  : proximo === "tipo_perfil"
+                    ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
+                    : proximo === "tipo_cliente"
+                      ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
+                      : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
               erro: "DADOS_INSUFICIENTES",
@@ -1969,6 +2030,10 @@ Deno.serve(async (req) => {
               frete: Number.isFinite(freteNum) ? freteNum : 0,
               cliente_nome: nome,
               cliente_endereco: estado?.endereco_instalacao || undefined,
+              adicionais: {
+                portinhola: Boolean((estado?.adicionais as any)?.portinhola),
+                alcapao: Boolean((estado?.adicionais as any)?.alcapao),
+              },
             });
 
             const html = gerarHtmlOrcamento(o);
@@ -2057,11 +2122,29 @@ Deno.serve(async (req) => {
               .select("tipo_cliente")
               .eq("id", conversa.id)
               .maybeSingle();
-            const proxima = cv?.tipo_cliente === "porta_instalada"
-              ? "Lâmina gravada. NÃO confirme. Siga DIRETO ao Passo 5: pergunte o CEP do local da instalação."
-              : "Lâmina gravada. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
+            const proxima = "Lâmina gravada. NÃO confirme. Siga DIRETO ao Passo 5: pergunte de forma natural se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando responder, chame definir_adicionais.";
             toolResult = { ok: true, tipo_perfil: pNorm, instrucao: proxima };
           }
+        } else if (fnName === "definir_adicionais") {
+          const portinhola = Boolean(args.portinhola);
+          const alcapao = Boolean(args.alcapao);
+          await supabase
+            .from("leo_conversations")
+            .update({
+              adicionais: { portinhola, alcapao },
+              adicionais_perguntado: true,
+              ultima_mensagem_at: new Date().toISOString(),
+            })
+            .eq("id", conversa.id);
+          const { data: cv2 } = await supabase
+            .from("leo_conversations")
+            .select("tipo_cliente, cep")
+            .eq("id", conversa.id)
+            .maybeSingle();
+          const proxima = cv2?.tipo_cliente === "porta_instalada" && !cv2?.cep
+            ? "Adicionais gravados. NÃO confirme. Siga DIRETO ao Passo 6: pergunte o CEP do local da instalação."
+            : "Adicionais gravados. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
+          toolResult = { ok: true, portinhola, alcapao, instrucao: proxima };
         } else if (fnName === "calcular_frete_cep") {
           const r: any = await calcularFretePorCep(String(args.cep || ""));
           if (r.ok) {
