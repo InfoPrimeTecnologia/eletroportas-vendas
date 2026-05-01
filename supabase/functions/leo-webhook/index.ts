@@ -1967,7 +1967,7 @@ Deno.serve(async (req) => {
           // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
           const { data: estado } = await supabase
             .from("leo_conversations")
-            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao")
+            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado")
             .eq("id", conversa.id)
             .maybeSingle();
 
@@ -1984,6 +1984,7 @@ Deno.serve(async (req) => {
           if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
           if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
           if (!perfilValid) faltando.push("tipo_perfil");
+          if (!estado?.adicionais_perguntado) faltando.push("adicionais");
           if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
             faltando.push("frete");
           }
@@ -1994,13 +1995,15 @@ Deno.serve(async (req) => {
             const proximo = faltando[0];
             const proximaPergunta = proximo === "frete"
               ? "Pergunte AGORA: 'Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho.' NÃO chame nenhuma tool nesta resposta."
-              : (proximo === "largura" || proximo === "altura")
-                ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
-                : proximo === "tipo_perfil"
-                  ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
-                  : proximo === "tipo_cliente"
-                    ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
-                    : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
+              : proximo === "adicionais"
+                ? "Pergunte AGORA, de forma natural, se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando ele responder, chame definir_adicionais. NÃO chame gerar_orcamento agora."
+                : (proximo === "largura" || proximo === "altura")
+                  ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
+                  : proximo === "tipo_perfil"
+                    ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
+                    : proximo === "tipo_cliente"
+                      ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
+                      : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
               erro: "DADOS_INSUFICIENTES",
@@ -2027,6 +2030,10 @@ Deno.serve(async (req) => {
               frete: Number.isFinite(freteNum) ? freteNum : 0,
               cliente_nome: nome,
               cliente_endereco: estado?.endereco_instalacao || undefined,
+              adicionais: {
+                portinhola: Boolean((estado?.adicionais as any)?.portinhola),
+                alcapao: Boolean((estado?.adicionais as any)?.alcapao),
+              },
             });
 
             const html = gerarHtmlOrcamento(o);
