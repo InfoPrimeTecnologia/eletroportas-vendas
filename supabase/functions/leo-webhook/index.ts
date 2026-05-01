@@ -1168,6 +1168,9 @@ function proximaPerguntaDeterministica(estado: any): string | null {
   if (!estado?.tipo_perfil) {
     return "Qual o tipo da lâmina?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
   }
+  if (!estado?.adicionais_perguntado) {
+    return "Antes de seguir, você gostaria de adicionar algum item opcional?\n\n• *Portinhola* (porta de acesso integrada)\n• *Alçapão* (acesso superior)\n\nPode ser os dois, só um, ou nenhum. Como prefere?";
+  }
   if (tipo === "porta_instalada" && !estado?.cep) {
     return "Por último, qual o *CEP do local da instalação*? Assim calculo o frete certinho.";
   }
@@ -1186,6 +1189,7 @@ function estadoProntoParaOrcamento(estado: any): boolean {
     Number.isFinite(largura) && largura > 0 && largura <= 20 &&
     Number.isFinite(altura) && altura > 0 && altura <= 20 &&
     perfilValido &&
+    Boolean(estado?.adicionais_perguntado) &&
     (tipo !== "porta_instalada" || Boolean(estado?.cep))
   );
 }
