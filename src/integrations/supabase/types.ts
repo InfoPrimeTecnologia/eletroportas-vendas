@@ -199,6 +199,8 @@ export type Database = {
       }
       leo_conversations: {
         Row: {
+          adicionais: Json
+          adicionais_perguntado: boolean
           altura: number | null
           cep: string | null
           created_at: string
@@ -215,6 +217,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          adicionais?: Json
+          adicionais_perguntado?: boolean
           altura?: number | null
           cep?: string | null
           created_at?: string
@@ -231,6 +235,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          adicionais?: Json
+          adicionais_perguntado?: boolean
           altura?: number | null
           cep?: string | null
           created_at?: string
