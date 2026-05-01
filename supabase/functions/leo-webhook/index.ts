@@ -1062,8 +1062,10 @@ function inferirAdicionaisTexto(texto: string): { portinhola: boolean; alcapao: 
   if (querNenhum) return { portinhola: false, alcapao: false };
 
   const ambos = /\b(os dois|ambos|duas|dois|todos|todas)\b/.test(t);
-  const portinhola = ambos || /\b(portinhola|porta de acesso)\b/.test(t);
-  const alcapao = ambos || /\b(alcapao|alçapao|alçapão|alcapa)\b/.test(t);
+  const negaPortinhola = /\b(sem|nao|dispenso|recuso)\s+(a\s+)?portinhola\b/.test(t);
+  const negaAlcapao = /\b(sem|nao|dispenso|recuso)\s+(o\s+)?(alcapao|alcapa)\b/.test(t);
+  const portinhola = (ambos || /\b(portinhola|porta de acesso)\b/.test(t)) && !negaPortinhola;
+  const alcapao = (ambos || /\b(alcapao|alcapa)\b/.test(t)) && !negaAlcapao;
 
   if (portinhola || alcapao) return { portinhola, alcapao };
   return null;
