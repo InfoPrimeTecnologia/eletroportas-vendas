@@ -1083,7 +1083,7 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const estadoRes = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, endereco_instalacao")
+      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado")
       .eq("id", conversaId)
       .maybeSingle()
   );
