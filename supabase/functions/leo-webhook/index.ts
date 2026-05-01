@@ -1131,6 +1131,10 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
   if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
   if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
+  if (estado.adicionais_perguntado && !baseEstado?.adicionais_perguntado) {
+    patch.adicionais = estado.adicionais || { portinhola: false, alcapao: false };
+    patch.adicionais_perguntado = true;
+  }
 
   const cep = inferirCepTexto(texto);
   if (cep && estado?.tipo_cliente === "porta_instalada" && !baseEstado?.cep) {
@@ -1191,7 +1195,7 @@ function proximaPerguntaDeterministica(estado: any): string | null {
     return "Qual o tipo da lâmina?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
   }
   if (!estado?.adicionais_perguntado) {
-    return "Antes de seguir, você gostaria de adicionar algum item opcional?\n\n• *Portinhola* (porta de acesso integrada)\n• *Alçapão* (acesso superior)\n\nPode ser os dois, só um, ou nenhum. Como prefere?";
+    return "Antes de seguir, você gostaria de adicionar algum item opcional?\n\n• *Portinhola* (porta de acesso integrada)\n• *Alçapão* (acesso na própria porta)\n\nPode ser os dois, só um, ou nenhum. Como prefere?";
   }
   if (tipo === "porta_instalada" && !estado?.cep) {
     return "Por último, qual o *CEP do local da instalação*? Assim calculo o frete certinho.";
