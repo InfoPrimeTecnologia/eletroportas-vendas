@@ -1053,6 +1053,22 @@ function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo
   return null;
 }
 
+function inferirAdicionaisTexto(texto: string): { portinhola: boolean; alcapao: boolean } | null {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!t.trim()) return null;
+
+  const querNenhum = /\b(nenhum|nenhuma|nao|não|sem|dispenso|obrigado|obrigada)\b/.test(t)
+    && !/\b(portinhola|alcapao|alcapão|alcapa|os dois|ambos|duas|dois)\b/.test(t);
+  if (querNenhum) return { portinhola: false, alcapao: false };
+
+  const ambos = /\b(os dois|ambos|duas|dois|todos|todas)\b/.test(t);
+  const portinhola = ambos || /\b(portinhola|porta de acesso)\b/.test(t);
+  const alcapao = ambos || /\b(alcapao|alçapao|alçapão|alcapa)\b/.test(t);
+
+  if (portinhola || alcapao) return { portinhola, alcapao };
+  return null;
+}
+
 function inferirCepTexto(texto: string): string | null {
   const match = (texto || "").match(/\b\d{5}-?\d{3}\b/);
   return match ? match[0].replace(/\D/g, "") : null;
@@ -1072,6 +1088,12 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
 
     const lamina = inferirLaminaTexto(txt);
     if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
+
+    const adicionais = inferirAdicionaisTexto(txt);
+    if (adicionais && estado.tipo_perfil && !estado.adicionais_perguntado) {
+      estado.adicionais = adicionais;
+      estado.adicionais_perguntado = true;
+    }
 
     const cep = inferirCepTexto(txt);
     if (cep && estado.tipo_cliente === "porta_instalada" && !estado.cep) estado.cep = cep;
