@@ -1256,7 +1256,7 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   const r = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao")
+      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1277,6 +1277,7 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
   if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
   if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
+  if (!estado?.adicionais_perguntado) faltando.push("adicionais");
   if (tipoCliente === "porta_instalada" && (!Number.isFinite(frete) || frete <= 0)) faltando.push("frete");
   if (faltando.length) return { ok: false, faltando };
 
@@ -1288,6 +1289,10 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
     frete,
     cliente_nome: nome,
     cliente_endereco: estado?.endereco_instalacao || undefined,
+    adicionais: {
+      portinhola: Boolean(estado?.adicionais?.portinhola),
+      alcapao: Boolean(estado?.adicionais?.alcapao),
+    },
   });
   const filename = `orcamento_${Date.now()}.pdf`;
   const pdfB64 = await gerarPdfDocrya(gerarHtmlOrcamento(orcamento), filename);
