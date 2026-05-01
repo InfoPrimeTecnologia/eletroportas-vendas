@@ -708,13 +708,28 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_lamina",
-      description: "Grava no banco o tipo de lâmina escolhido pelo cliente. Chame ASSIM QUE o cliente responder o Passo 4. Silenciosa. Na MESMA rodada avance para o próximo passo (CEP se porta_instalada, ou direto gerar_orcamento se revenda).",
+      description: "Grava no banco o tipo de lâmina escolhido pelo cliente. Chame ASSIM QUE o cliente responder o Passo 4. Silenciosa. Na MESMA rodada avance para o próximo passo (Passo 5 — adicionais).",
       parameters: {
         type: "object",
         properties: {
           tipo_perfil: { type: "string", enum: ["fechado", "transvision", "oblongo"] },
         },
         required: ["tipo_perfil"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "definir_adicionais",
+      description: "Grava no banco se o cliente quer Portinhola e/ou Alçapão. Chame ASSIM QUE o cliente responder o Passo 5 — mesmo que ele diga 'nenhum', 'não quero', 'só portinhola', 'os dois' etc. Marca adicionais_perguntado=true. Silenciosa — siga adiante na mesma rodada (CEP se porta_instalada, ou gerar_orcamento se revenda).",
+      parameters: {
+        type: "object",
+        properties: {
+          portinhola: { type: "boolean", description: "true se o cliente quer adicionar Portinhola" },
+          alcapao: { type: "boolean", description: "true se o cliente quer adicionar Alçapão" },
+        },
+        required: ["portinhola", "alcapao"],
       },
     },
   },
