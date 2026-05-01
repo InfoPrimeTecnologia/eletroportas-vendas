@@ -259,6 +259,13 @@ function calcularOrcamento(input: OrcamentoInput) {
   add("COMP-011", `CONTROLE REMOTO ANALÓGICO`, 2, "UN", PRECOS.controle_remoto);
   add("COMP-012", `CENTRAL DE COMANDO ANALÓGICO`, 1, "UN", PRECOS.central_comando);
 
+  if (input.adicionais?.portinhola) {
+    add("ADIC-001", `PORTINHOLA (porta de acesso integrada)`, 1, "UN", PRECOS.portinhola);
+  }
+  if (input.adicionais?.alcapao) {
+    add("ADIC-002", `ALÇAPÃO (acesso superior)`, 1, "UN", PRECOS.alcapao);
+  }
+
   const subtotal_produtos = itens.reduce((s, i) => s + i.subtotal, 0);
 
   let mao_de_obra = 0;
