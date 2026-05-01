@@ -1858,17 +1858,21 @@ Deno.serve(async (req) => {
     const montarEstado = async (): Promise<string> => {
       const { data: c } = await supabase
         .from("leo_conversations")
-        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado")
         .eq("id", conversa.id)
         .maybeSingle();
       const v = (x: any) => (x === null || x === undefined || x === "" || x === "indefinido") ? "PENDENTE" : String(x);
       const tc = v(c?.tipo_cliente);
       const precisaFrete = c?.tipo_cliente === "porta_instalada";
+      const adicionaisStr = c?.adicionais_perguntado
+        ? `portinhola=${Boolean((c?.adicionais as any)?.portinhola)}, alcapao=${Boolean((c?.adicionais as any)?.alcapao)}`
+        : "PENDENTE";
       const linhas = [
         `tipo_cliente=${tc}`,
         `largura=${v(c?.largura)}`,
         `altura=${v(c?.altura)}`,
         `tipo_perfil=${v(c?.tipo_perfil)}`,
+        `adicionais_perguntado=${adicionaisStr}`,
       ];
       if (precisaFrete) {
         linhas.push(`cep=${v(c?.cep)}`);
