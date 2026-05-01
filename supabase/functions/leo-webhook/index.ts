@@ -263,7 +263,7 @@ function calcularOrcamento(input: OrcamentoInput) {
     add("ADIC-001", `PORTINHOLA (porta de acesso integrada)`, 1, "UN", PRECOS.portinhola);
   }
   if (input.adicionais?.alcapao) {
-    add("ADIC-002", `ALÇAPÃO (acesso superior)`, 1, "UN", PRECOS.alcapao);
+    add("ADIC-002", `ALÇAPÃO (acesso na porta)`, 1, "UN", PRECOS.alcapao);
   }
 
   const subtotal_produtos = itens.reduce((s, i) => s + i.subtotal, 0);
@@ -602,7 +602,7 @@ Atender o cliente 24h por dia: tirar dúvidas, explicar produtos/processos e con
    Pergunte de forma natural se ele quer incluir algum dos itens opcionais:
    "Antes de seguir, você gostaria de adicionar algum desses itens opcionais?
    • **Portinhola** — porta de acesso integrada
-   • **Alçapão** — acesso superior
+   • **Alçapão** — acesso na própria porta
    Pode ser os dois, só um, ou nenhum. Como prefere?"
    Quando o cliente responder (mesmo que seja "nenhum", "só portinhola", "os dois", "alçapão", "não, obrigado"), chame **IMEDIATAMENTE** \`definir_adicionais\` com os booleanos certos. É silenciosa — siga adiante na mesma rodada.
 
