@@ -2122,11 +2122,29 @@ Deno.serve(async (req) => {
               .select("tipo_cliente")
               .eq("id", conversa.id)
               .maybeSingle();
-            const proxima = cv?.tipo_cliente === "porta_instalada"
-              ? "Lâmina gravada. NÃO confirme. Siga DIRETO ao Passo 5: pergunte o CEP do local da instalação."
-              : "Lâmina gravada. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
+            const proxima = "Lâmina gravada. NÃO confirme. Siga DIRETO ao Passo 5: pergunte de forma natural se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando responder, chame definir_adicionais.";
             toolResult = { ok: true, tipo_perfil: pNorm, instrucao: proxima };
           }
+        } else if (fnName === "definir_adicionais") {
+          const portinhola = Boolean(args.portinhola);
+          const alcapao = Boolean(args.alcapao);
+          await supabase
+            .from("leo_conversations")
+            .update({
+              adicionais: { portinhola, alcapao },
+              adicionais_perguntado: true,
+              ultima_mensagem_at: new Date().toISOString(),
+            })
+            .eq("id", conversa.id);
+          const { data: cv2 } = await supabase
+            .from("leo_conversations")
+            .select("tipo_cliente, cep")
+            .eq("id", conversa.id)
+            .maybeSingle();
+          const proxima = cv2?.tipo_cliente === "porta_instalada" && !cv2?.cep
+            ? "Adicionais gravados. NÃO confirme. Siga DIRETO ao Passo 6: pergunte o CEP do local da instalação."
+            : "Adicionais gravados. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
+          toolResult = { ok: true, portinhola, alcapao, instrucao: proxima };
         } else if (fnName === "calcular_frete_cep") {
           const r: any = await calcularFretePorCep(String(args.cep || ""));
           if (r.ok) {
