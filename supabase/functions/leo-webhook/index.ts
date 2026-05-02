@@ -2156,23 +2156,44 @@ Deno.serve(async (req) => {
         } else if (fnName === "definir_adicionais") {
           const portinhola = Boolean(args.portinhola);
           const alcapao = Boolean(args.alcapao);
-          await supabase
-            .from("leo_conversations")
-            .update({
-              adicionais: { portinhola, alcapao },
-              adicionais_perguntado: true,
-              ultima_mensagem_at: new Date().toISOString(),
-            })
-            .eq("id", conversa.id);
-          const { data: cv2 } = await supabase
-            .from("leo_conversations")
-            .select("tipo_cliente, cep")
-            .eq("id", conversa.id)
-            .maybeSingle();
-          const proxima = cv2?.tipo_cliente === "porta_instalada" && !cv2?.cep
-            ? "Adicionais gravados. NÃO confirme. Siga DIRETO ao Passo 6: pergunte o CEP do local da instalação."
-            : "Adicionais gravados. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
-          toolResult = { ok: true, portinhola, alcapao, instrucao: proxima };
+
+          // GUARD: só aceita se o assistant já fez a pergunta sobre adicionais nas últimas mensagens
+          const { data: ultimasMsgs } = await supabase
+            .from("leo_messages")
+            .select("role, content")
+            .eq("conversation_id", conversa.id)
+            .order("created_at", { ascending: false })
+            .limit(6);
+          const perguntouAdicionais = (ultimasMsgs || []).some((m: any) => {
+            if (m.role !== "assistant") return false;
+            const c = String(m.content || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return /portinhola/.test(c) && /alcapao/.test(c);
+          });
+
+          if (!perguntouAdicionais) {
+            toolResult = {
+              ok: false,
+              error: "Você ainda NÃO perguntou ao cliente sobre os adicionais. Pergunte AGORA, de forma natural, se ele quer Portinhola, Alçapão, os dois, ou nenhum. Só chame esta tool DEPOIS que o cliente responder.",
+            };
+          } else {
+            await supabase
+              .from("leo_conversations")
+              .update({
+                adicionais: { portinhola, alcapao },
+                adicionais_perguntado: true,
+                ultima_mensagem_at: new Date().toISOString(),
+              })
+              .eq("id", conversa.id);
+            const { data: cv2 } = await supabase
+              .from("leo_conversations")
+              .select("tipo_cliente, cep")
+              .eq("id", conversa.id)
+              .maybeSingle();
+            const proxima = cv2?.tipo_cliente === "porta_instalada" && !cv2?.cep
+              ? "Adicionais gravados. NÃO confirme. Siga DIRETO ao Passo 6: pergunte o CEP do local da instalação."
+              : "Adicionais gravados. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
+            toolResult = { ok: true, portinhola, alcapao, instrucao: proxima };
+          }
         } else if (fnName === "calcular_frete_cep") {
           const r: any = await calcularFretePorCep(String(args.cep || ""));
           if (r.ok) {
