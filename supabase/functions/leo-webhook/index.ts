@@ -1874,6 +1874,9 @@ Deno.serve(async (req) => {
     if (perguntaDeterministica) {
       await salvarMensagem(conversa.id, "assistant", perguntaDeterministica, { deterministic_flow: true });
       await enviarTexto(telefone, perguntaDeterministica);
+      if (isPerguntaLamina(perguntaDeterministica)) {
+        try { await enviarImagemUrl(telefone, LAMINAS_IMAGE_URL); } catch (e) { console.error(e); }
+      }
       return new Response(JSON.stringify({ ok: true, deterministic_flow: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
