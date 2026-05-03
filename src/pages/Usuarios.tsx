@@ -111,57 +111,36 @@ export default function Usuarios() {
 
     setIsCreatingUser(true);
     try {
-      // Save current session to restore after signUp (signUp would otherwise log in the new user)
-      const { data: currentSession } = await supabase.auth.getSession();
-
-      const { data, error } = await supabase.auth.signUp({
-        email: newUserEmail,
-        password: newUserPassword,
-        options: { emailRedirectTo: `${window.location.origin}/` },
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: { email: newUserEmail, password: newUserPassword, role: newUserRole },
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
-      if (data.user) {
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .insert({ user_id: data.user.id, role: newUserRole });
+      toast.success('Usuário criado! Agora defina as permissões de acesso.');
 
-        if (roleError) throw roleError;
+      const newUser: UserWithRole = {
+        id: data.user.id,
+        email: newUserEmail,
+        role: newUserRole,
+        created_at: new Date().toISOString(),
+        last_sign_in_at: null,
+        permissions: [],
+      };
 
-        // Restore the admin session so current user stays logged in
-        if (currentSession?.session) {
-          await supabase.auth.setSession({
-            access_token: currentSession.session.access_token,
-            refresh_token: currentSession.session.refresh_token,
-          });
-        }
+      setAddUserDialogOpen(false);
+      setNewUserEmail('');
+      setNewUserPassword('');
 
-        toast.success('Usuário criado! Agora defina as permissões de acesso.');
-
-        const newUser: UserWithRole = {
-          id: data.user.id,
-          email: newUserEmail,
-          role: newUserRole,
-          created_at: new Date().toISOString(),
-          last_sign_in_at: null,
-          permissions: [],
-        };
-
-        setAddUserDialogOpen(false);
-        setNewUserEmail('');
-        setNewUserPassword('');
-
-        // Open permissions dialog right after creation (admins have full access by role)
-        if (newUserRole !== 'admin') {
-          handleOpenPermissions(newUser);
-        }
-
-        setNewUserRole('user');
-        queryClient.invalidateQueries({ queryKey: ['all-users'] });
+      if (newUserRole !== 'admin') {
+        handleOpenPermissions(newUser);
       }
+
+      setNewUserRole('user');
+      queryClient.invalidateQueries({ queryKey: ['all-users'] });
     } catch (error: any) {
-      toast.error('Erro ao criar usuário: ' + error.message);
+      toast.error('Erro ao criar usuário: ' + (error?.message || 'erro desconhecido'));
     } finally {
       setIsCreatingUser(false);
     }
