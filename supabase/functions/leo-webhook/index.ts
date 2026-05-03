@@ -500,6 +500,61 @@ async function enviarPdfBase64(numero: string, base64: string, filename: string,
   return false;
 }
 
+async function enviarImagemUrl(numero: string, imageUrl: string, caption?: string) {
+  // Tenta enviar imagem por URL via PrimeSync (vários formatos suportados)
+  const variants = [
+    { body: { number: numero, body: caption || "", mediaUrl: imageUrl } },
+    { body: { number: numero, body: caption || "", url: imageUrl } },
+    { body: { number: numero, caption: caption || "", mediaUrl: imageUrl } },
+  ];
+  for (const [idx, v] of variants.entries()) {
+    try {
+      const r = await fetch(PRIMESYNC_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${PRIMESYNC_TOKEN}`,
+        },
+        body: JSON.stringify(v.body),
+      });
+      const txt = await r.text();
+      const ok = r.ok && !/erro|error|invalid|missing/i.test(txt);
+      console.log(`🖼️ PrimeSync img URL ${idx + 1}: status=${r.status} ok=${ok} resp=${txt.substring(0, 200)}`);
+      if (ok) return true;
+    } catch (e) {
+      console.error(`🖼️ PrimeSync img URL ${idx + 1} exceção:`, e);
+    }
+  }
+  // Fallback: baixar e enviar como multipart
+  try {
+    const imgResp = await fetch(imageUrl);
+    const buf = new Uint8Array(await imgResp.arrayBuffer());
+    const blob = new Blob([buf], { type: "image/jpeg" });
+    const form = new FormData();
+    form.append("number", numero);
+    form.append("body", caption || "");
+    form.append("medias", blob, "laminas.jpeg");
+    const r = await fetch(PRIMESYNC_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${PRIMESYNC_TOKEN}` },
+      body: form,
+    });
+    const txt = await r.text();
+    console.log(`🖼️ PrimeSync img multipart: status=${r.status} resp=${txt.substring(0, 200)}`);
+    return r.ok;
+  } catch (e) {
+    console.error("🖼️ PrimeSync img multipart exceção:", e);
+    return false;
+  }
+}
+
+const LAMINAS_IMAGE_URL = "https://qehuellmpdrimtxcqbxc.supabase.co/storage/v1/object/public/leo-assets/laminas.jpeg";
+
+function isPerguntaLamina(texto: string): boolean {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return /tipo de lamina|tipo da lamina/.test(t) && /interesse|fechada|transvision|oblongo/.test(t);
+}
+
 async function transferirParaHumano(ticketId: number) {
   // PrimeSync: transfere o ticket para fila de atendimento humano
   const url = PRIMESYNC_URL.replace(/\/external\/.+$/, `/tickets/${ticketId}/transfer`);
@@ -591,10 +646,11 @@ Atender o cliente 24h por dia: tirar dúvidas, explicar produtos/processos e con
    Quando o cliente responder, chame **IMEDIATAMENTE** \`definir_medidas\`. Avance.
 
 **Passo 4 — Tipo de lâmina** (pular se [ESTADO] já tiver tipo_perfil):
-   "Qual o tipo da lâmina?
+   "Qual o tipo de lâmina você tem interesse?
    1️⃣ FECHADA (lisa, sem visão)
    2️⃣ TRANSVISION (com visores)
    3️⃣ OBLONGO (perfurada)"
+   (O sistema envia automaticamente uma foto comparativa dos modelos junto com sua mensagem — não mencione a foto a menos que o cliente pergunte.)
    Mapeie: "lisa"/"fechada"/"meia cana"/"1" → fechado; "transvision"/"visor"/"2" → transvision; "oblongo"/"perfurada"/"3" → oblongo.
    Quando o cliente responder, chame **IMEDIATAMENTE** \`definir_lamina\` (silenciosa) e avance.
 
@@ -1196,7 +1252,7 @@ function proximaPerguntaDeterministica(estado: any): string | null {
     return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
   }
   if (!estado?.tipo_perfil) {
-    return "Qual o tipo da lâmina?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
+    return "Qual o tipo de lâmina você tem interesse?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
   }
   if (!estado?.adicionais_perguntado) {
     return "Antes de seguir, você gostaria de adicionar algum item opcional?\n\n• *Portinhola* (porta de acesso integrada)\n• *Alçapão* (acesso na própria porta)\n\nPode ser os dois, só um, ou nenhum. Como prefere?";
@@ -1818,6 +1874,9 @@ Deno.serve(async (req) => {
     if (perguntaDeterministica) {
       await salvarMensagem(conversa.id, "assistant", perguntaDeterministica, { deterministic_flow: true });
       await enviarTexto(telefone, perguntaDeterministica);
+      if (isPerguntaLamina(perguntaDeterministica)) {
+        try { await enviarImagemUrl(telefone, LAMINAS_IMAGE_URL); } catch (e) { console.error(e); }
+      }
       return new Response(JSON.stringify({ ok: true, deterministic_flow: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -2267,6 +2326,13 @@ Deno.serve(async (req) => {
           "Desculpe, tive uma instabilidade aqui. Pode repetir sua última mensagem, por favor? 🙏";
         await salvarMensagem(conversa.id, "assistant", textoFinal);
         await enviarTexto(telefone, textoFinal);
+        if (isPerguntaLamina(textoFinal)) {
+          try {
+            await enviarImagemUrl(telefone, LAMINAS_IMAGE_URL);
+          } catch (e) {
+            console.error("⚠️ Falha ao enviar imagem de lâminas (não fatal):", e);
+          }
+        }
       }
     } catch (e: any) {
       console.error("⚠️ Falha ao persistir/enviar resposta final (não fatal):", e?.message, JSON.stringify(e));
