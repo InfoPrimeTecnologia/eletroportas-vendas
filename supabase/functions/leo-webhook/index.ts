@@ -1252,7 +1252,7 @@ function proximaPerguntaDeterministica(estado: any): string | null {
     return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
   }
   if (!estado?.tipo_perfil) {
-    return "Qual o tipo da lâmina?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
+    return "Qual o tipo de lâmina você tem interesse?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
   }
   if (!estado?.adicionais_perguntado) {
     return "Antes de seguir, você gostaria de adicionar algum item opcional?\n\n• *Portinhola* (porta de acesso integrada)\n• *Alçapão* (acesso na própria porta)\n\nPode ser os dois, só um, ou nenhum. Como prefere?";
