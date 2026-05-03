@@ -59,26 +59,43 @@ function normalizarTelefone(t: string): string {
 async function buscarClientePorTelefone(telefone: string) {
   const tel = normalizarTelefone(telefone);
   if (!tel) return null;
-  // tenta variações: completo, sem código país (55), últimos 11 dígitos
+  // Variações para casar formatos diferentes salvos no banco, mas SEMPRE com match exato
+  // (não usar ilike %v% para evitar falso positivo com telefones que contenham os mesmos dígitos)
+  const semPais = tel.startsWith("55") ? tel.slice(2) : tel;
   const variacoes = Array.from(new Set([
     tel,
-    tel.startsWith("55") ? tel.slice(2) : tel,
+    semPais,
     tel.slice(-11),
     tel.slice(-10),
+    `+${tel}`,
+    `+55${semPais}`,
   ].filter(Boolean)));
 
-  for (const v of variacoes) {
-    const { data, error } = await legacyDb
-      .from("Clientes")
-      .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE, CLI_CPF, tipo_cliente")
-      .ilike("CLI_FONE", `%${v}%`)
-      .limit(1)
-      .maybeSingle();
-    if (error) {
-      console.error("buscarClientePorTelefone erro:", error?.message || error);
-      continue;
-    }
-    if (data) return data;
+  // Busca todos os clientes que batem em qualquer uma das variações exatas
+  const { data, error } = await legacyDb
+    .from("Clientes")
+    .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE, CLI_CPF, tipo_cliente")
+    .in("CLI_FONE", variacoes)
+    .limit(1);
+  if (error) {
+    console.error("buscarClientePorTelefone erro:", error?.message || error);
+    return null;
+  }
+  if (data && data.length > 0) return data[0];
+
+  // Fallback: compara apenas os dígitos (caso o banco tenha guardado com máscara como "(71) 9...")
+  const { data: todos } = await legacyDb
+    .from("Clientes")
+    .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE, CLI_CPF, tipo_cliente")
+    .ilike("CLI_FONE", `%${tel.slice(-8)}%`)
+    .limit(20);
+  if (Array.isArray(todos)) {
+    const alvo = tel.slice(-10); // DDD + 8 dígitos finais
+    const match = todos.find((c: any) => {
+      const digitos = String(c.CLI_FONE || "").replace(/\D/g, "");
+      return digitos.endsWith(alvo) && digitos.length >= 10;
+    });
+    if (match) return match;
   }
   return null;
 }
