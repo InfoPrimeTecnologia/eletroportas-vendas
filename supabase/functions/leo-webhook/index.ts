@@ -2323,6 +2323,13 @@ Deno.serve(async (req) => {
           "Desculpe, tive uma instabilidade aqui. Pode repetir sua última mensagem, por favor? 🙏";
         await salvarMensagem(conversa.id, "assistant", textoFinal);
         await enviarTexto(telefone, textoFinal);
+        if (isPerguntaLamina(textoFinal)) {
+          try {
+            await enviarImagemUrl(telefone, LAMINAS_IMAGE_URL);
+          } catch (e) {
+            console.error("⚠️ Falha ao enviar imagem de lâminas (não fatal):", e);
+          }
+        }
       }
     } catch (e: any) {
       console.error("⚠️ Falha ao persistir/enviar resposta final (não fatal):", e?.message, JSON.stringify(e));
