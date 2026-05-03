@@ -576,7 +576,7 @@ const Funil = () => {
         </Table>
         <div className="flex justify-between px-3 py-2 border-t text-sm font-semibold bg-muted/30">
           <span>Total</span>
-          <span className="font-mono">R$ {items.reduce((s, i) => s + i.valor_unitario * i.quantidade, 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+          <span className="font-mono">R$ {items.reduce((s, i) => s + (Number(i.valor_unitario) || 0) * (Number(i.quantidade) || 0), 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
         </div>
       </div>
     ) : (
