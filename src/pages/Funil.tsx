@@ -562,9 +562,9 @@ const Funil = () => {
             {items.map((item, idx) => (
               <TableRow key={idx}>
                 <TableCell className="text-xs font-medium">{item.descricao}</TableCell>
-                <TableCell className="text-xs text-center">{item.quantidade}</TableCell>
-                <TableCell className="text-xs text-right font-mono">R$ {item.valor_unitario.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
-                <TableCell className="text-xs text-right font-mono">R$ {(item.valor_unitario * item.quantidade).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
+                <TableCell className="text-xs text-center">{Number(item.quantidade) || 0}</TableCell>
+                <TableCell className="text-xs text-right font-mono">R$ {(Number(item.valor_unitario) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
+                <TableCell className="text-xs text-right font-mono">R$ {((Number(item.valor_unitario) || 0) * (Number(item.quantidade) || 0)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
                 {onRemove && (
                   <TableCell>
                     <button onClick={() => onRemove(idx)} className="text-destructive hover:text-destructive/80 text-xs">✕</button>
