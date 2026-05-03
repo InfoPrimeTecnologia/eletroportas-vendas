@@ -501,11 +501,12 @@ async function enviarPdfBase64(numero: string, base64: string, filename: string,
 }
 
 async function enviarImagemUrl(numero: string, imageUrl: string, caption?: string) {
+  const captionTxt = (caption || "Veja as opções de lâminas disponíveis.").trim();
   // Tenta enviar imagem por URL via PrimeSync (vários formatos suportados)
   const variants = [
-    { body: { number: numero, body: caption || "", mediaUrl: imageUrl } },
-    { body: { number: numero, body: caption || "", url: imageUrl } },
-    { body: { number: numero, caption: caption || "", mediaUrl: imageUrl } },
+    { body: { number: numero, body: captionTxt, mediaUrl: imageUrl, mediaType: "image" } },
+    { body: { number: numero, body: captionTxt, url: imageUrl, mediaType: "image" } },
+    { body: { number: numero, caption: captionTxt, body: captionTxt, mediaUrl: imageUrl, mediaType: "image" } },
   ];
   for (const [idx, v] of variants.entries()) {
     try {
@@ -532,7 +533,10 @@ async function enviarImagemUrl(numero: string, imageUrl: string, caption?: strin
     const blob = new Blob([buf], { type: "image/jpeg" });
     const form = new FormData();
     form.append("number", numero);
-    form.append("body", caption || "");
+    form.append("body", captionTxt);
+    form.append("caption", captionTxt);
+    form.append("mediaType", "image");
+    form.append("mimetype", "image/jpeg");
     form.append("medias", blob, "laminas.jpeg");
     const r = await fetch(PRIMESYNC_URL, {
       method: "POST",
