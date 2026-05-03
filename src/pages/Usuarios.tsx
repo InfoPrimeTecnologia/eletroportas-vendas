@@ -79,6 +79,7 @@ const getRoleBadgeVariant = (role: AppRole | null) => {
 };
 
 export default function Usuarios() {
+  const queryClient = useQueryClient();
   const { isSuperAdmin, isAdmin, isLoading: roleLoading } = useUserRole();
   const { 
     users, 
