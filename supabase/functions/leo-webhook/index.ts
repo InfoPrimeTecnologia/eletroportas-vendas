@@ -552,7 +552,13 @@ const LAMINAS_IMAGE_URL = "https://qehuellmpdrimtxcqbxc.supabase.co/storage/v1/o
 
 function isPerguntaLamina(texto: string): boolean {
   const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return /tipo de lamina|tipo da lamina/.test(t) && /interesse|fechada|transvision|oblongo/.test(t);
+  // Detecta qualquer menção a lâmina/perfil OU aos três modelos juntos (mesmo que reformulada)
+  if (/\blamina|\bperfil\b/.test(t) && /(fechad|transvision|oblongo|lisa|visor|perfurad|1\b|2\b|3\b)/.test(t)) {
+    return true;
+  }
+  // Caso clássico: lista os 3 modelos
+  const hits = [/fechad/, /transvision/, /oblongo/].filter((r) => r.test(t)).length;
+  return hits >= 2;
 }
 
 async function transferirParaHumano(ticketId: number) {
