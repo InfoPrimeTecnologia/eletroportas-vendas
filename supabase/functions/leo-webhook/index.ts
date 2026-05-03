@@ -798,6 +798,8 @@ function estadoInicialConversa(telefone: string, nome?: string) {
     cep: null,
     frete: null,
     endereco_instalacao: null,
+    adicionais: { portinhola: false, alcapao: false },
+    adicionais_perguntado: false,
     ultima_mensagem_at: new Date().toISOString(),
   };
 }
