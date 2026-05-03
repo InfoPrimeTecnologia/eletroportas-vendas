@@ -1902,7 +1902,9 @@ Deno.serve(async (req) => {
     const estadoLocalInferido = await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
 
     const estadoAposExtracao = (await carregarEstadoConversa(conversa.id)) || estadoLocalInferido;
-    const perguntaDeterministica = proximaPerguntaDeterministica(estadoAposExtracao);
+    // Se o cliente NÃO está cadastrado no banco legado, NÃO dispara o fluxo determinístico
+    // (tipo/medidas/perfil/etc) — deixa a IA conduzir o Passo 1 (cadastro: nome, e-mail, CNPJ/CPF) primeiro.
+    const perguntaDeterministica = clienteExistente ? proximaPerguntaDeterministica(estadoAposExtracao) : null;
     if (perguntaDeterministica) {
       await salvarMensagem(conversa.id, "assistant", perguntaDeterministica, { deterministic_flow: true });
       await enviarTexto(telefone, perguntaDeterministica);
@@ -1914,7 +1916,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (estadoProntoParaOrcamento(estadoAposExtracao)) {
+    if (clienteExistente && estadoProntoParaOrcamento(estadoAposExtracao)) {
       const jaEnviouPdf = await pdfJaEnviadoConversa(conversa.id);
       // CONTEXTO (não palavras-chave): se as medidas/perfil/cep mudaram desde o último PDF, é OUTRO orçamento.
       const medidasMudaram = jaEnviouPdf ? await medidasMudaramDesdeUltimoPdf(conversa.id) : true;
