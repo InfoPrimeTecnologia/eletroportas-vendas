@@ -1916,7 +1916,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (estadoProntoParaOrcamento(estadoAposExtracao)) {
+    if (clienteExistente && estadoProntoParaOrcamento(estadoAposExtracao)) {
       const jaEnviouPdf = await pdfJaEnviadoConversa(conversa.id);
       // CONTEXTO (não palavras-chave): se as medidas/perfil/cep mudaram desde o último PDF, é OUTRO orçamento.
       const medidasMudaram = jaEnviouPdf ? await medidasMudaramDesdeUltimoPdf(conversa.id) : true;
