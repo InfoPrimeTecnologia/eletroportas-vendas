@@ -500,6 +500,61 @@ async function enviarPdfBase64(numero: string, base64: string, filename: string,
   return false;
 }
 
+async function enviarImagemUrl(numero: string, imageUrl: string, caption?: string) {
+  // Tenta enviar imagem por URL via PrimeSync (vários formatos suportados)
+  const variants = [
+    { body: { number: numero, body: caption || "", mediaUrl: imageUrl } },
+    { body: { number: numero, body: caption || "", url: imageUrl } },
+    { body: { number: numero, caption: caption || "", mediaUrl: imageUrl } },
+  ];
+  for (const [idx, v] of variants.entries()) {
+    try {
+      const r = await fetch(PRIMESYNC_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${PRIMESYNC_TOKEN}`,
+        },
+        body: JSON.stringify(v.body),
+      });
+      const txt = await r.text();
+      const ok = r.ok && !/erro|error|invalid|missing/i.test(txt);
+      console.log(`🖼️ PrimeSync img URL ${idx + 1}: status=${r.status} ok=${ok} resp=${txt.substring(0, 200)}`);
+      if (ok) return true;
+    } catch (e) {
+      console.error(`🖼️ PrimeSync img URL ${idx + 1} exceção:`, e);
+    }
+  }
+  // Fallback: baixar e enviar como multipart
+  try {
+    const imgResp = await fetch(imageUrl);
+    const buf = new Uint8Array(await imgResp.arrayBuffer());
+    const blob = new Blob([buf], { type: "image/jpeg" });
+    const form = new FormData();
+    form.append("number", numero);
+    form.append("body", caption || "");
+    form.append("medias", blob, "laminas.jpeg");
+    const r = await fetch(PRIMESYNC_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${PRIMESYNC_TOKEN}` },
+      body: form,
+    });
+    const txt = await r.text();
+    console.log(`🖼️ PrimeSync img multipart: status=${r.status} resp=${txt.substring(0, 200)}`);
+    return r.ok;
+  } catch (e) {
+    console.error("🖼️ PrimeSync img multipart exceção:", e);
+    return false;
+  }
+}
+
+const LAMINAS_IMAGE_URL = "https://qehuellmpdrimtxcqbxc.supabase.co/storage/v1/object/public/leo-assets/laminas.jpeg";
+
+function isPerguntaLamina(texto: string): boolean {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return /tipo de lamina|tipo da lamina/.test(t) && /interesse|fechada|transvision|oblongo/.test(t);
+}
+
 async function transferirParaHumano(ticketId: number) {
   // PrimeSync: transfere o ticket para fila de atendimento humano
   const url = PRIMESYNC_URL.replace(/\/external\/.+$/, `/tickets/${ticketId}/transfer`);
