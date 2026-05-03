@@ -158,6 +158,7 @@ export default function Usuarios() {
         }
 
         setNewUserRole('user');
+        queryClient.invalidateQueries({ queryKey: ['all-users'] });
       }
     } catch (error: any) {
       toast.error('Erro ao criar usuário: ' + error.message);
