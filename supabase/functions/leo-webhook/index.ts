@@ -1312,18 +1312,23 @@ async function medidasMudaramDesdeUltimoPdf(conversation_id: string): Promise<bo
   if (!snap) return true; // nenhum PDF salvo com snapshot → tratar como mudança/permitir
   const { data: c } = await supabase
     .from("leo_conversations")
-    .select("tipo_cliente, largura, altura, tipo_perfil, cep")
+    .select("tipo_cliente, largura, altura, tipo_perfil, cep, adicionais")
     .eq("id", conversation_id)
     .maybeSingle();
   if (!c) return false;
   const eq = (a: any, b: any) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
   const num = (a: any, b: any) => Number(a) === Number(b);
+  const bool = (v: any) => Boolean(v);
+  const adAtual = (c.adicionais as any) || {};
+  const adSnap = (snap.adicionais as any) || {};
   return !(
     eq(c.tipo_cliente, snap.tipo_cliente) &&
     num(c.largura, snap.largura) &&
     num(c.altura, snap.altura) &&
     eq(c.tipo_perfil, snap.tipo_perfil) &&
-    eq(c.cep, snap.cep)
+    eq(c.cep, snap.cep) &&
+    bool(adAtual.portinhola) === bool(adSnap.portinhola) &&
+    bool(adAtual.alcapao) === bool(adSnap.alcapao)
   );
 }
 
