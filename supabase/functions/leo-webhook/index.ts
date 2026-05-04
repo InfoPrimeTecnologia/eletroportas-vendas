@@ -288,7 +288,7 @@ function calcularOrcamento(input: OrcamentoInput) {
   let mao_de_obra = 0;
   let frete = 0;
   if (tipo_cliente === "porta_instalada") {
-    mao_de_obra = PRECOS.mao_de_obra_padrao;
+    mao_de_obra = area <= 30 ? 1500 : 2000;
     frete = input.frete || 0;
   }
 
