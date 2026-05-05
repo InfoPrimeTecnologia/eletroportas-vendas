@@ -602,31 +602,45 @@ async function transferirParaHumano(ticketId: number) {
 }
 
 // ===========================
-// Docrya — gerar PDF
+// PDFShift — gerar PDF (substitui Docrya, aceita HTML direto)
 // ===========================
-async function gerarPdfDocrya(html: string, filename: string): Promise<string | null> {
-  console.log(`📄 Docrya: gerando PDF "${filename}" (html ${html.length} chars)`);
-  const r = await fetch(DOCRYA_URL, {
+async function gerarPdfPdfShift(html: string, filename: string): Promise<string | null> {
+  if (!PDFSHIFT_API_KEY) {
+    console.error("📄 PDFSHIFT_API_KEY não configurada");
+    return null;
+  }
+  console.log(`📄 PDFShift: gerando PDF "${filename}" (html ${html.length} chars)`);
+  const auth = "Basic " + btoa(`api:${PDFSHIFT_API_KEY}`);
+  const r = await fetch(PDFSHIFT_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${DOCRYA_API_KEY}`,
+      Authorization: auth,
     },
-    body: JSON.stringify({ html, filename }),
+    body: JSON.stringify({
+      source: html,
+      landscape: false,
+      use_print: false,
+      format: "A4",
+    }),
   });
   if (!r.ok) {
-    console.error("📄 Docrya erro:", r.status, await r.text());
+    console.error("📄 PDFShift erro:", r.status, await r.text());
     return null;
   }
   const buf = new Uint8Array(await r.arrayBuffer());
-  console.log(`📄 Docrya OK: ${buf.length} bytes`);
-  // base64 em chunks (evita stack overflow)
+  console.log(`📄 PDFShift OK: ${buf.length} bytes`);
   let binary = "";
   const chunk = 0x8000;
   for (let i = 0; i < buf.length; i += chunk) {
     binary += String.fromCharCode(...buf.subarray(i, i + chunk));
   }
   return btoa(binary);
+}
+
+// Mantém o nome antigo para não quebrar callers
+async function gerarPdfDocrya(html: string, filename: string): Promise<string | null> {
+  return gerarPdfPdfShift(html, filename);
 }
 
 // ===========================
