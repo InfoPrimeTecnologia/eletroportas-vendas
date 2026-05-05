@@ -15,9 +15,11 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const PRIMESYNC_URL = Deno.env.get("PRIMESYNC_URL")!;
 const PRIMESYNC_TOKEN = Deno.env.get("PRIMESYNC_TOKEN")!;
-const DOCRYA_API_KEY = Deno.env.get("DOCRYA_API_KEY")!;
+const DOCRYA_API_KEY = Deno.env.get("DOCRYA_API_KEY") ?? "";
+const PDFSHIFT_API_KEY = Deno.env.get("PDFSHIFT_API_KEY") ?? "";
 
 const DOCRYA_URL = "https://www.docrya.com/api/v1/html-to-pdf";
+const PDFSHIFT_URL = "https://api.pdfshift.io/v3/convert/pdf";
 const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 // Modelo Lovable AI para agente de vendas com tool calling
 const AI_MODEL = "google/gemini-3-flash-preview";
