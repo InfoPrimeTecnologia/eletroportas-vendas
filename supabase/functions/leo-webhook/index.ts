@@ -1197,6 +1197,26 @@ function inferirAdicionaisTexto(texto: string): { portinhola: boolean; alcapao: 
   return null;
 }
 
+function inferirPinturaTexto(texto: string): { quer_pintura: boolean; tipo_pintura?: string } | null {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!t.trim()) return null;
+  // cores explícitas → quer pintura
+  if (/\bbranc(o|a)\b/.test(t)) return { quer_pintura: true, tipo_pintura: "branco_liso" };
+  if (/\bpret(o|a)\b/.test(t)) return { quer_pintura: true, tipo_pintura: "preta_fosco" };
+  if (/\bcinza\b/.test(t)) return { quer_pintura: true, tipo_pintura: "cinza_texturizado" };
+  if (/\b(especial|ral)\b/.test(t)) return { quer_pintura: true, tipo_pintura: "cor_especial" };
+  // negação clara
+  if (/\b(nao|não|nao precisa|nao quero|sem pintura|dispens|nao precis|sem pint|negativo|nada)\b/.test(t)
+      && !/\b(sim|quero|pode|incluir|coloca)\b/.test(t)) {
+    return { quer_pintura: false };
+  }
+  // afirmação sem cor
+  if (/\b(sim|quero|pode|incluir|coloca|pinta)\b/.test(t) && !/\bnao\b/.test(t)) {
+    return { quer_pintura: true };
+  }
+  return null;
+}
+
 function inferirCepTexto(texto: string): string | null {
   const match = (texto || "").match(/\b\d{5}-?\d{3}\b/);
   return match ? match[0].replace(/\D/g, "") : null;
@@ -1233,7 +1253,7 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const estadoRes = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado")
+      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1259,6 +1279,21 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
   if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
   if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
+
+  // Pintura: só infere após o perfil estar definido (significa que a pergunta de pintura foi/é a próxima)
+  if (estado.tipo_perfil && !baseEstado?.pintura_perguntado) {
+    const pint = inferirPinturaTexto(texto);
+    if (pint) {
+      patch.pintura_perguntado = true;
+      patch.quer_pintura = pint.quer_pintura;
+      patch.tipo_pintura = pint.quer_pintura ? (pint.tipo_pintura || null) : null;
+      // Se quer pintura mas não escolheu cor, deixa pintura_perguntado=false para o agente perguntar a cor
+      if (pint.quer_pintura && !pint.tipo_pintura) {
+        patch.pintura_perguntado = false;
+      }
+    }
+  }
+
   if (estado.adicionais_perguntado && !baseEstado?.adicionais_perguntado) {
     patch.adicionais = estado.adicionais || { portinhola: false, alcapao: false };
     patch.adicionais_perguntado = true;
