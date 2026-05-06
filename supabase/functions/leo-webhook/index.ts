@@ -2018,12 +2018,15 @@ Deno.serve(async (req) => {
     const montarEstado = async (): Promise<string> => {
       const { data: c } = await supabase
         .from("leo_conversations")
-        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado")
+        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
         .eq("id", conversa.id)
         .maybeSingle();
       const v = (x: any) => (x === null || x === undefined || x === "" || x === "indefinido") ? "PENDENTE" : String(x);
       const tc = v(c?.tipo_cliente);
       const precisaFrete = c?.tipo_cliente === "porta_instalada";
+      const pinturaStr = c?.pintura_perguntado
+        ? (c?.quer_pintura ? `cor=${c?.tipo_pintura || "PENDENTE_COR"}` : "dispensou")
+        : "PENDENTE";
       const adicionaisStr = c?.adicionais_perguntado
         ? `portinhola=${Boolean((c?.adicionais as any)?.portinhola)}, alcapao=${Boolean((c?.adicionais as any)?.alcapao)}`
         : "PENDENTE";
@@ -2032,6 +2035,7 @@ Deno.serve(async (req) => {
         `largura=${v(c?.largura)}`,
         `altura=${v(c?.altura)}`,
         `tipo_perfil=${v(c?.tipo_perfil)}`,
+        `pintura_perguntado=${pinturaStr}`,
         `adicionais_perguntado=${adicionaisStr}`,
       ];
       if (precisaFrete) {
