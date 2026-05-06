@@ -418,7 +418,7 @@ td { border-bottom: 1px solid #e6eaf0; padding: 5px; font-size: 8.8px; vertical-
       <h2>Especificações</h2>
       <strong>Dimensões:</strong> ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m<br/>
       <strong>Área:</strong> ${o.area.toFixed(2).replace(".", ",")}m²<br/>
-      <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.tipo_pintura.replace("_", " "))}
+      <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.incluir_pintura ? o.tipo_pintura.replace("_", " ") : "não inclusa")}
     </div>
   </div>
 </div>
