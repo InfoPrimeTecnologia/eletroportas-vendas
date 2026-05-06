@@ -1172,10 +1172,12 @@ function inferirMedidasTexto(texto: string): { largura: number; altura: number }
 }
 
 function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo" | null {
-  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (/\b(1|fechada|fechado|lisa|liso|meia cana)\b/.test(t)) return "fechado";
-  if (/\b(2|transvision|transvisao|visor|visores)\b/.test(t)) return "transvision";
-  if (/\b(3|oblongo|perfurada|perfurado)\b/.test(t)) return "oblongo";
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  if (!t) return null;
+  // Match prefixes/typos comuns: "oblong", "oblong.", "transv", "fech", etc.
+  if (/(^|\s)(1|fechad\w*|lis[ao]|meia\s*cana)(\s|$|[.,!?])/.test(t)) return "fechado";
+  if (/(^|\s)(2|transv\w*|visor\w*|visao|visores)(\s|$|[.,!?])/.test(t)) return "transvision";
+  if (/(^|\s)(3|oblong\w*|oblog\w*|perfurad\w*|perfurac\w*)(\s|$|[.,!?])/.test(t)) return "oblongo";
   return null;
 }
 
