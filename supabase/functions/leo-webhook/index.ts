@@ -706,7 +706,8 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
    2️⃣ TRANSVISION (com visores)
    3️⃣ OBLONGO (perfurada)"
    (O sistema envia automaticamente uma foto comparativa — não mencione a foto.)
-   Mapeie: lisa/fechada/1 → fechado; transvision/visor/2 → transvision; oblongo/perfurada/3 → oblongo.
+   Mapeie SEMPRE com tolerância a erros de digitação/abreviações: "lisa/fechad/fech/1" → fechado; "transv/transvision/visor/2" → transvision; "oblong/oblongo/oblog/perfurad/3" → oblongo.
+   NÃO repita a pergunta se conseguir inferir a escolha (ex: "oblong" = oblongo). Em caso de dúvida real, confirme: "Você quis dizer OBLONGO (perfurada)? 👍".
    Resposta → \`definir_lamina\` IMEDIATAMENTE.
 
 **Passo 5 — Pintura** (pular APENAS se [ESTADO] tiver pintura_perguntado=true):
@@ -1172,10 +1173,12 @@ function inferirMedidasTexto(texto: string): { largura: number; altura: number }
 }
 
 function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo" | null {
-  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (/\b(1|fechada|fechado|lisa|liso|meia cana)\b/.test(t)) return "fechado";
-  if (/\b(2|transvision|transvisao|visor|visores)\b/.test(t)) return "transvision";
-  if (/\b(3|oblongo|perfurada|perfurado)\b/.test(t)) return "oblongo";
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  if (!t) return null;
+  // Match prefixes/typos comuns: "oblong", "oblong.", "transv", "fech", etc.
+  if (/(^|\s)(1|fechad\w*|lis[ao]|meia\s*cana)(\s|$|[.,!?])/.test(t)) return "fechado";
+  if (/(^|\s)(2|transv\w*|visor\w*|visao|visores)(\s|$|[.,!?])/.test(t)) return "transvision";
+  if (/(^|\s)(3|oblong\w*|oblog\w*|perfurad\w*|perfurac\w*)(\s|$|[.,!?])/.test(t)) return "oblongo";
   return null;
 }
 
