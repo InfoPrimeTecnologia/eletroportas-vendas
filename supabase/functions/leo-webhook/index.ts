@@ -302,7 +302,7 @@ function calcularOrcamento(input: OrcamentoInput) {
 
   return {
     largura, altura, area,
-    tipo_cliente, tipo_perfil, tipo_motor, tipo_pintura,
+    tipo_cliente, tipo_perfil, tipo_motor, tipo_pintura, incluir_pintura,
     itens,
     subtotal_produtos: +subtotal_produtos.toFixed(2),
     mao_de_obra: +mao_de_obra.toFixed(2),
