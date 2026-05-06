@@ -2289,6 +2289,28 @@ Deno.serve(async (req) => {
             const proxima = "Lâmina gravada. NÃO confirme. Siga DIRETO ao Passo 5: pergunte de forma natural se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando responder, chame definir_adicionais.";
             toolResult = { ok: true, tipo_perfil: pNorm, instrucao: proxima };
           }
+        } else if (fnName === "definir_pintura") {
+          const querPintura = Boolean(args.quer_pintura);
+          const tipoPint = String(args.tipo_pintura || "").toLowerCase();
+          const tipoValido = ["branco_liso", "preta_fosco", "cinza_texturizado", "cor_especial"].includes(tipoPint) ? tipoPint : null;
+          if (querPintura && !tipoValido) {
+            toolResult = {
+              ok: false,
+              error: "Cliente quer pintura, mas a cor não foi informada. Pergunte qual cor: branco liso, preta fosco, cinza texturizado ou cor especial. Só chame definir_pintura quando souber a cor.",
+            };
+          } else {
+            await supabase
+              .from("leo_conversations")
+              .update({
+                pintura_perguntado: true,
+                quer_pintura: querPintura,
+                tipo_pintura: querPintura ? tipoValido : null,
+                ultima_mensagem_at: new Date().toISOString(),
+              })
+              .eq("id", conversa.id);
+            const proxima = "Pintura gravada. NÃO confirme. Siga DIRETO ao Passo 6: pergunte de forma natural sobre Portinhola/Alçapão (os dois, um ou nenhum).";
+            toolResult = { ok: true, quer_pintura: querPintura, tipo_pintura: querPintura ? tipoValido : null, instrucao: proxima };
+          }
         } else if (fnName === "definir_adicionais") {
           const portinhola = Boolean(args.portinhola);
           const alcapao = Boolean(args.alcapao);
