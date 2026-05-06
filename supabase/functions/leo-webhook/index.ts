@@ -706,7 +706,8 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
    2️⃣ TRANSVISION (com visores)
    3️⃣ OBLONGO (perfurada)"
    (O sistema envia automaticamente uma foto comparativa — não mencione a foto.)
-   Mapeie: lisa/fechada/1 → fechado; transvision/visor/2 → transvision; oblongo/perfurada/3 → oblongo.
+   Mapeie SEMPRE com tolerância a erros de digitação/abreviações: "lisa/fechad/fech/1" → fechado; "transv/transvision/visor/2" → transvision; "oblong/oblongo/oblog/perfurad/3" → oblongo.
+   NÃO repita a pergunta se conseguir inferir a escolha (ex: "oblong" = oblongo). Em caso de dúvida real, confirme: "Você quis dizer OBLONGO (perfurada)? 👍".
    Resposta → \`definir_lamina\` IMEDIATAMENTE.
 
 **Passo 5 — Pintura** (pular APENAS se [ESTADO] tiver pintura_perguntado=true):
