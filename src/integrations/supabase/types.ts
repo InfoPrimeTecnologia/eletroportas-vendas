@@ -209,10 +209,13 @@ export type Database = {
           id: string
           largura: number | null
           nome_cliente: string | null
+          pintura_perguntado: boolean
+          quer_pintura: boolean | null
           status: string
           telefone: string
           tipo_cliente: string
           tipo_perfil: string | null
+          tipo_pintura: string | null
           ultima_mensagem_at: string | null
           updated_at: string
         }
@@ -227,10 +230,13 @@ export type Database = {
           id?: string
           largura?: number | null
           nome_cliente?: string | null
+          pintura_perguntado?: boolean
+          quer_pintura?: boolean | null
           status?: string
           telefone: string
           tipo_cliente?: string
           tipo_perfil?: string | null
+          tipo_pintura?: string | null
           ultima_mensagem_at?: string | null
           updated_at?: string
         }
@@ -245,10 +251,13 @@ export type Database = {
           id?: string
           largura?: number | null
           nome_cliente?: string | null
+          pintura_perguntado?: boolean
+          quer_pintura?: boolean | null
           status?: string
           telefone?: string
           tipo_cliente?: string
           tipo_perfil?: string | null
+          tipo_pintura?: string | null
           ultima_mensagem_at?: string | null
           updated_at?: string
         }

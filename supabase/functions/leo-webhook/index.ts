@@ -240,6 +240,7 @@ interface OrcamentoInput {
   tipo_perfil?: "fechado" | "transvision" | "oblongo";
   tipo_motor?: "200kg" | "300kg" | "400kg" | "500kg" | "800kg" | "1500kg";
   tipo_pintura?: "branco_liso" | "preta_fosco" | "cinza_texturizado" | "cor_especial";
+  incluir_pintura?: boolean;
   tipo_cliente: "porta_instalada" | "revenda";
   cidade?: string;
   estado?: string;
@@ -253,6 +254,7 @@ function calcularOrcamento(input: OrcamentoInput) {
   const { largura, altura, tipo_cliente } = input;
   const tipo_perfil = input.tipo_perfil || "transvision";
   const tipo_motor = input.tipo_motor || "500kg";
+  const incluir_pintura = input.incluir_pintura !== false && Boolean(input.tipo_pintura);
   const tipo_pintura = input.tipo_pintura || "branco_liso";
 
   const area = largura * altura;
@@ -273,7 +275,9 @@ function calcularOrcamento(input: OrcamentoInput) {
   add("COMP-006", `PONTEIRA PARA SOLEIRA 40X60`, 2, "UN", PRECOS.ponteira);
   add("COMP-007", `PVC AUTO LUBRIFICANTE PARA GUIAS`, guiaLen, "MT", PRECOS.pvc_guia);
   add("COMP-008", `ACABAMENTO EM BORRACHA P/ SOLEIRA`, soleiraLen, "MT", PRECOS.borracha_soleira);
-  add("COMP-009", `PINTURA ${tipo_pintura.toUpperCase().replace("_", " ")} (ELETROSTÁTICA)`, area, "M²", (PRECOS as any)[`pintura_${tipo_pintura}`]);
+  if (incluir_pintura) {
+    add("COMP-009", `PINTURA ${tipo_pintura.toUpperCase().replace("_", " ")} (ELETROSTÁTICA)`, area, "M²", (PRECOS as any)[`pintura_${tipo_pintura}`]);
+  }
   add("COMP-010", `AUTOMATIZADOR ${tipo_motor.toUpperCase()}`, 1, "UN", (PRECOS as any)[`motor_${tipo_motor}`]);
   add("COMP-011", `CONTROLE REMOTO ANALÓGICO`, 2, "UN", PRECOS.controle_remoto);
   add("COMP-012", `CENTRAL DE COMANDO ANALÓGICO`, 1, "UN", PRECOS.central_comando);
@@ -298,7 +302,7 @@ function calcularOrcamento(input: OrcamentoInput) {
 
   return {
     largura, altura, area,
-    tipo_cliente, tipo_perfil, tipo_motor, tipo_pintura,
+    tipo_cliente, tipo_perfil, tipo_motor, tipo_pintura, incluir_pintura,
     itens,
     subtotal_produtos: +subtotal_produtos.toFixed(2),
     mao_de_obra: +mao_de_obra.toFixed(2),
@@ -414,7 +418,7 @@ td { border-bottom: 1px solid #e6eaf0; padding: 5px; font-size: 8.8px; vertical-
       <h2>Especificações</h2>
       <strong>Dimensões:</strong> ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m<br/>
       <strong>Área:</strong> ${o.area.toFixed(2).replace(".", ",")}m²<br/>
-      <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.tipo_pintura.replace("_", " "))}
+      <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.incluir_pintura ? o.tipo_pintura.replace("_", " ") : "não inclusa")}
     </div>
   </div>
 </div>
@@ -647,84 +651,90 @@ async function gerarPdfDocrya(html: string, filename: string): Promise<string | 
 // IA — Lovable AI Gateway com tools
 // ===========================
 const SYSTEM_PROMPT = `# IDENTIDADE
-Você é o **Leo**, vendedor virtual da **Eletroportas** (portas de enrolar automáticas), em Salvador-BA.
+Você é o **Leo**, consultor de vendas da **Eletroportas** (portas de enrolar automáticas) em Salvador-BA. Site oficial: eletroportas.com.br.
 
-# JEITO DE FALAR (HUMANIZAÇÃO — MUITO IMPORTANTE)
-- Fale como um vendedor de verdade conversando no WhatsApp: simpático, próximo, leve, com calma, em português do Brasil bem natural.
-- Use o primeiro nome do cliente quando souber ("Beleza, João", "Show, Maria", "Entendi, João"), mas SEM exagerar (não em toda frase).
-- Use confirmações naturais antes de seguir: "Perfeito!", "Show!", "Tranquilo, anotei aqui.", "Boa!", "Combinado.", "Entendi.", "Ótimo.". Varie — nunca repita a mesma de seguida.
-- Frases curtas, mas com calor humano. Evite tom robótico, evite listas formais quando não precisar, evite jargão técnico desnecessário.
-- Emojis com MUITA moderação: no máximo 1 por mensagem, só quando agregar (😊 📄 ✅ 📍). NÃO encha de emoji.
-- NUNCA soe genérico tipo "Como posso ajudá-lo?". Sempre saiba o que perguntar a seguir e conduza com naturalidade.
-- Quando for pedir um dado, conecte com o que o cliente acabou de falar. Ex.: depois das medidas, "Boa, anotei 4x3. Agora me conta: qual tipo de lâmina você prefere?".
+# REGRA DE OURO — VOCÊ É HUMANO
+Você JAMAIS revela, sugere, insinua ou confirma que é um robô, IA, bot, agente virtual, automatizado, sistema ou qualquer coisa parecida. Se perguntarem ("você é robô?", "isso é IA?", "tô falando com humano?"), responda com naturalidade que sim, é uma pessoa de verdade do time da Eletroportas, e siga a conversa normalmente. NUNCA diga "como assistente", "fui treinado", "como IA", "consultor virtual", "atendimento automático" — nada disso. Você é o **Leo**, gente que trabalha aqui.
+
+# JEITO DE FALAR (CURTO, HUMANO, ASSERTIVO)
+- WhatsApp brasileiro de verdade: respostas **curtas e diretas**, normalmente 1 a 3 frases. Nada de textão.
+- Linguagem natural e calorosa, mas sem enrolar. Frases objetivas.
+- Use o primeiro nome do cliente de vez em quando, sem exagerar.
+- Confirmações curtas e variadas: "Perfeito.", "Show.", "Boa.", "Tranquilo.", "Combinado.", "Anotado.". Nunca repita a mesma seguidas.
+- Emojis no máximo 1 por mensagem, só se agregar (😊 ✅ 📄 📍). De preferência, sem emoji.
+- Nada de listas longas, nada de "como posso ajudá-lo?", nada de jargão.
+- Quando for pedir o próximo dado, conecte com o que o cliente disse. Ex.: "Boa, 4x3 anotado. E a lâmina, qual prefere?"
+- NUNCA fale frases tipo "vou pedir para um consultor te chamar", "te passo para um humano", a menos que esteja realmente transferindo via \`transferir_humano\`. Você É o consultor.
 
 # OBJETIVO
-Atender o cliente 24h por dia: tirar dúvidas, explicar produtos/processos e conduzir, passo a passo e sem repetições, até gerar um **orçamento em PDF** (PORTA INSTALADA na Bahia, ou REVENDA para qualquer estado).
+Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e conduzir, passo a passo, até gerar um **orçamento em PDF** (PORTA INSTALADA na Bahia, ou REVENDA em qualquer estado).
+
+# CONHECIMENTO DA EMPRESA (use com naturalidade)
+- Eletroportas: portas de enrolar automáticas, fabricação própria, instalação na Bahia e venda para revenda em todo o Brasil.
+- Lâminas: FECHADA (lisa), TRANSVISION (com visores), OBLONGO (perfurada).
+- Pintura eletrostática opcional: branco liso, preta fosco, cinza texturizado, ou cor especial (RAL).
+- Adicionais: Portinhola (porta de acesso integrada) e Alçapão (acesso na própria porta).
+- Motores de 200kg até 1500kg, controle remoto e central inclusos no padrão.
+- Garantia conforme certificado, prazo de entrega indicativo de até 15 dias após assinatura (confirmado no fechamento).
 
 # REGRAS CRÍTICAS (NUNCA VIOLE)
-1. **A saudação inicial JÁ FOI ENVIADA pelo sistema**. NÃO se apresente de novo. NÃO repita "Olá", "Sou o Leo" etc. Comece direto pelo conteúdo.
-2. **LEIA O HISTÓRICO COMPLETO antes de responder.** Se uma pergunta já foi feita ou respondida, NUNCA repita. Avance.
-3. Se o cliente só cumprimenta ("oi", "bom dia"), responda curto e simpático e já avance para o próximo passo.
-4. **NUNCA invente dados ou preços.** Valores e condições saem APENAS no PDF. Para prazos, diga que dependem da confirmação do pedido, agenda de produção/instalação e disponibilidade, e que um atendente confirma o prazo exato após aprovação.
-5. Se algo sai do seu escopo (instalação fora da BA, dúvida muito técnica, reclamação), chame \`transferir_humano\` com motivo claro.
-6. UMA pergunta por vez. Frases curtas, calorosas. Sem rodeios.
-7. Mesmo depois do PDF enviado, continue respondendo o cliente normalmente. Nunca fique mudo. Só gere novo PDF se o cliente pedir explicitamente.
-8. Para perguntas tipo "quais os prazos?", "quando instala?", responda em texto. NÃO chame \`gerar_orcamento\` e NÃO reenvie o PDF.
+1. A saudação inicial JÁ FOI ENVIADA pelo sistema. NÃO se apresente de novo.
+2. LEIA o histórico antes de responder. Nunca repita pergunta já feita.
+3. NUNCA invente preços ou prazos exatos. Valores saem APENAS no PDF. Prazos: confirmados no fechamento.
+4. Se sair do seu escopo (instalação fora da BA, dúvida técnica profunda, reclamação séria), chame \`transferir_humano\`.
+5. UMA pergunta por vez. Curto e direto.
+6. Mesmo depois do PDF enviado, continue respondendo normalmente. Só gere novo PDF se o cliente pedir.
+7. Dúvidas gerais ("quando instala?", "tem garantia?") → responda em texto, NÃO chame \`gerar_orcamento\`.
 
 # FLUXO DE VENDAS (siga em ordem, pulando passos já cumpridos)
 
-⚠️ **PRINCÍPIO FUNDAMENTAL**: O sistema mantém um **[ESTADO]** estruturado da conversa (tipo_cliente, largura, altura, tipo_perfil, adicionais_perguntado, cep, frete). Esse estado é a ÚNICA fonte de verdade — ignore o histórico para decidir o que falta. Olhe SEMPRE para o [ESTADO]. Cada vez que o cliente responder algo, chame a tool correspondente para gravar; só assim o [ESTADO] avança.
+⚠️ O sistema mantém um **[ESTADO]** estruturado (tipo_cliente, largura, altura, tipo_perfil, pintura_perguntado, adicionais_perguntado, cep, frete). É a ÚNICA fonte de verdade — olhe SEMPRE o [ESTADO]. Cada resposta do cliente, chame a tool correspondente para gravar.
 
-**Passo 1 — Cadastro (apenas se [CONTEXTO] disser "NÃO CADASTRADO"):**
-   Colete nome completo, e-mail e CNPJ ou CPF, de forma leve (uma coisa por vez se preferir). Quando tiver os 3, chame \`cadastrar_cliente\`. Se já cadastrado, pule.
+**Passo 1 — Cadastro** (apenas se [CONTEXTO] disser "NÃO CADASTRADO"): colete nome, e-mail e CNPJ/CPF de forma leve. Quando tiver, chame \`cadastrar_cliente\`.
 
 **Passo 2 — Tipo de atendimento** (pular se [ESTADO] já tiver tipo_cliente):
-   "Você tem interesse em **PORTA INSTALADA** ou em **REVENDA**?"
-   - PORTA INSTALADA → atendemos só na BAHIA.
-   - REVENDA → qualquer estado, sem mão de obra/frete.
-   Quando o cliente responder, chame **IMEDIATAMENTE** \`definir_tipo_cliente\` (silenciosa) e avance.
+   "Você quer **PORTA INSTALADA** (Bahia) ou **REVENDA** (qualquer estado)?"
+   Resposta → chame \`definir_tipo_cliente\` IMEDIATAMENTE.
 
-**Passo 3 — Medidas** (pular se [ESTADO] já tiver largura E altura):
-   Pergunte de forma natural a largura e altura da porta em metros (ex: 4x3).
-   Quando o cliente responder, chame **IMEDIATAMENTE** \`definir_medidas\`. Avance.
+**Passo 3 — Medidas** (pular se já tiver largura/altura):
+   Pergunte de forma natural a largura e altura em metros (ex: 4x3).
+   Resposta → \`definir_medidas\` IMEDIATAMENTE.
 
-**Passo 4 — Tipo de lâmina** (pular se [ESTADO] já tiver tipo_perfil):
-   "Qual o tipo de lâmina você tem interesse?
-   1️⃣ FECHADA (lisa, sem visão)
+**Passo 4 — Lâmina** (pular se já tiver tipo_perfil):
+   "Qual lâmina prefere?
+   1️⃣ FECHADA (lisa)
    2️⃣ TRANSVISION (com visores)
    3️⃣ OBLONGO (perfurada)"
-   (O sistema envia automaticamente uma foto comparativa dos modelos junto com sua mensagem — não mencione a foto a menos que o cliente pergunte.)
-   Mapeie: "lisa"/"fechada"/"meia cana"/"1" → fechado; "transvision"/"visor"/"2" → transvision; "oblongo"/"perfurada"/"3" → oblongo.
-   Quando o cliente responder, chame **IMEDIATAMENTE** \`definir_lamina\` (silenciosa) e avance.
+   (O sistema envia automaticamente uma foto comparativa — não mencione a foto.)
+   Mapeie: lisa/fechada/1 → fechado; transvision/visor/2 → transvision; oblongo/perfurada/3 → oblongo.
+   Resposta → \`definir_lamina\` IMEDIATAMENTE.
 
-**Passo 5 — Itens adicionais (Portinhola/Alçapão)** (SEMPRE — pular APENAS se [ESTADO] já tiver adicionais_perguntado=true):
-   Pergunte de forma natural se ele quer incluir algum dos itens opcionais:
-   "Antes de seguir, você gostaria de adicionar algum desses itens opcionais?
-   • **Portinhola** — porta de acesso integrada
-   • **Alçapão** — acesso na própria porta
-   Pode ser os dois, só um, ou nenhum. Como prefere?"
-   Quando o cliente responder (mesmo que seja "nenhum", "só portinhola", "os dois", "alçapão", "não, obrigado"), chame **IMEDIATAMENTE** \`definir_adicionais\` com os booleanos certos. É silenciosa — siga adiante na mesma rodada.
+**Passo 5 — Pintura** (pular APENAS se [ESTADO] tiver pintura_perguntado=true):
+   Primeiro pergunte SE quer pintura: "Quer incluir pintura eletrostática na porta?"
+   - Se cliente disser NÃO/dispensa → chame \`definir_pintura\` com quer_pintura=false (sem cor) e siga.
+   - Se cliente disser SIM → informe as cores disponíveis ("Show. As cores são: branco liso, preta fosco, cinza texturizado, ou cor especial (RAL). Qual prefere?") e quando ele escolher, chame \`definir_pintura\` com quer_pintura=true e tipo_pintura.
+   NUNCA inclua pintura no orçamento se o cliente disse que não quer.
 
-**Passo 6 — CEP e frete** (APENAS se tipo_cliente=porta_instalada e [ESTADO] não tiver frete):
-   "Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho."
-   Quando o cliente informar, chame **imediatamente** \`calcular_frete_cep\`.
-   - Se \`fora_da_bahia: true\`, chame \`transferir_humano\`.
-   - Se \`ok: true\`, **NÃO mencione o valor do frete** — siga direto para o Passo 7.
-   Para REVENDA, pule este passo.
+**Passo 6 — Adicionais (Portinhola/Alçapão)** (pular APENAS se adicionais_perguntado=true):
+   "Quer adicionar Portinhola (porta de acesso integrada) ou Alçapão (acesso na própria porta)? Pode ser os dois, um, ou nenhum."
+   Resposta → \`definir_adicionais\` IMEDIATAMENTE com os booleanos certos.
 
-**Passo 7 — Gerar orçamento** (quando [ESTADO] tiver TODOS os dados):
-   Chame \`gerar_orcamento\` (sem argumentos). Após \`pdf_enviado: true\`, NÃO envie mensagem extra — o sistema já mandou a legenda do PDF.
+**Passo 7 — CEP** (APENAS se tipo_cliente=porta_instalada e sem frete):
+   "Por último, qual o CEP do local da instalação?"
+   Resposta → \`calcular_frete_cep\`. Se fora da BA → \`transferir_humano\`. Se ok → NÃO mencione o frete, vá ao Passo 8.
+   Para REVENDA, pule.
+
+**Passo 8 — Gerar orçamento**: chame \`gerar_orcamento\` (sem argumentos). Após \`pdf_enviado: true\`, NÃO envie mensagem extra.
 
 # ORDEM RESUMIDA
-- PORTA INSTALADA: tipo → medidas → lâmina → **adicionais** → CEP → orçamento.
-- REVENDA: tipo → medidas → lâmina → **adicionais** → orçamento.
+- PORTA INSTALADA: tipo → medidas → lâmina → **pintura** → adicionais → CEP → orçamento.
+- REVENDA: tipo → medidas → lâmina → **pintura** → adicionais → orçamento.
 
-# ANTI-LOOP / ANTI-ALUCINAÇÃO (CRÍTICO)
-- O **[ESTADO]** é a única fonte de verdade. Se mostra "largura=PENDENTE", pergunte largura. Se mostra "adicionais_perguntado=PENDENTE", pergunte os adicionais. NUNCA pergunte algo já preenchido.
-- **NUNCA** chame \`gerar_orcamento\` se o [ESTADO] tiver QUALQUER campo obrigatório como "PENDENTE". Se chamar, vai retornar \`DADOS_INSUFICIENTES\`.
-- **NUNCA** chame \`gerar_orcamento\` para responder dúvidas gerais depois do PDF já enviado. Dúvida se responde em texto.
-- Se o cliente só cumprimenta, responda em 1 frase calorosa e curta, e pergunte o próximo dado pendente do [ESTADO].
-- UMA pergunta por vez. Calor humano sem encher linguiça. NUNCA invente dados, preços ou prazos.
+# ANTI-LOOP
+- [ESTADO] é a fonte de verdade. Nunca pergunte algo já preenchido.
+- NUNCA chame \`gerar_orcamento\` se faltar campo obrigatório.
+- Cumprimento simples → responda em 1 frase curta e siga ao próximo dado pendente.
+- UMA pergunta por vez. Curto. Direto. Humano. NUNCA revele que é IA.
 `;
 
 const TOOLS = [
@@ -820,8 +830,23 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "definir_pintura",
+      description: "Grava no banco se o cliente quer pintura eletrostática e qual a cor. Chame ASSIM QUE o cliente responder o Passo 5. Se o cliente NÃO quer pintura, chame com quer_pintura=false (sem tipo_pintura). Se quer, chame com quer_pintura=true e o tipo_pintura escolhido. Marca pintura_perguntado=true. Silenciosa.",
+      parameters: {
+        type: "object",
+        properties: {
+          quer_pintura: { type: "boolean", description: "true se o cliente quer incluir pintura, false se dispensou" },
+          tipo_pintura: { type: "string", enum: ["branco_liso", "preta_fosco", "cinza_texturizado", "cor_especial"], description: "Cor escolhida (apenas se quer_pintura=true)" },
+        },
+        required: ["quer_pintura"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "definir_adicionais",
-      description: "Grava no banco se o cliente quer Portinhola e/ou Alçapão. Chame ASSIM QUE o cliente responder o Passo 5 — mesmo que ele diga 'nenhum', 'não quero', 'só portinhola', 'os dois' etc. Marca adicionais_perguntado=true. Silenciosa — siga adiante na mesma rodada (CEP se porta_instalada, ou gerar_orcamento se revenda).",
+      description: "Grava no banco se o cliente quer Portinhola e/ou Alçapão. Chame ASSIM QUE o cliente responder o Passo 6 — mesmo que ele diga 'nenhum', 'não quero', 'só portinhola', 'os dois' etc. Marca adicionais_perguntado=true. Silenciosa — siga adiante na mesma rodada (CEP se porta_instalada, ou gerar_orcamento se revenda).",
       parameters: {
         type: "object",
         properties: {
@@ -1273,7 +1298,7 @@ async function carregarEstadoConversa(conversaId: string) {
   const { data, error } = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado")
+      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1290,18 +1315,24 @@ function proximaPerguntaDeterministica(estado: any): string | null {
   const largura = Number(estado?.largura);
   const altura = Number(estado?.altura);
 
-  if (!tipoValido) return "Você tem interesse em *PORTA INSTALADA* ou em *REVENDA*?";
+  if (!tipoValido) return "Você quer *PORTA INSTALADA* (Bahia) ou *REVENDA* (qualquer estado)?";
   if (!Number.isFinite(largura) || largura <= 0 || !Number.isFinite(altura) || altura <= 0) {
     return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
   }
   if (!estado?.tipo_perfil) {
-    return "Qual o tipo de lâmina você tem interesse?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
+    return "Qual lâmina prefere?\n\n1️⃣ FECHADA (lisa)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
+  }
+  if (!estado?.pintura_perguntado) {
+    return "Quer incluir pintura eletrostática na porta?";
+  }
+  if (estado?.quer_pintura && !estado?.tipo_pintura) {
+    return "Show. As cores disponíveis são: *branco liso*, *preta fosco*, *cinza texturizado* ou *cor especial* (RAL). Qual prefere?";
   }
   if (!estado?.adicionais_perguntado) {
-    return "Antes de seguir, você gostaria de adicionar algum item opcional?\n\n• *Portinhola* (porta de acesso integrada)\n• *Alçapão* (acesso na própria porta)\n\nPode ser os dois, só um, ou nenhum. Como prefere?";
+    return "Quer adicionar *Portinhola* (porta de acesso integrada) ou *Alçapão* (acesso na própria porta)? Pode ser os dois, um, ou nenhum.";
   }
   if (tipo === "porta_instalada" && !estado?.cep) {
-    return "Por último, qual o *CEP do local da instalação*? Assim calculo o frete certinho.";
+    return "Por último, qual o *CEP do local da instalação*?";
   }
   return null;
 }
@@ -1313,11 +1344,13 @@ function estadoProntoParaOrcamento(estado: any): boolean {
   const altura = Number(estado?.altura);
   const perfil = String(estado?.tipo_perfil || "").toLowerCase();
   const perfilValido = ["fechado", "transvision", "oblongo"].includes(perfil);
+  const pinturaOk = Boolean(estado?.pintura_perguntado) && (!estado?.quer_pintura || Boolean(estado?.tipo_pintura));
   return Boolean(
     tipoValido &&
     Number.isFinite(largura) && largura > 0 && largura <= 20 &&
     Number.isFinite(altura) && altura > 0 && altura <= 20 &&
     perfilValido &&
+    pinturaOk &&
     Boolean(estado?.adicionais_perguntado) &&
     (tipo !== "porta_instalada" || Boolean(estado?.cep))
   );
@@ -1390,7 +1423,7 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   const r = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado")
+      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1411,6 +1444,8 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
   if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
   if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
+  if (!estado?.pintura_perguntado) faltando.push("pintura");
+  if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
   if (!estado?.adicionais_perguntado) faltando.push("adicionais");
   if (tipoCliente === "porta_instalada" && (!Number.isFinite(frete) || frete <= 0)) faltando.push("frete");
   if (faltando.length) return { ok: false, faltando };
@@ -1420,6 +1455,8 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
     altura,
     tipo_cliente: tipoCliente as any,
     tipo_perfil: tipoPerfil as any,
+    tipo_pintura: estado?.quer_pintura ? estado?.tipo_pintura : undefined,
+    incluir_pintura: Boolean(estado?.quer_pintura),
     frete,
     cliente_nome: nome,
     cliente_endereco: estado?.endereco_instalacao || undefined,
@@ -1800,20 +1837,76 @@ Deno.serve(async (req) => {
 
     // Só processa texto por enquanto
     const mediaType = body?.mediaType || "chat";
-    if (mediaType !== "chat" && mediaType !== "text") {
+    const isAudio = mediaType === "audio" || mediaType === "ptt" || mediaType === "voice";
+    if (mediaType !== "chat" && mediaType !== "text" && !isAudio) {
       console.log("⏭️ Ignorado: mediaType=", mediaType);
       return new Response(JSON.stringify({ ignored: "media" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const messageBody: string = body?.messageBody || "";
+    let messageBody: string = body?.messageBody || "";
     const messageId: string | undefined = body?.messageId || body?.id;
     const contact = body?.contact || {};
     const telefone: string = contact?.phoneNumber || body?.from || "";
     telefoneFallback = telefone;
     const nome: string = contact?.name || contact?.pushname || "";
     const ticketId: number | undefined = body?.ticket?.id;
+
+    // Se for áudio, baixa e transcreve via Whisper antes de seguir
+    if (isAudio) {
+      const audioUrl: string = body?.mediaUrl || body?.media?.url || body?.url || "";
+      if (!audioUrl) {
+        console.warn("🎙️ Áudio recebido sem mediaUrl — pedindo texto ao cliente");
+        if (telefone) {
+          await enviarTexto(telefone, "Desculpa, não consegui ouvir esse áudio agora. Pode me mandar por texto, por favor?");
+        }
+        return new Response(JSON.stringify({ ignored: "audio_no_url" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      try {
+        console.log("🎙️ Baixando áudio:", audioUrl);
+        const audioResp = await fetch(audioUrl);
+        if (!audioResp.ok) throw new Error(`download ${audioResp.status}`);
+        const audioBuf = await audioResp.arrayBuffer();
+        const ct = audioResp.headers.get("content-type") || "audio/ogg";
+        const ext = /mp3/.test(ct) ? "mp3" : /mp4|m4a/.test(ct) ? "m4a" : /wav/.test(ct) ? "wav" : "ogg";
+        const audioBlob = new Blob([audioBuf], { type: ct });
+        const formAudio = new FormData();
+        formAudio.append("file", audioBlob, `audio.${ext}`);
+        formAudio.append("model", "whisper-1");
+        formAudio.append("language", "pt");
+        const trResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+          body: formAudio,
+        });
+        const trJson = await trResp.json();
+        if (!trResp.ok) {
+          console.error("🎙️ Whisper erro:", trResp.status, JSON.stringify(trJson).substring(0, 300));
+          if (telefone) await enviarTexto(telefone, "Desculpa, não consegui ouvir esse áudio agora. Pode me mandar por texto?");
+          return new Response(JSON.stringify({ ignored: "audio_transcription_failed" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const transcricao = String(trJson?.text || "").trim();
+        console.log("🎙️ Transcrição:", transcricao);
+        if (!transcricao) {
+          if (telefone) await enviarTexto(telefone, "Não consegui entender o áudio. Pode repetir por texto?");
+          return new Response(JSON.stringify({ ignored: "audio_empty" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        messageBody = transcricao;
+      } catch (e) {
+        console.error("🎙️ Falha ao processar áudio:", e);
+        if (telefone) await enviarTexto(telefone, "Tive um probleminha pra ouvir o áudio aqui. Pode mandar por texto?");
+        return new Response(JSON.stringify({ ignored: "audio_error" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     console.log(`📞 De: ${telefone} (${nome}) | Msg: "${messageBody}"`);
 
@@ -1997,12 +2090,15 @@ Deno.serve(async (req) => {
     const montarEstado = async (): Promise<string> => {
       const { data: c } = await supabase
         .from("leo_conversations")
-        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado")
+        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
         .eq("id", conversa.id)
         .maybeSingle();
       const v = (x: any) => (x === null || x === undefined || x === "" || x === "indefinido") ? "PENDENTE" : String(x);
       const tc = v(c?.tipo_cliente);
       const precisaFrete = c?.tipo_cliente === "porta_instalada";
+      const pinturaStr = c?.pintura_perguntado
+        ? (c?.quer_pintura ? `cor=${c?.tipo_pintura || "PENDENTE_COR"}` : "dispensou")
+        : "PENDENTE";
       const adicionaisStr = c?.adicionais_perguntado
         ? `portinhola=${Boolean((c?.adicionais as any)?.portinhola)}, alcapao=${Boolean((c?.adicionais as any)?.alcapao)}`
         : "PENDENTE";
@@ -2011,6 +2107,7 @@ Deno.serve(async (req) => {
         `largura=${v(c?.largura)}`,
         `altura=${v(c?.altura)}`,
         `tipo_perfil=${v(c?.tipo_perfil)}`,
+        `pintura_perguntado=${pinturaStr}`,
         `adicionais_perguntado=${adicionaisStr}`,
       ];
       if (precisaFrete) {
@@ -2106,7 +2203,7 @@ Deno.serve(async (req) => {
           // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
           const { data: estado } = await supabase
             .from("leo_conversations")
-            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado")
+            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
             .eq("id", conversa.id)
             .maybeSingle();
 
@@ -2123,6 +2220,8 @@ Deno.serve(async (req) => {
           if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
           if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
           if (!perfilValid) faltando.push("tipo_perfil");
+          if (!estado?.pintura_perguntado) faltando.push("pintura");
+          if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
           if (!estado?.adicionais_perguntado) faltando.push("adicionais");
           if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
             faltando.push("frete");
@@ -2165,7 +2264,8 @@ Deno.serve(async (req) => {
               tipo_cliente: tcRawV as any,
               tipo_perfil: perfilRaw as any,
               tipo_motor: args.tipo_motor,
-              tipo_pintura: args.tipo_pintura,
+              tipo_pintura: estado?.quer_pintura ? (estado?.tipo_pintura || args.tipo_pintura) : undefined,
+              incluir_pintura: Boolean(estado?.quer_pintura),
               frete: Number.isFinite(freteNum) ? freteNum : 0,
               cliente_nome: nome,
               cliente_endereco: estado?.endereco_instalacao || undefined,
@@ -2263,6 +2363,28 @@ Deno.serve(async (req) => {
               .maybeSingle();
             const proxima = "Lâmina gravada. NÃO confirme. Siga DIRETO ao Passo 5: pergunte de forma natural se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando responder, chame definir_adicionais.";
             toolResult = { ok: true, tipo_perfil: pNorm, instrucao: proxima };
+          }
+        } else if (fnName === "definir_pintura") {
+          const querPintura = Boolean(args.quer_pintura);
+          const tipoPint = String(args.tipo_pintura || "").toLowerCase();
+          const tipoValido = ["branco_liso", "preta_fosco", "cinza_texturizado", "cor_especial"].includes(tipoPint) ? tipoPint : null;
+          if (querPintura && !tipoValido) {
+            toolResult = {
+              ok: false,
+              error: "Cliente quer pintura, mas a cor não foi informada. Pergunte qual cor: branco liso, preta fosco, cinza texturizado ou cor especial. Só chame definir_pintura quando souber a cor.",
+            };
+          } else {
+            await supabase
+              .from("leo_conversations")
+              .update({
+                pintura_perguntado: true,
+                quer_pintura: querPintura,
+                tipo_pintura: querPintura ? tipoValido : null,
+                ultima_mensagem_at: new Date().toISOString(),
+              })
+              .eq("id", conversa.id);
+            const proxima = "Pintura gravada. NÃO confirme. Siga DIRETO ao Passo 6: pergunte de forma natural sobre Portinhola/Alçapão (os dois, um ou nenhum).";
+            toolResult = { ok: true, quer_pintura: querPintura, tipo_pintura: querPintura ? tipoValido : null, instrucao: proxima };
           }
         } else if (fnName === "definir_adicionais") {
           const portinhola = Boolean(args.portinhola);
