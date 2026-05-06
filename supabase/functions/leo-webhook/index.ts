@@ -1419,7 +1419,7 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   const r = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado")
+      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1440,6 +1440,8 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
   if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
   if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
+  if (!estado?.pintura_perguntado) faltando.push("pintura");
+  if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
   if (!estado?.adicionais_perguntado) faltando.push("adicionais");
   if (tipoCliente === "porta_instalada" && (!Number.isFinite(frete) || frete <= 0)) faltando.push("frete");
   if (faltando.length) return { ok: false, faltando };
@@ -1449,6 +1451,8 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
     altura,
     tipo_cliente: tipoCliente as any,
     tipo_perfil: tipoPerfil as any,
+    tipo_pintura: estado?.quer_pintura ? estado?.tipo_pintura : undefined,
+    incluir_pintura: Boolean(estado?.quer_pintura),
     frete,
     cliente_nome: nome,
     cliente_endereco: estado?.endereco_instalacao || undefined,
