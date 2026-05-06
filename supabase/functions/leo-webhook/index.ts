@@ -2164,6 +2164,8 @@ Deno.serve(async (req) => {
           if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
           if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
           if (!perfilValid) faltando.push("tipo_perfil");
+          if (!estado?.pintura_perguntado) faltando.push("pintura");
+          if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
           if (!estado?.adicionais_perguntado) faltando.push("adicionais");
           if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
             faltando.push("frete");
