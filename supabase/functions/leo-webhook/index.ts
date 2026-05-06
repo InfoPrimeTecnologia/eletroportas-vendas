@@ -240,6 +240,7 @@ interface OrcamentoInput {
   tipo_perfil?: "fechado" | "transvision" | "oblongo";
   tipo_motor?: "200kg" | "300kg" | "400kg" | "500kg" | "800kg" | "1500kg";
   tipo_pintura?: "branco_liso" | "preta_fosco" | "cinza_texturizado" | "cor_especial";
+  incluir_pintura?: boolean;
   tipo_cliente: "porta_instalada" | "revenda";
   cidade?: string;
   estado?: string;
@@ -253,6 +254,7 @@ function calcularOrcamento(input: OrcamentoInput) {
   const { largura, altura, tipo_cliente } = input;
   const tipo_perfil = input.tipo_perfil || "transvision";
   const tipo_motor = input.tipo_motor || "500kg";
+  const incluir_pintura = input.incluir_pintura !== false && Boolean(input.tipo_pintura);
   const tipo_pintura = input.tipo_pintura || "branco_liso";
 
   const area = largura * altura;
