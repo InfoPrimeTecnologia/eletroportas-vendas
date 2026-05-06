@@ -1837,20 +1837,76 @@ Deno.serve(async (req) => {
 
     // Só processa texto por enquanto
     const mediaType = body?.mediaType || "chat";
-    if (mediaType !== "chat" && mediaType !== "text") {
+    const isAudio = mediaType === "audio" || mediaType === "ptt" || mediaType === "voice";
+    if (mediaType !== "chat" && mediaType !== "text" && !isAudio) {
       console.log("⏭️ Ignorado: mediaType=", mediaType);
       return new Response(JSON.stringify({ ignored: "media" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const messageBody: string = body?.messageBody || "";
+    let messageBody: string = body?.messageBody || "";
     const messageId: string | undefined = body?.messageId || body?.id;
     const contact = body?.contact || {};
     const telefone: string = contact?.phoneNumber || body?.from || "";
     telefoneFallback = telefone;
     const nome: string = contact?.name || contact?.pushname || "";
     const ticketId: number | undefined = body?.ticket?.id;
+
+    // Se for áudio, baixa e transcreve via Whisper antes de seguir
+    if (isAudio) {
+      const audioUrl: string = body?.mediaUrl || body?.media?.url || body?.url || "";
+      if (!audioUrl) {
+        console.warn("🎙️ Áudio recebido sem mediaUrl — pedindo texto ao cliente");
+        if (telefone) {
+          await enviarTexto(telefone, "Desculpa, não consegui ouvir esse áudio agora. Pode me mandar por texto, por favor?");
+        }
+        return new Response(JSON.stringify({ ignored: "audio_no_url" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      try {
+        console.log("🎙️ Baixando áudio:", audioUrl);
+        const audioResp = await fetch(audioUrl);
+        if (!audioResp.ok) throw new Error(`download ${audioResp.status}`);
+        const audioBuf = await audioResp.arrayBuffer();
+        const ct = audioResp.headers.get("content-type") || "audio/ogg";
+        const ext = /mp3/.test(ct) ? "mp3" : /mp4|m4a/.test(ct) ? "m4a" : /wav/.test(ct) ? "wav" : "ogg";
+        const audioBlob = new Blob([audioBuf], { type: ct });
+        const formAudio = new FormData();
+        formAudio.append("file", audioBlob, `audio.${ext}`);
+        formAudio.append("model", "whisper-1");
+        formAudio.append("language", "pt");
+        const trResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+          body: formAudio,
+        });
+        const trJson = await trResp.json();
+        if (!trResp.ok) {
+          console.error("🎙️ Whisper erro:", trResp.status, JSON.stringify(trJson).substring(0, 300));
+          if (telefone) await enviarTexto(telefone, "Desculpa, não consegui ouvir esse áudio agora. Pode me mandar por texto?");
+          return new Response(JSON.stringify({ ignored: "audio_transcription_failed" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const transcricao = String(trJson?.text || "").trim();
+        console.log("🎙️ Transcrição:", transcricao);
+        if (!transcricao) {
+          if (telefone) await enviarTexto(telefone, "Não consegui entender o áudio. Pode repetir por texto?");
+          return new Response(JSON.stringify({ ignored: "audio_empty" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        messageBody = transcricao;
+      } catch (e) {
+        console.error("🎙️ Falha ao processar áudio:", e);
+        if (telefone) await enviarTexto(telefone, "Tive um probleminha pra ouvir o áudio aqui. Pode mandar por texto?");
+        return new Response(JSON.stringify({ ignored: "audio_error" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     console.log(`📞 De: ${telefone} (${nome}) | Msg: "${messageBody}"`);
 
