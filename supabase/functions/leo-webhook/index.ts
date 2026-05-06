@@ -2147,7 +2147,7 @@ Deno.serve(async (req) => {
           // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
           const { data: estado } = await supabase
             .from("leo_conversations")
-            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado")
+            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
             .eq("id", conversa.id)
             .maybeSingle();
 
