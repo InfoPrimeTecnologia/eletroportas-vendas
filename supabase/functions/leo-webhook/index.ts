@@ -1311,18 +1311,24 @@ function proximaPerguntaDeterministica(estado: any): string | null {
   const largura = Number(estado?.largura);
   const altura = Number(estado?.altura);
 
-  if (!tipoValido) return "Você tem interesse em *PORTA INSTALADA* ou em *REVENDA*?";
+  if (!tipoValido) return "Você quer *PORTA INSTALADA* (Bahia) ou *REVENDA* (qualquer estado)?";
   if (!Number.isFinite(largura) || largura <= 0 || !Number.isFinite(altura) || altura <= 0) {
     return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
   }
   if (!estado?.tipo_perfil) {
-    return "Qual o tipo de lâmina você tem interesse?\n\n1️⃣ FECHADA (lisa, sem visão)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
+    return "Qual lâmina prefere?\n\n1️⃣ FECHADA (lisa)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
+  }
+  if (!estado?.pintura_perguntado) {
+    return "Quer incluir pintura eletrostática na porta?";
+  }
+  if (estado?.quer_pintura && !estado?.tipo_pintura) {
+    return "Show. As cores disponíveis são: *branco liso*, *preta fosco*, *cinza texturizado* ou *cor especial* (RAL). Qual prefere?";
   }
   if (!estado?.adicionais_perguntado) {
-    return "Antes de seguir, você gostaria de adicionar algum item opcional?\n\n• *Portinhola* (porta de acesso integrada)\n• *Alçapão* (acesso na própria porta)\n\nPode ser os dois, só um, ou nenhum. Como prefere?";
+    return "Quer adicionar *Portinhola* (porta de acesso integrada) ou *Alçapão* (acesso na própria porta)? Pode ser os dois, um, ou nenhum.";
   }
   if (tipo === "porta_instalada" && !estado?.cep) {
-    return "Por último, qual o *CEP do local da instalação*? Assim calculo o frete certinho.";
+    return "Por último, qual o *CEP do local da instalação*?";
   }
   return null;
 }
@@ -1334,11 +1340,13 @@ function estadoProntoParaOrcamento(estado: any): boolean {
   const altura = Number(estado?.altura);
   const perfil = String(estado?.tipo_perfil || "").toLowerCase();
   const perfilValido = ["fechado", "transvision", "oblongo"].includes(perfil);
+  const pinturaOk = Boolean(estado?.pintura_perguntado) && (!estado?.quer_pintura || Boolean(estado?.tipo_pintura));
   return Boolean(
     tipoValido &&
     Number.isFinite(largura) && largura > 0 && largura <= 20 &&
     Number.isFinite(altura) && altura > 0 && altura <= 20 &&
     perfilValido &&
+    pinturaOk &&
     Boolean(estado?.adicionais_perguntado) &&
     (tipo !== "porta_instalada" || Boolean(estado?.cep))
   );
