@@ -1197,6 +1197,26 @@ function inferirAdicionaisTexto(texto: string): { portinhola: boolean; alcapao: 
   return null;
 }
 
+function inferirPinturaTexto(texto: string): { quer_pintura: boolean; tipo_pintura?: string } | null {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!t.trim()) return null;
+  // cores explícitas → quer pintura
+  if (/\bbranc(o|a)\b/.test(t)) return { quer_pintura: true, tipo_pintura: "branco_liso" };
+  if (/\bpret(o|a)\b/.test(t)) return { quer_pintura: true, tipo_pintura: "preta_fosco" };
+  if (/\bcinza\b/.test(t)) return { quer_pintura: true, tipo_pintura: "cinza_texturizado" };
+  if (/\b(especial|ral)\b/.test(t)) return { quer_pintura: true, tipo_pintura: "cor_especial" };
+  // negação clara
+  if (/\b(nao|não|nao precisa|nao quero|sem pintura|dispens|nao precis|sem pint|negativo|nada)\b/.test(t)
+      && !/\b(sim|quero|pode|incluir|coloca)\b/.test(t)) {
+    return { quer_pintura: false };
+  }
+  // afirmação sem cor
+  if (/\b(sim|quero|pode|incluir|coloca|pinta)\b/.test(t) && !/\bnao\b/.test(t)) {
+    return { quer_pintura: true };
+  }
+  return null;
+}
+
 function inferirCepTexto(texto: string): string | null {
   const match = (texto || "").match(/\b\d{5}-?\d{3}\b/);
   return match ? match[0].replace(/\D/g, "") : null;
