@@ -826,8 +826,23 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "definir_pintura",
+      description: "Grava no banco se o cliente quer pintura eletrostática e qual a cor. Chame ASSIM QUE o cliente responder o Passo 5. Se o cliente NÃO quer pintura, chame com quer_pintura=false (sem tipo_pintura). Se quer, chame com quer_pintura=true e o tipo_pintura escolhido. Marca pintura_perguntado=true. Silenciosa.",
+      parameters: {
+        type: "object",
+        properties: {
+          quer_pintura: { type: "boolean", description: "true se o cliente quer incluir pintura, false se dispensou" },
+          tipo_pintura: { type: "string", enum: ["branco_liso", "preta_fosco", "cinza_texturizado", "cor_especial"], description: "Cor escolhida (apenas se quer_pintura=true)" },
+        },
+        required: ["quer_pintura"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "definir_adicionais",
-      description: "Grava no banco se o cliente quer Portinhola e/ou Alçapão. Chame ASSIM QUE o cliente responder o Passo 5 — mesmo que ele diga 'nenhum', 'não quero', 'só portinhola', 'os dois' etc. Marca adicionais_perguntado=true. Silenciosa — siga adiante na mesma rodada (CEP se porta_instalada, ou gerar_orcamento se revenda).",
+      description: "Grava no banco se o cliente quer Portinhola e/ou Alçapão. Chame ASSIM QUE o cliente responder o Passo 6 — mesmo que ele diga 'nenhum', 'não quero', 'só portinhola', 'os dois' etc. Marca adicionais_perguntado=true. Silenciosa — siga adiante na mesma rodada (CEP se porta_instalada, ou gerar_orcamento se revenda).",
       parameters: {
         type: "object",
         properties: {
