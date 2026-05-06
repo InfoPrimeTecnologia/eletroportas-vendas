@@ -1279,6 +1279,21 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
   if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
   if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
+
+  // Pintura: só infere após o perfil estar definido (significa que a pergunta de pintura foi/é a próxima)
+  if (estado.tipo_perfil && !baseEstado?.pintura_perguntado) {
+    const pint = inferirPinturaTexto(texto);
+    if (pint) {
+      patch.pintura_perguntado = true;
+      patch.quer_pintura = pint.quer_pintura;
+      patch.tipo_pintura = pint.quer_pintura ? (pint.tipo_pintura || null) : null;
+      // Se quer pintura mas não escolheu cor, deixa pintura_perguntado=false para o agente perguntar a cor
+      if (pint.quer_pintura && !pint.tipo_pintura) {
+        patch.pintura_perguntado = false;
+      }
+    }
+  }
+
   if (estado.adicionais_perguntado && !baseEstado?.adicionais_perguntado) {
     patch.adicionais = estado.adicionais || { portinhola: false, alcapao: false };
     patch.adicionais_perguntado = true;
