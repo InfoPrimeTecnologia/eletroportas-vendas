@@ -2742,6 +2742,8 @@ Deno.serve(async (req) => {
                 frete: r.frete,
                 endereco_instalacao: enderecoResumo || null,
                 tipo_cliente: "porta_instalada",
+                entrega_perguntado: true,
+                quer_entrega: true,
                 ultima_mensagem_at: new Date().toISOString(),
               })
               .eq("id", conversa.id);
