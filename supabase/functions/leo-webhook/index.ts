@@ -2325,29 +2325,41 @@ Deno.serve(async (req) => {
     const montarEstado = async (): Promise<string> => {
       const { data: c } = await supabase
         .from("leo_conversations")
-        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+        .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
         .eq("id", conversa.id)
         .maybeSingle();
       const v = (x: any) => (x === null || x === undefined || x === "" || x === "indefinido") ? "PENDENTE" : String(x);
       const tc = v(c?.tipo_cliente);
+      const ehRevenda = c?.tipo_cliente === "revenda";
+      const ehPecas = ehRevenda && c?.subtipo_revenda === "pecas";
       const precisaFrete = c?.tipo_cliente === "porta_instalada";
-      const pinturaStr = c?.pintura_perguntado
-        ? (c?.quer_pintura ? `cor=${c?.tipo_pintura || "PENDENTE_COR"}` : "dispensou")
-        : "PENDENTE";
-      const adicionaisStr = c?.adicionais_perguntado
-        ? `portinhola=${Boolean((c?.adicionais as any)?.portinhola)}, alcapao=${Boolean((c?.adicionais as any)?.alcapao)}`
-        : "PENDENTE";
-      const linhas = [
-        `tipo_cliente=${tc}`,
-        `largura=${v(c?.largura)}`,
-        `altura=${v(c?.altura)}`,
-        `tipo_perfil=${v(c?.tipo_perfil)}`,
-        `pintura_perguntado=${pinturaStr}`,
-        `adicionais_perguntado=${adicionaisStr}`,
-      ];
-      if (precisaFrete) {
-        linhas.push(`cep=${v(c?.cep)}`);
+
+      const linhas: string[] = [`tipo_cliente=${tc}`];
+
+      if (ehRevenda) {
+        linhas.push(`subtipo_revenda=${v(c?.subtipo_revenda)}`);
       }
+
+      if (ehPecas) {
+        const pecas = Array.isArray((c as any)?.pecas_avulsas) ? (c as any).pecas_avulsas : [];
+        linhas.push(`pecas_avulsas=${pecas.length === 0 ? "PENDENTE" : `${pecas.length} item(ns)`}`);
+      } else {
+        const pinturaStr = c?.pintura_perguntado
+          ? (c?.quer_pintura ? `cor=${c?.tipo_pintura || "PENDENTE_COR"}` : "dispensou")
+          : "PENDENTE";
+        const adicionaisStr = c?.adicionais_perguntado
+          ? `portinhola=${Boolean((c?.adicionais as any)?.portinhola)}, alcapao=${Boolean((c?.adicionais as any)?.alcapao)}`
+          : "PENDENTE";
+        linhas.push(
+          `largura=${v(c?.largura)}`,
+          `altura=${v(c?.altura)}`,
+          `tipo_perfil=${v(c?.tipo_perfil)}`,
+          `pintura_perguntado=${pinturaStr}`,
+          `adicionais_perguntado=${adicionaisStr}`,
+        );
+        if (precisaFrete) linhas.push(`cep=${v(c?.cep)}`);
+      }
+
       const pendentes = linhas.filter((l) => l.endsWith("=PENDENTE")).map((l) => l.split("=")[0]);
       const proximo = pendentes[0] || "TODOS_OK_CHAMAR_GERAR_ORCAMENTO";
       return `[ESTADO ATUAL DA CONVERSA — fonte de verdade]\n${linhas.join("\n")}\nPRÓXIMO_PASSO: ${proximo === "TODOS_OK_CHAMAR_GERAR_ORCAMENTO" ? "TODOS os dados prontos — chame gerar_orcamento agora (sem argumentos)." : `pergunte ao cliente sobre "${proximo}".`}`;
