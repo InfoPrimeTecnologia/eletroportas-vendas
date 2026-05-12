@@ -2563,7 +2563,7 @@ Deno.serve(async (req) => {
       } else {
         const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
         if (resultadoPdf.pdf_enviado) {
-          const snapDet = await supabase.from("leo_conversations").select("tipo_cliente, largura, altura, tipo_perfil, cep, adicionais").eq("id", conversa.id).maybeSingle();
+          const snapDet = await supabase.from("leo_conversations").select("tipo_cliente, subtipo_revenda, largura, altura, tipo_perfil, cep, adicionais, pecas_avulsas").eq("id", conversa.id).maybeSingle();
           await salvarMensagem(conversa.id, "assistant", resultadoPdf.caption, { pdf_enviado: true, deterministic_flow: true, snapshot: snapDet.data || null });
           // ➕ DASHBOARD: salva orçamento + anexo PDF e move lead para "orcamento_enviado"
           if (resultadoPdf.pdfBase64 && resultadoPdf.orcamento) {
