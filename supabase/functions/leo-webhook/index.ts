@@ -1570,11 +1570,81 @@ async function contarMensagensUserApos(conversation_id: string, sinceIso: string
   return count || 0;
 }
 
+/** Resolve preço/SKU/unidade no estoque para uma lista de peças (busca por sku ou nome). */
+async function enriquecerPecasComEstoque(itens: any[]): Promise<any[]> {
+  const out: any[] = [];
+  for (const raw of (itens || [])) {
+    const item = { ...raw };
+    let row: any = null;
+    if (item.codigo_sku) {
+      const { data } = await dashboardDb
+        .from("estoque")
+        .select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida")
+        .eq("codigo_sku", item.codigo_sku)
+        .maybeSingle();
+      row = data || null;
+    }
+    if (!row && item.produto_nome) {
+      const { data } = await dashboardDb
+        .from("estoque")
+        .select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida")
+        .ilike("produto_nome", `%${item.produto_nome}%`)
+        .limit(1)
+        .maybeSingle();
+      row = data || null;
+    }
+    out.push({
+      codigo_sku: item.codigo_sku || row?.codigo_sku || "AVULSA",
+      produto_nome: row?.produto_nome || item.produto_nome,
+      descricao: row?.descricao || row?.produto_nome || item.produto_nome,
+      quantidade: Number(item.quantidade) || 0,
+      unidade: item.unidade || row?.unidade_medida || "UN",
+      preco_unitario: Number(item.preco_unitario ?? row?.preco_venda ?? 0),
+    });
+  }
+  return out;
+}
+
+/** Monta um "orçamento" no mesmo formato de calcularOrcamento, mas só com peças avulsas (revenda). */
+function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string) {
+  const itens = (itensRaw || []).map((i) => {
+    const qty = Number(i.quantidade) || 0;
+    const preco = Number(i.preco_unitario) || 0;
+    return {
+      code: i.codigo_sku || "AVULSA",
+      description: i.descricao || i.produto_nome || "Peça avulsa",
+      qty,
+      unit: i.unidade || "UN",
+      unit_price: preco,
+      subtotal: qty * preco,
+    };
+  });
+  const subtotal = itens.reduce((s, i) => s + i.subtotal, 0);
+  return {
+    largura: 0,
+    altura: 0,
+    area: 0,
+    tipo_cliente: "revenda" as const,
+    tipo_perfil: "—" as any,
+    tipo_motor: "—" as any,
+    tipo_pintura: "—" as any,
+    incluir_pintura: false,
+    itens,
+    subtotal_produtos: +subtotal.toFixed(2),
+    mao_de_obra: 0,
+    frete: 0,
+    total_geral: +subtotal.toFixed(2),
+    cliente_nome,
+    cliente_endereco: undefined,
+    is_pecas_avulsas: true,
+  } as any;
+}
+
 async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone: string, nome: string) {
   const r = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1584,38 +1654,50 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   }
   const estado: any = r.data;
 
-  const largura = Number(estado?.largura);
-  const altura = Number(estado?.altura);
   const tipoCliente = String(estado?.tipo_cliente || "").toLowerCase();
-  const tipoPerfil = String(estado?.tipo_perfil || "").toLowerCase();
-  const frete = estado?.frete != null ? Number(estado.frete) : 0;
 
-  const faltando: string[] = [];
-  if (tipoCliente !== "porta_instalada" && tipoCliente !== "revenda") faltando.push("tipo_cliente");
-  if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
-  if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
-  if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
-  if (!estado?.pintura_perguntado) faltando.push("pintura");
-  if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
-  if (!estado?.adicionais_perguntado) faltando.push("adicionais");
-  if (tipoCliente === "porta_instalada" && (!Number.isFinite(frete) || frete <= 0)) faltando.push("frete");
-  if (faltando.length) return { ok: false, faltando };
+  let orcamento: any;
 
-  const orcamento = calcularOrcamento({
-    largura,
-    altura,
-    tipo_cliente: tipoCliente as any,
-    tipo_perfil: tipoPerfil as any,
-    tipo_pintura: estado?.quer_pintura ? estado?.tipo_pintura : undefined,
-    incluir_pintura: Boolean(estado?.quer_pintura),
-    frete,
-    cliente_nome: nome,
-    cliente_endereco: estado?.endereco_instalacao || undefined,
-    adicionais: {
-      portinhola: Boolean(estado?.adicionais?.portinhola),
-      alcapao: Boolean(estado?.adicionais?.alcapao),
-    },
-  });
+  // Branch revenda + peças avulsas
+  if (tipoCliente === "revenda" && estado?.subtipo_revenda === "pecas") {
+    const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
+    if (pecas.length === 0) return { ok: false, faltando: ["pecas_avulsas"] };
+    const enriquecidas = await enriquecerPecasComEstoque(pecas);
+    orcamento = montarOrcamentoPecas(enriquecidas, nome);
+  } else {
+    const largura = Number(estado?.largura);
+    const altura = Number(estado?.altura);
+    const tipoPerfil = String(estado?.tipo_perfil || "").toLowerCase();
+    const frete = estado?.frete != null ? Number(estado.frete) : 0;
+
+    const faltando: string[] = [];
+    if (tipoCliente !== "porta_instalada" && tipoCliente !== "revenda") faltando.push("tipo_cliente");
+    if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
+    if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
+    if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
+    if (!estado?.pintura_perguntado) faltando.push("pintura");
+    if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
+    if (!estado?.adicionais_perguntado) faltando.push("adicionais");
+    if (tipoCliente === "porta_instalada" && (!Number.isFinite(frete) || frete <= 0)) faltando.push("frete");
+    if (faltando.length) return { ok: false, faltando };
+
+    orcamento = calcularOrcamento({
+      largura,
+      altura,
+      tipo_cliente: tipoCliente as any,
+      tipo_perfil: tipoPerfil as any,
+      tipo_pintura: estado?.quer_pintura ? estado?.tipo_pintura : undefined,
+      incluir_pintura: Boolean(estado?.quer_pintura),
+      frete,
+      cliente_nome: nome,
+      cliente_endereco: estado?.endereco_instalacao || undefined,
+      adicionais: {
+        portinhola: Boolean(estado?.adicionais?.portinhola),
+        alcapao: Boolean(estado?.adicionais?.alcapao),
+      },
+    });
+  }
+
   const filename = `orcamento_${Date.now()}.pdf`;
   const pdfB64 = await gerarPdfDocrya(gerarHtmlOrcamento(orcamento), filename);
   if (!pdfB64) return { ok: false, error: "Falha ao gerar PDF" };
