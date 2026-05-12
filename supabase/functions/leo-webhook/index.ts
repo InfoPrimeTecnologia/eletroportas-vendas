@@ -1821,8 +1821,10 @@ async function enriquecerPecasComEstoque(itens: any[]): Promise<any[]> {
     const precoInformado = Number(item.preco_unitario);
     const precoEstoque = Number(row?.preco_venda);
     const precoFallback = Number(fallback?.preco);
+    const skuInformado = String(item.codigo_sku || "").trim();
+    const skuValido = skuInformado && skuInformado !== "AVULSA" ? skuInformado : null;
     out.push({
-      codigo_sku: item.codigo_sku || row?.codigo_sku || fallback?.codigo || "AVULSA",
+      codigo_sku: skuValido || row?.codigo_sku || fallback?.codigo || "AVULSA",
       produto_nome: row?.produto_nome || fallback?.nome || item.produto_nome,
       descricao: row?.descricao || row?.produto_nome || fallback?.nome || item.produto_nome,
       quantidade: Number(item.quantidade) || 0,
