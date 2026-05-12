@@ -2327,10 +2327,8 @@ Deno.serve(async (req) => {
 
     // 🛑 Cliente com cadastro PENDENTE de aprovação como serralheiro: NÃO segue o fluxo de orçamento.
     {
-      const tipoLegadoAtual = String((clienteExistente as any)?.tipo_cliente || "").trim().toLowerCase();
-      if (tipoLegadoAtual.includes("pendente") && tipoLegadoAtual.includes("serralheiro")) {
-        const primeiroNome = (clienteExistente?.CLI_NOME || conversa.nome_cliente || nome || "").trim().split(/\s+/)[0] || "";
-        const msgPend = `${primeiroNome ? primeiroNome + ", " : ""}seu cadastro como *Serralheiro* ainda está *pendente de aprovação* pela nossa equipe. ⏳\n\nAssim que for liberado, eu sigo com você normalmente para gerar o orçamento. Obrigado pela paciência! 🙏`;
+      if (ehPendenteSerralheiro((clienteExistente as any)?.tipo_cliente)) {
+        const msgPend = montarMensagemPendenteSerralheiro(clienteExistente?.CLI_NOME || conversa.nome_cliente || nome || "");
         await enviarTexto(telefone, msgPend);
         await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true });
         return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
@@ -2362,6 +2360,20 @@ Deno.serve(async (req) => {
     }
 
     const estadoLocalInferido = await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
+
+    // Se esta própria mensagem classificou como REVENDA, o legado acabou de virar
+    // "Pendente Serralheiro". Bloqueia imediatamente, antes de perguntar KIT/PEÇAS.
+    if (clienteExistente && estadoLocalInferido?.tipo_cliente === "revenda") {
+      const clienteAtual = await buscarClientePorTelefone(telefone);
+      if (ehPendenteSerralheiro((clienteAtual as any)?.tipo_cliente)) {
+        const msgPend = montarMensagemPendenteSerralheiro((clienteAtual as any)?.CLI_NOME || conversa.nome_cliente || nome || "");
+        await enviarTexto(telefone, msgPend);
+        await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true, bloqueio_pos_inferencia: true });
+        return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     const estadoAposExtracao = (await carregarEstadoConversa(conversa.id)) || estadoLocalInferido;
     // Se o cliente NÃO está cadastrado no banco legado, NÃO dispara o fluxo determinístico
