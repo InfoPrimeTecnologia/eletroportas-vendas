@@ -67,6 +67,24 @@ function montarMensagemPendenteSerralheiro(nome?: string | null): string {
   return `${primeiroNome ? primeiroNome + ", " : ""}seu cadastro como *Serralheiro* ainda está *pendente de aprovação* pela nossa equipe. ⏳\n\nAssim que for liberado, eu sigo com você normalmente para gerar o orçamento. Obrigado pela paciência! 🙏`;
 }
 
+function telefoneClienteBate(cliFone: unknown, telefone: string): boolean {
+  const alvo = normalizarTelefone(telefone);
+  const fone = normalizarTelefone(String(cliFone || ""));
+  if (!alvo || !fone) return false;
+  const alvoSemPais = alvo.startsWith("55") ? alvo.slice(2) : alvo;
+  const foneSemPais = fone.startsWith("55") ? fone.slice(2) : fone;
+  return fone === alvo || fone === alvoSemPais || foneSemPais === alvoSemPais || fone.endsWith(alvo.slice(-10)) || alvo.endsWith(fone.slice(-10));
+}
+
+function escolherClienteMaisRelevante(clientes: any[], telefone: string) {
+  const matches = (clientes || []).filter((c) => telefoneClienteBate(c?.CLI_FONE, telefone));
+  const lista = matches.length ? matches : (clientes || []);
+  return lista.find((c) => ehPendenteSerralheiro(c?.tipo_cliente))
+    || lista.find((c) => /revenda|instalada|porta_instalada/i.test(String(c?.tipo_cliente || "")))
+    || lista[0]
+    || null;
+}
+
 // Busca cliente no backend legado pelo telefone
 async function buscarClientePorTelefone(telefone: string) {
   const tel = normalizarTelefone(telefone);
@@ -88,25 +106,21 @@ async function buscarClientePorTelefone(telefone: string) {
     .from("Clientes")
     .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE, CLI_CPF, tipo_cliente")
     .in("CLI_FONE", variacoes)
-    .limit(1);
+    .limit(20);
   if (error) {
     console.error("buscarClientePorTelefone erro:", error?.message || error);
     return null;
   }
-  if (data && data.length > 0) return data[0];
+  if (data && data.length > 0) return escolherClienteMaisRelevante(data, tel);
 
   // Fallback: compara apenas os dígitos (caso o banco tenha guardado com máscara como "(71) 9...")
   const { data: todos } = await legacyDb
     .from("Clientes")
     .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE, CLI_CPF, tipo_cliente")
     .ilike("CLI_FONE", `%${tel.slice(-8)}%`)
-    .limit(20);
+    .limit(50);
   if (Array.isArray(todos)) {
-    const alvo = tel.slice(-10); // DDD + 8 dígitos finais
-    const match = todos.find((c: any) => {
-      const digitos = String(c.CLI_FONE || "").replace(/\D/g, "");
-      return digitos.endsWith(alvo) && digitos.length >= 10;
-    });
+    const match = escolherClienteMaisRelevante(todos, tel);
     if (match) return match;
   }
   return null;
