@@ -1247,8 +1247,8 @@ async function salvarMensagem(conversation_id: string, role: string, content: st
 
 function inferirTipoClienteTexto(texto: string): "porta_instalada" | "revenda" | null {
   const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (/\b(revenda|revender|revendedor|fornecimento|sem instalacao)\b/.test(t)) return "revenda";
-  if (/\b(instalada|instalar|instalacao|com instalacao|porta instalada)\b/.test(t)) return "porta_instalada";
+  if (/\b(serralheiro|serralheria|revenda|revender|revendedor|fornecimento|sem instalacao)\b/.test(t)) return "revenda";
+  if (/\b(cliente\s*final|consumidor\s*final|consumidor|instalada|instalar|instalacao|com instalacao|porta instalada)\b/.test(t)) return "porta_instalada";
   return null;
 }
 
