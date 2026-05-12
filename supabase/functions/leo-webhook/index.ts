@@ -710,9 +710,9 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
    - Se 'pecas': PULA medidas, lâmina, pintura e adicionais. Vá direto ao Passo 2.2.
 
 **Passo 2.2 — Coleta de peças** (APENAS se subtipo_revenda=pecas):
-   Pergunte de forma natural quais peças o cliente quer e em qual quantidade. Pode ser uma lista (ex: "2 motores 500kg, 10m de guia lateral, 1 controle remoto").
-   Use \`listar_pecas_disponiveis\` se precisar consultar o catálogo (códigos, preços, descrições do estoque). NÃO invente preços nem códigos — sempre baseie-se no que essa tool retornar.
-   Quando o cliente confirmar a lista final, chame \`definir_pecas_avulsas\` com o array completo de peças. Depois siga ao Passo 7 (entrega) se for PORTA INSTALADA, ou direto a \`gerar_orcamento\` se for REVENDA.
+   Pergunte de forma natural quais peças o cliente quer e em qual quantidade (ex: "2 motores 500kg, 10m de guia lateral, 1 controle remoto").
+   Use \`listar_pecas_disponiveis\` se precisar consultar o catálogo (códigos, preços, descrições do estoque). NÃO invente preços nem códigos.
+   ⚡ ASSIM QUE o cliente listar peças com quantidade (ex: "5 motores de 200kg"), chame \`definir_pecas_avulsas\` IMEDIATAMENTE com o array de itens. NÃO peça confirmação extra antes de gravar — apenas grave e siga. Só pergunte de novo se faltar quantidade ou o item for ambíguo. Depois siga ao Passo 7 (entrega) se PORTA INSTALADA, ou direto a \`gerar_orcamento\` se REVENDA.
 
 **Passo 3 — Medidas** (pular se já tiver largura/altura, ou se subtipo_revenda=pecas):
    Pergunte de forma natural a largura e altura em metros (ex: 4x3).
@@ -937,7 +937,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_pecas_avulsas",
-      description: "Apenas para REVENDA + subtipo=pecas. Grava a lista final de peças que o cliente quer comprar. Cada item deve ter produto_nome e quantidade; informe codigo_sku quando souber (do catálogo). Após chamar esta tool, chame gerar_orcamento.",
+      description: "Para REVENDA ou PORTA INSTALADA com subtipo=pecas. Grava a lista de peças que o cliente quer comprar. Chame ASSIM QUE o cliente listar peças com quantidade (ex: '5 motores 200kg', '2 controles e 10m de guia') — NÃO peça confirmação adicional antes. Cada item deve ter produto_nome e quantidade; informe codigo_sku quando souber.",
       parameters: {
         type: "object",
         properties: {
@@ -2590,8 +2590,8 @@ Deno.serve(async (req) => {
                         ? "Pergunte AGORA, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'. NÃO chame nenhuma tool."
                         : proximo === "subtipo_revenda"
                           ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
-                          : proximo === "pecas_avulsas"
-                            ? "Pergunte AGORA quais peças e quantidades o cliente precisa. Quando ele confirmar, chame definir_pecas_avulsas com a lista. NÃO chame gerar_orcamento agora."
+                        : proximo === "pecas_avulsas"
+                          ? "Se o cliente AINDA NÃO listou peças, pergunte AGORA quais peças e quantidades. Se ELE JÁ listou (ex: '5 motores 200kg'), chame definir_pecas_avulsas IMEDIATAMENTE com o array de itens — sem pedir confirmação extra. NÃO chame gerar_orcamento agora."
                             : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
@@ -2792,6 +2792,23 @@ Deno.serve(async (req) => {
               .update({ tipo_cliente: tcNorm, ultima_mensagem_at: new Date().toISOString() })
               .eq("id", conversa.id);
             try { await atualizarTipoClienteLegado(telefone, tcNorm); } catch (_) {}
+
+            // 🛑 Se virou REVENDA e o cadastro legado ficou "Pendente Serralheiro",
+            // interrompe AQUI antes de seguir ao Passo 2.1 (KIT/PEÇAS).
+            if (tcNorm === "revenda") {
+              const cliLeg = await buscarClientePorTelefone(telefone);
+              const tipoLeg = String((cliLeg as any)?.tipo_cliente || "").trim().toLowerCase();
+              if (tipoLeg.includes("pendente") && tipoLeg.includes("serralheiro")) {
+                const primeiroNome = (cliLeg?.CLI_NOME || conversa.nome_cliente || nome || "").trim().split(/\s+/)[0] || "";
+                const msgPend = `${primeiroNome ? primeiroNome + ", " : ""}seu cadastro como *Serralheiro* ainda está *pendente de aprovação* pela nossa equipe. ⏳\n\nAssim que for liberado, eu sigo com você normalmente para gerar o orçamento. Obrigado pela paciência! 🙏`;
+                await enviarTexto(telefone, msgPend);
+                await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true });
+                return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
+                  headers: { ...corsHeaders, "Content-Type": "application/json" },
+                });
+              }
+            }
+
             toolResult = {
               ok: true,
               tipo_cliente: tcNorm,
