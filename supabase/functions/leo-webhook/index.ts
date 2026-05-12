@@ -1464,40 +1464,47 @@ function proximaPerguntaDeterministica(estado: any): string | null {
 
   if (!tipoValido) return "Você quer *PORTA INSTALADA* (Bahia) ou *REVENDA* (qualquer estado)?";
 
-  // Branch de revenda: perguntar subtipo
-  if (tipo === "revenda" && !estado?.subtipo_revenda) {
-    return "Você precisa de um *KIT* completo de porta de enrolar, ou apenas *PEÇAS AVULSAS*?";
+  // Subtipo (kit/pecas) vale tanto para revenda quanto para porta_instalada
+  if (!estado?.subtipo_revenda) {
+    return "Você quer um *KIT* completo de porta de enrolar, ou apenas *PEÇAS AVULSAS*?";
   }
 
-  // Revenda + peças avulsas: precisa apenas da lista de peças
-  if (tipo === "revenda" && estado?.subtipo_revenda === "pecas") {
+  const ehPecas = estado?.subtipo_revenda === "pecas";
+
+  if (ehPecas) {
     const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
     if (pecas.length === 0) {
       return "Perfeito. Quais *peças* você precisa e em qual *quantidade*? Pode me mandar a lista (ex: 2 motores 500kg, 10m de guia lateral, 1 controle remoto).";
     }
-    return null;
+  } else {
+    // Fluxo padrão (kit)
+    const largura = Number(estado?.largura);
+    const altura = Number(estado?.altura);
+    if (!Number.isFinite(largura) || largura <= 0 || !Number.isFinite(altura) || altura <= 0) {
+      return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
+    }
+    if (!estado?.tipo_perfil) {
+      return "Qual lâmina prefere?\n\n1️⃣ FECHADA (lisa)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
+    }
+    if (!estado?.pintura_perguntado) {
+      return "Quer incluir pintura eletrostática na porta?";
+    }
+    if (estado?.quer_pintura && !estado?.tipo_pintura) {
+      return "Show. As cores disponíveis são: *branco liso*, *preta fosco*, *cinza texturizado* ou *cor especial* (RAL). Qual prefere?";
+    }
+    if (!estado?.adicionais_perguntado) {
+      return "Quer adicionar *Portinhola* (porta de acesso integrada) ou *Alçapão* (acesso na própria porta)? Pode ser os dois, um, ou nenhum.";
+    }
   }
 
-  // Fluxo padrão (kit ou porta_instalada)
-  const largura = Number(estado?.largura);
-  const altura = Number(estado?.altura);
-  if (!Number.isFinite(largura) || largura <= 0 || !Number.isFinite(altura) || altura <= 0) {
-    return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
-  }
-  if (!estado?.tipo_perfil) {
-    return "Qual lâmina prefere?\n\n1️⃣ FECHADA (lisa)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
-  }
-  if (!estado?.pintura_perguntado) {
-    return "Quer incluir pintura eletrostática na porta?";
-  }
-  if (estado?.quer_pintura && !estado?.tipo_pintura) {
-    return "Show. As cores disponíveis são: *branco liso*, *preta fosco*, *cinza texturizado* ou *cor especial* (RAL). Qual prefere?";
-  }
-  if (!estado?.adicionais_perguntado) {
-    return "Quer adicionar *Portinhola* (porta de acesso integrada) ou *Alçapão* (acesso na própria porta)? Pode ser os dois, um, ou nenhum.";
-  }
-  if (tipo === "porta_instalada" && !estado?.cep) {
-    return "Por último, qual o *CEP do local da instalação*?";
+  // Entrega/CEP só vale para porta_instalada
+  if (tipo === "porta_instalada") {
+    if (!estado?.entrega_perguntado) {
+      return "Você prefere que a gente *entregue* no local, ou prefere *buscar/retirar* com a gente?";
+    }
+    if (estado?.quer_entrega && !estado?.cep) {
+      return "Por último, qual o *CEP do local da entrega*?";
+    }
   }
   return null;
 }
@@ -1506,26 +1513,31 @@ function estadoProntoParaOrcamento(estado: any): boolean {
   const tipo = String(estado?.tipo_cliente || "").toLowerCase();
   const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
   if (!tipoValido) return false;
+  if (!estado?.subtipo_revenda) return false;
 
-  // Revenda + peças: pronto quando há ao menos 1 peça
-  if (tipo === "revenda" && estado?.subtipo_revenda === "pecas") {
+  const ehPecas = estado?.subtipo_revenda === "pecas";
+
+  if (ehPecas) {
     const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
-    return pecas.length > 0;
+    if (pecas.length === 0) return false;
+  } else {
+    const largura = Number(estado?.largura);
+    const altura = Number(estado?.altura);
+    const perfil = String(estado?.tipo_perfil || "").toLowerCase();
+    const perfilValido = ["fechado", "transvision", "oblongo"].includes(perfil);
+    const pinturaOk = Boolean(estado?.pintura_perguntado) && (!estado?.quer_pintura || Boolean(estado?.tipo_pintura));
+    if (!(Number.isFinite(largura) && largura > 0 && largura <= 20 &&
+        Number.isFinite(altura) && altura > 0 && altura <= 20 &&
+        perfilValido && pinturaOk && Boolean(estado?.adicionais_perguntado))) {
+      return false;
+    }
   }
 
-  const largura = Number(estado?.largura);
-  const altura = Number(estado?.altura);
-  const perfil = String(estado?.tipo_perfil || "").toLowerCase();
-  const perfilValido = ["fechado", "transvision", "oblongo"].includes(perfil);
-  const pinturaOk = Boolean(estado?.pintura_perguntado) && (!estado?.quer_pintura || Boolean(estado?.tipo_pintura));
-  return Boolean(
-    Number.isFinite(largura) && largura > 0 && largura <= 20 &&
-    Number.isFinite(altura) && altura > 0 && altura <= 20 &&
-    perfilValido &&
-    pinturaOk &&
-    Boolean(estado?.adicionais_perguntado) &&
-    (tipo !== "porta_instalada" || Boolean(estado?.cep))
-  );
+  if (tipo === "porta_instalada") {
+    if (!estado?.entrega_perguntado) return false;
+    if (estado?.quer_entrega && !estado?.cep) return false;
+  }
+  return true;
 }
 
 async function pdfJaEnviadoConversa(conversation_id: string) {
