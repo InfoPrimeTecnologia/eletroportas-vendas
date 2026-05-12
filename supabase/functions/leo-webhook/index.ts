@@ -696,7 +696,18 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
    "Você quer **PORTA INSTALADA** (Bahia) ou **REVENDA** (qualquer estado)?"
    Resposta → chame \`definir_tipo_cliente\` IMEDIATAMENTE.
 
-**Passo 3 — Medidas** (pular se já tiver largura/altura):
+**Passo 2.1 — Subtipo de revenda** (APENAS se tipo_cliente=revenda e sem subtipo_revenda):
+   "Você precisa de um **KIT** completo de porta de enrolar, ou apenas **PEÇAS AVULSAS**?"
+   Resposta → chame \`definir_subtipo_revenda\` IMEDIATAMENTE com 'kit' ou 'pecas'.
+   - Se 'kit': segue o fluxo normal (medidas → lâmina → pintura → adicionais → orçamento).
+   - Se 'pecas': PULA medidas, lâmina, pintura e adicionais. Vá direto ao Passo 2.2.
+
+**Passo 2.2 — Coleta de peças** (APENAS se subtipo_revenda=pecas):
+   Pergunte de forma natural quais peças o cliente quer e em qual quantidade. Pode ser uma lista (ex: "2 motores 500kg, 10m de guia lateral, 1 controle remoto").
+   Use \`listar_pecas_disponiveis\` se precisar consultar o catálogo (códigos, preços, descrições do estoque). NÃO invente preços nem códigos — sempre baseie-se no que essa tool retornar.
+   Quando o cliente confirmar a lista final, chame \`definir_pecas_avulsas\` com o array completo de peças. Em seguida chame \`gerar_orcamento\` (sem argumentos) — o PDF terá APENAS as peças solicitadas, sem o kit completo.
+
+**Passo 3 — Medidas** (pular se já tiver largura/altura, ou se subtipo_revenda=pecas):
    Pergunte de forma natural a largura e altura em metros (ex: 4x3).
    Resposta → \`definir_medidas\` IMEDIATAMENTE.
 
