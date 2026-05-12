@@ -2377,7 +2377,7 @@ Deno.serve(async (req) => {
       if (ehRevenda) {
         blocoTipo = ` Esse cliente já é classificado como **REVENDA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de REVENDA (Passo 2.1: KIT ou PEÇAS AVULSAS).`;
       } else if (ehInstalada) {
-        blocoTipo = ` Esse cliente já é classificado como **PORTA INSTALADA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de PORTA INSTALADA (Passo 3: largura e altura).`;
+        blocoTipo = ` Esse cliente já é classificado como **PORTA INSTALADA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de PORTA INSTALADA (Passo 2.1: KIT completo ou PEÇAS AVULSAS).`;
       } else {
         blocoTipo = ` Tipo do cliente ainda não definido — siga o fluxo normal e pergunte se é PORTA INSTALADA ou REVENDA.`;
       }
