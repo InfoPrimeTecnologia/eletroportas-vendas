@@ -209,9 +209,11 @@ export type Database = {
           id: string
           largura: number | null
           nome_cliente: string | null
+          pecas_avulsas: Json
           pintura_perguntado: boolean
           quer_pintura: boolean | null
           status: string
+          subtipo_revenda: string | null
           telefone: string
           tipo_cliente: string
           tipo_perfil: string | null
@@ -230,9 +232,11 @@ export type Database = {
           id?: string
           largura?: number | null
           nome_cliente?: string | null
+          pecas_avulsas?: Json
           pintura_perguntado?: boolean
           quer_pintura?: boolean | null
           status?: string
+          subtipo_revenda?: string | null
           telefone: string
           tipo_cliente?: string
           tipo_perfil?: string | null
@@ -251,9 +255,11 @@ export type Database = {
           id?: string
           largura?: number | null
           nome_cliente?: string | null
+          pecas_avulsas?: Json
           pintura_perguntado?: boolean
           quer_pintura?: boolean | null
           status?: string
+          subtipo_revenda?: string | null
           telefone?: string
           tipo_cliente?: string
           tipo_perfil?: string | null

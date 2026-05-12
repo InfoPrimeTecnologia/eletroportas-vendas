@@ -416,14 +416,16 @@ td { border-bottom: 1px solid #e6eaf0; padding: 5px; font-size: 8.8px; vertical-
   <div class="col" style="padding-right:0">
     <div class="card">
       <h2>Especificações</h2>
-      <strong>Dimensões:</strong> ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m<br/>
+      ${(o as any).is_pecas_avulsas
+        ? `<strong>Modalidade:</strong> Revenda — peças avulsas<br/><strong>Itens:</strong> ${o.itens.length} peça(s) selecionada(s)`
+        : `<strong>Dimensões:</strong> ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m<br/>
       <strong>Área:</strong> ${o.area.toFixed(2).replace(".", ",")}m²<br/>
-      <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.incluir_pintura ? o.tipo_pintura.replace("_", " ") : "não inclusa")}
+      <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.incluir_pintura ? o.tipo_pintura.replace("_", " ") : "não inclusa")}`}
     </div>
   </div>
 </div>
 
-<div class="delivery">PREVISÃO DE ENTREGA: até 15 dias após assinatura do pedido, sujeito à confirmação comercial e disponibilidade.</div>
+<div class="delivery">PREVISÃO DE ENTREGA: ${(o as any).is_pecas_avulsas ? "conforme disponibilidade de estoque, confirmada pelo atendimento comercial." : "até 15 dias após assinatura do pedido, sujeito à confirmação comercial e disponibilidade."}</div>
 
 <div class="section-title">Itens do orçamento</div>
 <table>
@@ -696,7 +698,18 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
    "Você quer **PORTA INSTALADA** (Bahia) ou **REVENDA** (qualquer estado)?"
    Resposta → chame \`definir_tipo_cliente\` IMEDIATAMENTE.
 
-**Passo 3 — Medidas** (pular se já tiver largura/altura):
+**Passo 2.1 — Subtipo de revenda** (APENAS se tipo_cliente=revenda e sem subtipo_revenda):
+   "Você precisa de um **KIT** completo de porta de enrolar, ou apenas **PEÇAS AVULSAS**?"
+   Resposta → chame \`definir_subtipo_revenda\` IMEDIATAMENTE com 'kit' ou 'pecas'.
+   - Se 'kit': segue o fluxo normal (medidas → lâmina → pintura → adicionais → orçamento).
+   - Se 'pecas': PULA medidas, lâmina, pintura e adicionais. Vá direto ao Passo 2.2.
+
+**Passo 2.2 — Coleta de peças** (APENAS se subtipo_revenda=pecas):
+   Pergunte de forma natural quais peças o cliente quer e em qual quantidade. Pode ser uma lista (ex: "2 motores 500kg, 10m de guia lateral, 1 controle remoto").
+   Use \`listar_pecas_disponiveis\` se precisar consultar o catálogo (códigos, preços, descrições do estoque). NÃO invente preços nem códigos — sempre baseie-se no que essa tool retornar.
+   Quando o cliente confirmar a lista final, chame \`definir_pecas_avulsas\` com o array completo de peças. Em seguida chame \`gerar_orcamento\` (sem argumentos) — o PDF terá APENAS as peças solicitadas, sem o kit completo.
+
+**Passo 3 — Medidas** (pular se já tiver largura/altura, ou se subtipo_revenda=pecas):
    Pergunte de forma natural a largura e altura em metros (ex: 4x3).
    Resposta → \`definir_medidas\` IMEDIATAMENTE.
 
@@ -728,8 +741,9 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
 **Passo 8 — Gerar orçamento**: chame \`gerar_orcamento\` (sem argumentos). Após \`pdf_enviado: true\`, NÃO envie mensagem extra.
 
 # ORDEM RESUMIDA
-- PORTA INSTALADA: tipo → medidas → lâmina → **pintura** → adicionais → CEP → orçamento.
-- REVENDA: tipo → medidas → lâmina → **pintura** → adicionais → orçamento.
+- PORTA INSTALADA: tipo → medidas → lâmina → pintura → adicionais → CEP → orçamento.
+- REVENDA (kit): tipo → subtipo(kit) → medidas → lâmina → pintura → adicionais → orçamento.
+- REVENDA (peças avulsas): tipo → subtipo(pecas) → coletar peças → orçamento (somente das peças).
 
 # ANTI-LOOP
 - [ESTADO] é a fonte de verdade. Nunca pergunte algo já preenchido.
@@ -867,6 +881,61 @@ const TOOLS = [
         type: "object",
         properties: { motivo: { type: "string" } },
         required: ["motivo"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "definir_subtipo_revenda",
+      description: "Apenas para clientes REVENDA. Grava no banco se o cliente quer um KIT completo de porta de enrolar ('kit') ou apenas PEÇAS AVULSAS ('pecas'). Chame ASSIM QUE o cliente responder. Silenciosa.",
+      parameters: {
+        type: "object",
+        properties: {
+          subtipo: { type: "string", enum: ["kit", "pecas"] },
+        },
+        required: ["subtipo"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "listar_pecas_disponiveis",
+      description: "Consulta o catálogo de peças disponíveis no estoque (códigos SKU, nome, preço de venda). Use quando o cliente revendedor de PEÇAS AVULSAS pedir para ver o que tem disponível, ou quando você precisar identificar uma peça que ele citou. Pode passar um termo de busca opcional.",
+      parameters: {
+        type: "object",
+        properties: {
+          busca: { type: "string", description: "Termo opcional para filtrar por nome/sku (ex: 'motor', 'guia', 'controle')" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "definir_pecas_avulsas",
+      description: "Apenas para REVENDA + subtipo=pecas. Grava a lista final de peças que o cliente quer comprar. Cada item deve ter produto_nome e quantidade; informe codigo_sku quando souber (do catálogo). Após chamar esta tool, chame gerar_orcamento.",
+      parameters: {
+        type: "object",
+        properties: {
+          itens: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                codigo_sku: { type: "string", description: "SKU do estoque (opcional, mas recomendado)" },
+                produto_nome: { type: "string" },
+                quantidade: { type: "number" },
+                unidade: { type: "string", description: "ex: UN, MT, M²" },
+                preco_unitario: { type: "number", description: "Preço unitário (opcional, será buscado do estoque se omitido)" },
+              },
+              required: ["produto_nome", "quantidade"],
+            },
+          },
+        },
+        required: ["itens"],
       },
     },
   },
@@ -1225,29 +1294,47 @@ function inferirCepTexto(texto: string): string | null {
   return match ? match[0].replace(/\D/g, "") : null;
 }
 
+function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!t.trim()) return null;
+  if (/\b(pec[aá]s?\s*avuls(a|as)|avuls(a|as|o)|somente\s*pec|so\s*pec|apenas\s*pec|peca|pecas|pe[cç]a)\b/.test(t)) return "pecas";
+  if (/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "kit";
+  return null;
+}
+
 function aplicarInferenciasEmEstado(base: any, textos: string[]) {
   const estado = { ...(base || {}) };
   for (const txt of textos) {
     const tipo = inferirTipoClienteTexto(txt);
     if (tipo && (!estado.tipo_cliente || estado.tipo_cliente === "indefinido")) estado.tipo_cliente = tipo;
 
-    const medidas = inferirMedidasTexto(txt);
-    if (medidas && (estado.largura == null || estado.altura == null)) {
-      estado.largura = medidas.largura;
-      estado.altura = medidas.altura;
+    if (estado.tipo_cliente === "revenda" && !estado.subtipo_revenda) {
+      const sub = inferirSubtipoRevendaTexto(txt);
+      if (sub) estado.subtipo_revenda = sub;
     }
 
-    const lamina = inferirLaminaTexto(txt);
-    if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
+    // Se for revenda + peças, NÃO inferir medidas/lâmina/etc
+    const ehPecas = estado.tipo_cliente === "revenda" && estado.subtipo_revenda === "pecas";
 
-    const adicionais = inferirAdicionaisTexto(txt);
-    if (adicionais && estado.tipo_perfil && !estado.adicionais_perguntado) {
-      estado.adicionais = adicionais;
-      estado.adicionais_perguntado = true;
+    if (!ehPecas) {
+      const medidas = inferirMedidasTexto(txt);
+      if (medidas && (estado.largura == null || estado.altura == null)) {
+        estado.largura = medidas.largura;
+        estado.altura = medidas.altura;
+      }
+
+      const lamina = inferirLaminaTexto(txt);
+      if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
+
+      const adicionais = inferirAdicionaisTexto(txt);
+      if (adicionais && estado.tipo_perfil && !estado.adicionais_perguntado) {
+        estado.adicionais = adicionais;
+        estado.adicionais_perguntado = true;
+      }
+
+      const cep = inferirCepTexto(txt);
+      if (cep && estado.tipo_cliente === "porta_instalada" && !estado.cep) estado.cep = cep;
     }
-
-    const cep = inferirCepTexto(txt);
-    if (cep && estado.tipo_cliente === "porta_instalada" && !estado.cep) estado.cep = cep;
   }
   return estado;
 }
@@ -1256,7 +1343,7 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const estadoRes = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1277,45 +1364,50 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const textos = [texto, ...((histRes.data || []) as any[]).map((m) => String(m?.content || ""))].filter(Boolean);
   const estado = aplicarInferenciasEmEstado(baseEstado, textos);
 
+  const ehPecas = estado.tipo_cliente === "revenda" && estado.subtipo_revenda === "pecas";
+
   const patch: Record<string, unknown> = {};
   if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
-  if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
-  if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
-  if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
+  if (estado.subtipo_revenda && !baseEstado?.subtipo_revenda) patch.subtipo_revenda = estado.subtipo_revenda;
 
-  // Pintura: só infere após o perfil estar definido (significa que a pergunta de pintura foi/é a próxima)
-  if (estado.tipo_perfil && !baseEstado?.pintura_perguntado) {
-    const pint = inferirPinturaTexto(texto);
-    if (pint) {
-      patch.pintura_perguntado = true;
-      patch.quer_pintura = pint.quer_pintura;
-      patch.tipo_pintura = pint.quer_pintura ? (pint.tipo_pintura || null) : null;
-      // Se quer pintura mas não escolheu cor, deixa pintura_perguntado=false para o agente perguntar a cor
-      if (pint.quer_pintura && !pint.tipo_pintura) {
-        patch.pintura_perguntado = false;
+  if (!ehPecas) {
+    if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
+    if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
+    if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
+
+    // Pintura: só infere após o perfil estar definido
+    if (estado.tipo_perfil && !baseEstado?.pintura_perguntado) {
+      const pint = inferirPinturaTexto(texto);
+      if (pint) {
+        patch.pintura_perguntado = true;
+        patch.quer_pintura = pint.quer_pintura;
+        patch.tipo_pintura = pint.quer_pintura ? (pint.tipo_pintura || null) : null;
+        if (pint.quer_pintura && !pint.tipo_pintura) {
+          patch.pintura_perguntado = false;
+        }
       }
     }
-  }
 
-  if (estado.adicionais_perguntado && !baseEstado?.adicionais_perguntado) {
-    patch.adicionais = estado.adicionais || { portinhola: false, alcapao: false };
-    patch.adicionais_perguntado = true;
-  }
+    if (estado.adicionais_perguntado && !baseEstado?.adicionais_perguntado) {
+      patch.adicionais = estado.adicionais || { portinhola: false, alcapao: false };
+      patch.adicionais_perguntado = true;
+    }
 
-  const cep = inferirCepTexto(texto);
-  if (cep && estado?.tipo_cliente === "porta_instalada" && !baseEstado?.cep) {
-    const frete: any = await calcularFretePorCep(cep);
-    if (frete.ok) {
-      patch.cep = frete.cep;
-      patch.frete = frete.frete;
-      patch.endereco_instalacao = [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
-        .filter((x: any) => x && String(x).trim())
-        .join(", ") || null;
-    } else if (!frete.fora_da_bahia) {
-      console.warn(`⚠️ CEP ${cep} aceito com fallback para evitar loop: ${frete.error || "consulta indisponível"}`);
-      patch.cep = cep;
-      patch.frete = 350;
-      patch.endereco_instalacao = null;
+    const cep = inferirCepTexto(texto);
+    if (cep && estado?.tipo_cliente === "porta_instalada" && !baseEstado?.cep) {
+      const frete: any = await calcularFretePorCep(cep);
+      if (frete.ok) {
+        patch.cep = frete.cep;
+        patch.frete = frete.frete;
+        patch.endereco_instalacao = [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
+          .filter((x: any) => x && String(x).trim())
+          .join(", ") || null;
+      } else if (!frete.fora_da_bahia) {
+        console.warn(`⚠️ CEP ${cep} aceito com fallback para evitar loop: ${frete.error || "consulta indisponível"}`);
+        patch.cep = cep;
+        patch.frete = 350;
+        patch.endereco_instalacao = null;
+      }
     }
   }
 
@@ -1336,7 +1428,7 @@ async function carregarEstadoConversa(conversaId: string) {
   const { data, error } = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1350,10 +1442,26 @@ async function carregarEstadoConversa(conversaId: string) {
 function proximaPerguntaDeterministica(estado: any): string | null {
   const tipo = String(estado?.tipo_cliente || "").toLowerCase();
   const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
-  const largura = Number(estado?.largura);
-  const altura = Number(estado?.altura);
 
   if (!tipoValido) return "Você quer *PORTA INSTALADA* (Bahia) ou *REVENDA* (qualquer estado)?";
+
+  // Branch de revenda: perguntar subtipo
+  if (tipo === "revenda" && !estado?.subtipo_revenda) {
+    return "Você precisa de um *KIT* completo de porta de enrolar, ou apenas *PEÇAS AVULSAS*?";
+  }
+
+  // Revenda + peças avulsas: precisa apenas da lista de peças
+  if (tipo === "revenda" && estado?.subtipo_revenda === "pecas") {
+    const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
+    if (pecas.length === 0) {
+      return "Perfeito. Quais *peças* você precisa e em qual *quantidade*? Pode me mandar a lista (ex: 2 motores 500kg, 10m de guia lateral, 1 controle remoto).";
+    }
+    return null;
+  }
+
+  // Fluxo padrão (kit ou porta_instalada)
+  const largura = Number(estado?.largura);
+  const altura = Number(estado?.altura);
   if (!Number.isFinite(largura) || largura <= 0 || !Number.isFinite(altura) || altura <= 0) {
     return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
   }
@@ -1378,13 +1486,20 @@ function proximaPerguntaDeterministica(estado: any): string | null {
 function estadoProntoParaOrcamento(estado: any): boolean {
   const tipo = String(estado?.tipo_cliente || "").toLowerCase();
   const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
+  if (!tipoValido) return false;
+
+  // Revenda + peças: pronto quando há ao menos 1 peça
+  if (tipo === "revenda" && estado?.subtipo_revenda === "pecas") {
+    const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
+    return pecas.length > 0;
+  }
+
   const largura = Number(estado?.largura);
   const altura = Number(estado?.altura);
   const perfil = String(estado?.tipo_perfil || "").toLowerCase();
   const perfilValido = ["fechado", "transvision", "oblongo"].includes(perfil);
   const pinturaOk = Boolean(estado?.pintura_perguntado) && (!estado?.quer_pintura || Boolean(estado?.tipo_pintura));
   return Boolean(
-    tipoValido &&
     Number.isFinite(largura) && largura > 0 && largura <= 20 &&
     Number.isFinite(altura) && altura > 0 && altura <= 20 &&
     perfilValido &&
@@ -1457,11 +1572,81 @@ async function contarMensagensUserApos(conversation_id: string, sinceIso: string
   return count || 0;
 }
 
+/** Resolve preço/SKU/unidade no estoque para uma lista de peças (busca por sku ou nome). */
+async function enriquecerPecasComEstoque(itens: any[]): Promise<any[]> {
+  const out: any[] = [];
+  for (const raw of (itens || [])) {
+    const item = { ...raw };
+    let row: any = null;
+    if (item.codigo_sku) {
+      const { data } = await dashboardDb
+        .from("estoque")
+        .select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida")
+        .eq("codigo_sku", item.codigo_sku)
+        .maybeSingle();
+      row = data || null;
+    }
+    if (!row && item.produto_nome) {
+      const { data } = await dashboardDb
+        .from("estoque")
+        .select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida")
+        .ilike("produto_nome", `%${item.produto_nome}%`)
+        .limit(1)
+        .maybeSingle();
+      row = data || null;
+    }
+    out.push({
+      codigo_sku: item.codigo_sku || row?.codigo_sku || "AVULSA",
+      produto_nome: row?.produto_nome || item.produto_nome,
+      descricao: row?.descricao || row?.produto_nome || item.produto_nome,
+      quantidade: Number(item.quantidade) || 0,
+      unidade: item.unidade || row?.unidade_medida || "UN",
+      preco_unitario: Number(item.preco_unitario ?? row?.preco_venda ?? 0),
+    });
+  }
+  return out;
+}
+
+/** Monta um "orçamento" no mesmo formato de calcularOrcamento, mas só com peças avulsas (revenda). */
+function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string) {
+  const itens = (itensRaw || []).map((i) => {
+    const qty = Number(i.quantidade) || 0;
+    const preco = Number(i.preco_unitario) || 0;
+    return {
+      code: i.codigo_sku || "AVULSA",
+      description: i.descricao || i.produto_nome || "Peça avulsa",
+      qty,
+      unit: i.unidade || "UN",
+      unit_price: preco,
+      subtotal: qty * preco,
+    };
+  });
+  const subtotal = itens.reduce((s, i) => s + i.subtotal, 0);
+  return {
+    largura: 0,
+    altura: 0,
+    area: 0,
+    tipo_cliente: "revenda" as const,
+    tipo_perfil: "—" as any,
+    tipo_motor: "—" as any,
+    tipo_pintura: "—" as any,
+    incluir_pintura: false,
+    itens,
+    subtotal_produtos: +subtotal.toFixed(2),
+    mao_de_obra: 0,
+    frete: 0,
+    total_geral: +subtotal.toFixed(2),
+    cliente_nome,
+    cliente_endereco: undefined,
+    is_pecas_avulsas: true,
+  } as any;
+}
+
 async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone: string, nome: string) {
   const r = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1471,38 +1656,50 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   }
   const estado: any = r.data;
 
-  const largura = Number(estado?.largura);
-  const altura = Number(estado?.altura);
   const tipoCliente = String(estado?.tipo_cliente || "").toLowerCase();
-  const tipoPerfil = String(estado?.tipo_perfil || "").toLowerCase();
-  const frete = estado?.frete != null ? Number(estado.frete) : 0;
 
-  const faltando: string[] = [];
-  if (tipoCliente !== "porta_instalada" && tipoCliente !== "revenda") faltando.push("tipo_cliente");
-  if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
-  if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
-  if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
-  if (!estado?.pintura_perguntado) faltando.push("pintura");
-  if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
-  if (!estado?.adicionais_perguntado) faltando.push("adicionais");
-  if (tipoCliente === "porta_instalada" && (!Number.isFinite(frete) || frete <= 0)) faltando.push("frete");
-  if (faltando.length) return { ok: false, faltando };
+  let orcamento: any;
 
-  const orcamento = calcularOrcamento({
-    largura,
-    altura,
-    tipo_cliente: tipoCliente as any,
-    tipo_perfil: tipoPerfil as any,
-    tipo_pintura: estado?.quer_pintura ? estado?.tipo_pintura : undefined,
-    incluir_pintura: Boolean(estado?.quer_pintura),
-    frete,
-    cliente_nome: nome,
-    cliente_endereco: estado?.endereco_instalacao || undefined,
-    adicionais: {
-      portinhola: Boolean(estado?.adicionais?.portinhola),
-      alcapao: Boolean(estado?.adicionais?.alcapao),
-    },
-  });
+  // Branch revenda + peças avulsas
+  if (tipoCliente === "revenda" && estado?.subtipo_revenda === "pecas") {
+    const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
+    if (pecas.length === 0) return { ok: false, faltando: ["pecas_avulsas"] };
+    const enriquecidas = await enriquecerPecasComEstoque(pecas);
+    orcamento = montarOrcamentoPecas(enriquecidas, nome);
+  } else {
+    const largura = Number(estado?.largura);
+    const altura = Number(estado?.altura);
+    const tipoPerfil = String(estado?.tipo_perfil || "").toLowerCase();
+    const frete = estado?.frete != null ? Number(estado.frete) : 0;
+
+    const faltando: string[] = [];
+    if (tipoCliente !== "porta_instalada" && tipoCliente !== "revenda") faltando.push("tipo_cliente");
+    if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
+    if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
+    if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
+    if (!estado?.pintura_perguntado) faltando.push("pintura");
+    if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
+    if (!estado?.adicionais_perguntado) faltando.push("adicionais");
+    if (tipoCliente === "porta_instalada" && (!Number.isFinite(frete) || frete <= 0)) faltando.push("frete");
+    if (faltando.length) return { ok: false, faltando };
+
+    orcamento = calcularOrcamento({
+      largura,
+      altura,
+      tipo_cliente: tipoCliente as any,
+      tipo_perfil: tipoPerfil as any,
+      tipo_pintura: estado?.quer_pintura ? estado?.tipo_pintura : undefined,
+      incluir_pintura: Boolean(estado?.quer_pintura),
+      frete,
+      cliente_nome: nome,
+      cliente_endereco: estado?.endereco_instalacao || undefined,
+      adicionais: {
+        portinhola: Boolean(estado?.adicionais?.portinhola),
+        alcapao: Boolean(estado?.adicionais?.alcapao),
+      },
+    });
+  }
+
   const filename = `orcamento_${Date.now()}.pdf`;
   const pdfB64 = await gerarPdfDocrya(gerarHtmlOrcamento(orcamento), filename);
   if (!pdfB64) return { ok: false, error: "Falha ao gerar PDF" };
@@ -2128,29 +2325,41 @@ Deno.serve(async (req) => {
     const montarEstado = async (): Promise<string> => {
       const { data: c } = await supabase
         .from("leo_conversations")
-        .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+        .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
         .eq("id", conversa.id)
         .maybeSingle();
       const v = (x: any) => (x === null || x === undefined || x === "" || x === "indefinido") ? "PENDENTE" : String(x);
       const tc = v(c?.tipo_cliente);
+      const ehRevenda = c?.tipo_cliente === "revenda";
+      const ehPecas = ehRevenda && c?.subtipo_revenda === "pecas";
       const precisaFrete = c?.tipo_cliente === "porta_instalada";
-      const pinturaStr = c?.pintura_perguntado
-        ? (c?.quer_pintura ? `cor=${c?.tipo_pintura || "PENDENTE_COR"}` : "dispensou")
-        : "PENDENTE";
-      const adicionaisStr = c?.adicionais_perguntado
-        ? `portinhola=${Boolean((c?.adicionais as any)?.portinhola)}, alcapao=${Boolean((c?.adicionais as any)?.alcapao)}`
-        : "PENDENTE";
-      const linhas = [
-        `tipo_cliente=${tc}`,
-        `largura=${v(c?.largura)}`,
-        `altura=${v(c?.altura)}`,
-        `tipo_perfil=${v(c?.tipo_perfil)}`,
-        `pintura_perguntado=${pinturaStr}`,
-        `adicionais_perguntado=${adicionaisStr}`,
-      ];
-      if (precisaFrete) {
-        linhas.push(`cep=${v(c?.cep)}`);
+
+      const linhas: string[] = [`tipo_cliente=${tc}`];
+
+      if (ehRevenda) {
+        linhas.push(`subtipo_revenda=${v(c?.subtipo_revenda)}`);
       }
+
+      if (ehPecas) {
+        const pecas = Array.isArray((c as any)?.pecas_avulsas) ? (c as any).pecas_avulsas : [];
+        linhas.push(`pecas_avulsas=${pecas.length === 0 ? "PENDENTE" : `${pecas.length} item(ns)`}`);
+      } else {
+        const pinturaStr = c?.pintura_perguntado
+          ? (c?.quer_pintura ? `cor=${c?.tipo_pintura || "PENDENTE_COR"}` : "dispensou")
+          : "PENDENTE";
+        const adicionaisStr = c?.adicionais_perguntado
+          ? `portinhola=${Boolean((c?.adicionais as any)?.portinhola)}, alcapao=${Boolean((c?.adicionais as any)?.alcapao)}`
+          : "PENDENTE";
+        linhas.push(
+          `largura=${v(c?.largura)}`,
+          `altura=${v(c?.altura)}`,
+          `tipo_perfil=${v(c?.tipo_perfil)}`,
+          `pintura_perguntado=${pinturaStr}`,
+          `adicionais_perguntado=${adicionaisStr}`,
+        );
+        if (precisaFrete) linhas.push(`cep=${v(c?.cep)}`);
+      }
+
       const pendentes = linhas.filter((l) => l.endsWith("=PENDENTE")).map((l) => l.split("=")[0]);
       const proximo = pendentes[0] || "TODOS_OK_CHAMAR_GERAR_ORCAMENTO";
       return `[ESTADO ATUAL DA CONVERSA — fonte de verdade]\n${linhas.join("\n")}\nPRÓXIMO_PASSO: ${proximo === "TODOS_OK_CHAMAR_GERAR_ORCAMENTO" ? "TODOS os dados prontos — chame gerar_orcamento agora (sem argumentos)." : `pergunte ao cliente sobre "${proximo}".`}`;
@@ -2241,28 +2450,37 @@ Deno.serve(async (req) => {
           // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
           const { data: estado } = await supabase
             .from("leo_conversations")
-            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+            .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
             .eq("id", conversa.id)
             .maybeSingle();
 
-          const larguraNum = Number(estado?.largura);
-          const alturaNum = Number(estado?.altura);
           const tcRawV = String(estado?.tipo_cliente || "").toLowerCase().trim();
           const tcValid = tcRawV === "porta_instalada" || tcRawV === "revenda";
-          const perfilRaw = String(estado?.tipo_perfil || "").toLowerCase();
-          const perfilValid = ["fechado", "transvision", "oblongo"].includes(perfilRaw);
-          const freteNum = estado?.frete != null ? Number(estado.frete) : NaN;
+          const ehPecasAvulsas = tcRawV === "revenda" && estado?.subtipo_revenda === "pecas";
 
           const faltando: string[] = [];
           if (!tcValid) faltando.push("tipo_cliente");
-          if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
-          if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
-          if (!perfilValid) faltando.push("tipo_perfil");
-          if (!estado?.pintura_perguntado) faltando.push("pintura");
-          if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
-          if (!estado?.adicionais_perguntado) faltando.push("adicionais");
-          if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
-            faltando.push("frete");
+
+          if (ehPecasAvulsas) {
+            const pecas = Array.isArray((estado as any)?.pecas_avulsas) ? (estado as any).pecas_avulsas : [];
+            if (pecas.length === 0) faltando.push("pecas_avulsas");
+          } else {
+            const larguraNum = Number(estado?.largura);
+            const alturaNum = Number(estado?.altura);
+            const perfilRaw = String(estado?.tipo_perfil || "").toLowerCase();
+            const perfilValid = ["fechado", "transvision", "oblongo"].includes(perfilRaw);
+            const freteNum = estado?.frete != null ? Number(estado.frete) : NaN;
+
+            if (tcRawV === "revenda" && !estado?.subtipo_revenda) faltando.push("subtipo_revenda");
+            if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
+            if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
+            if (!perfilValid) faltando.push("tipo_perfil");
+            if (!estado?.pintura_perguntado) faltando.push("pintura");
+            if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
+            if (!estado?.adicionais_perguntado) faltando.push("adicionais");
+            if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
+              faltando.push("frete");
+            }
           }
 
           if (faltando.length > 0) {
@@ -2279,7 +2497,11 @@ Deno.serve(async (req) => {
                     ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
                     : proximo === "tipo_cliente"
                       ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
-                      : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
+                      : proximo === "subtipo_revenda"
+                        ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
+                        : proximo === "pecas_avulsas"
+                          ? "Pergunte AGORA quais peças e quantidades o cliente precisa. Quando ele confirmar, chame definir_pecas_avulsas com a lista. NÃO chame gerar_orcamento agora."
+                          : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
               erro: "DADOS_INSUFICIENTES",
@@ -2296,51 +2518,24 @@ Deno.serve(async (req) => {
           }
 
           try {
-            const o = calcularOrcamento({
-              largura: larguraNum,
-              altura: alturaNum,
-              tipo_cliente: tcRawV as any,
-              tipo_perfil: perfilRaw as any,
-              tipo_motor: args.tipo_motor,
-              tipo_pintura: estado?.quer_pintura ? (estado?.tipo_pintura || args.tipo_pintura) : undefined,
-              incluir_pintura: Boolean(estado?.quer_pintura),
-              frete: Number.isFinite(freteNum) ? freteNum : 0,
-              cliente_nome: nome,
-              cliente_endereco: estado?.endereco_instalacao || undefined,
-              adicionais: {
-                portinhola: Boolean((estado?.adicionais as any)?.portinhola),
-                alcapao: Boolean((estado?.adicionais as any)?.alcapao),
-              },
-            });
-
-            const html = gerarHtmlOrcamento(o);
-            const filename = `orcamento_${Date.now()}.pdf`;
-            const pdfB64 = await gerarPdfDocrya(html, filename);
-
-            if (pdfB64) {
-              const captionPdf = "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
-              const pdfEnviado = await enviarPdfBase64(telefone, pdfB64, filename, captionPdf);
-              if (pdfEnviado) {
-                pdfEnviadoNesteTurno = true;
-                pdfCaptionEnviada = captionPdf;
-                // ➕ DASHBOARD: salva orçamento + anexo PDF e move lead para "orcamento_enviado"
-                await registrarOrcamentoEAvancarFunil({
-                  telefone,
-                  nome: conversa.nome_cliente || nome || "",
-                  orcamento: o,
-                  pdfBase64: pdfB64,
-                  filename,
-                });
-              }
+            const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
+            if (resultadoPdf.pdf_enviado && resultadoPdf.orcamento) {
+              pdfEnviadoNesteTurno = true;
+              pdfCaptionEnviada = resultadoPdf.caption || "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
+              await registrarOrcamentoEAvancarFunil({
+                telefone,
+                nome: conversa.nome_cliente || nome || "",
+                orcamento: resultadoPdf.orcamento,
+                pdfBase64: resultadoPdf.pdfBase64!,
+                filename: resultadoPdf.filename || `orcamento_${Date.now()}.pdf`,
+              });
               toolResult = {
-                ok: pdfEnviado,
-                pdf_enviado: pdfEnviado,
-                instrucao: pdfEnviado
-                  ? "PDF enviado. NÃO envie nova mensagem. NÃO mencione valores."
-                  : "Houve instabilidade no envio do arquivo — informe que um atendente vai encaminhar em breve.",
+                ok: true,
+                pdf_enviado: true,
+                instrucao: "PDF enviado. NÃO envie nova mensagem. NÃO mencione valores.",
               };
             } else {
-              toolResult = { ok: false, error: "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
+              toolResult = { ok: false, error: resultadoPdf.error || "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
             }
           } catch (e: any) {
             console.error("❌ Erro em gerar_orcamento:", e?.message, e);
@@ -2507,7 +2702,59 @@ Deno.serve(async (req) => {
             toolResult = {
               ok: true,
               tipo_cliente: tcNorm,
-              instrucao: "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta (ex: 4x3).",
+              instrucao: tcNorm === "revenda"
+                ? "Tipo REVENDA gravado. NÃO confirme. Siga DIRETO ao Passo 2.1: pergunte se ele precisa de KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS."
+                : "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta (ex: 4x3).",
+            };
+          }
+        } else if (fnName === "definir_subtipo_revenda") {
+          const sub = String(args.subtipo || "").toLowerCase();
+          const subNorm: "kit" | "pecas" | null = sub === "kit" ? "kit" : sub === "pecas" ? "pecas" : null;
+          if (!subNorm) {
+            toolResult = { ok: false, error: "subtipo inválido. Use 'kit' ou 'pecas'." };
+          } else {
+            await supabase
+              .from("leo_conversations")
+              .update({ subtipo_revenda: subNorm, ultima_mensagem_at: new Date().toISOString() })
+              .eq("id", conversa.id);
+            toolResult = {
+              ok: true,
+              subtipo: subNorm,
+              instrucao: subNorm === "pecas"
+                ? "Subtipo PEÇAS AVULSAS gravado. NÃO confirme. Siga DIRETO ao Passo 2.2: pergunte quais peças e quantidades o cliente precisa. Use listar_pecas_disponiveis se precisar consultar o catálogo."
+                : "Subtipo KIT gravado. NÃO confirme. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.",
+            };
+          }
+        } else if (fnName === "listar_pecas_disponiveis") {
+          const busca = String(args.busca || "").trim();
+          let q = dashboardDb.from("estoque").select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida, quantidade").limit(50);
+          if (busca) q = q.ilike("produto_nome", `%${busca}%`);
+          const { data, error } = await q;
+          if (error) {
+            toolResult = { ok: false, error: error.message };
+          } else {
+            toolResult = {
+              ok: true,
+              total: data?.length || 0,
+              itens: data || [],
+              instrucao: "Catálogo retornado. Use estes códigos/preços para confirmar com o cliente. NÃO invente itens fora desta lista.",
+            };
+          }
+        } else if (fnName === "definir_pecas_avulsas") {
+          const itensRaw = Array.isArray(args.itens) ? args.itens : [];
+          if (itensRaw.length === 0) {
+            toolResult = { ok: false, error: "Lista de peças vazia. Pergunte ao cliente quais peças e quantidades." };
+          } else {
+            const enriquecidas = await enriquecerPecasComEstoque(itensRaw);
+            await supabase
+              .from("leo_conversations")
+              .update({ pecas_avulsas: enriquecidas, ultima_mensagem_at: new Date().toISOString() })
+              .eq("id", conversa.id);
+            toolResult = {
+              ok: true,
+              total: enriquecidas.length,
+              itens: enriquecidas,
+              instrucao: "Peças gravadas no [ESTADO]. NÃO liste valores ao cliente. Chame gerar_orcamento agora (sem argumentos).",
             };
           }
         } else if (fnName === "transferir_humano") {
