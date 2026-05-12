@@ -937,7 +937,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_pecas_avulsas",
-      description: "Apenas para REVENDA + subtipo=pecas. Grava a lista final de peças que o cliente quer comprar. Cada item deve ter produto_nome e quantidade; informe codigo_sku quando souber (do catálogo). Após chamar esta tool, chame gerar_orcamento.",
+      description: "Para REVENDA ou PORTA INSTALADA com subtipo=pecas. Grava a lista de peças que o cliente quer comprar. Chame ASSIM QUE o cliente listar peças com quantidade (ex: '5 motores 200kg', '2 controles e 10m de guia') — NÃO peça confirmação adicional antes. Cada item deve ter produto_nome e quantidade; informe codigo_sku quando souber.",
       parameters: {
         type: "object",
         properties: {
