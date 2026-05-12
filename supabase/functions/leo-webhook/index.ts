@@ -1334,7 +1334,7 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
     }
 
     // Se for revenda + peças, NÃO inferir medidas/lâmina/etc
-    const ehPecas = estado.tipo_cliente === "revenda" && estado.subtipo_revenda === "pecas";
+    const ehPecas = estado.subtipo_revenda === "pecas";
 
     if (!ehPecas) {
       const medidas = inferirMedidasTexto(txt);
@@ -1384,7 +1384,7 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const textos = [texto, ...((histRes.data || []) as any[]).map((m) => String(m?.content || ""))].filter(Boolean);
   const estado = aplicarInferenciasEmEstado(baseEstado, textos);
 
-  const ehPecas = estado.tipo_cliente === "revenda" && estado.subtipo_revenda === "pecas";
+  const ehPecas = estado.subtipo_revenda === "pecas";
 
   const patch: Record<string, unknown> = {};
   if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
