@@ -2329,13 +2329,14 @@ Deno.serve(async (req) => {
     if (clienteExistente) {
       const tipoSalvo = (clienteExistente as any).tipo_cliente as string | null;
       const tipoNorm = tipoSalvo ? String(tipoSalvo).trim().toLowerCase() : "";
-      const ehRevenda = tipoNorm.includes("revenda");
-      const ehInstalada = tipoNorm.includes("instalada") || tipoNorm.includes("porta_instalada");
+      const ehPendente = tipoNorm.includes("pendente");
+      const ehRevenda = !ehPendente && tipoNorm.includes("revenda");
+      const ehInstalada = tipoNorm.includes("instalada") || tipoNorm === "porta_instalada";
       let blocoTipo = "";
       if (ehRevenda) {
-        blocoTipo = ` Esse cliente já é classificado como **REVENDA** no nosso sistema. NÃO faça a pergunta padrão de "porta instalada ou revenda". Em vez disso, confirme de forma natural: pergunte se ele quer seguir orçando como REVENDA (padrão dele) ou se desta vez prefere PORTA INSTALADA. Se ele só pedir "orçamento" sem especificar, assuma REVENDA.`;
+        blocoTipo = ` Esse cliente já é classificado como **REVENDA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de REVENDA (Passo 2.1: KIT ou PEÇAS AVULSAS).`;
       } else if (ehInstalada) {
-        blocoTipo = ` Esse cliente já é classificado como **PORTA INSTALADA** no nosso sistema. NÃO faça a pergunta padrão. Confirme se ele quer seguir como PORTA INSTALADA (padrão dele) ou se desta vez prefere REVENDA. Se ele só pedir "orçamento" sem especificar, assuma PORTA INSTALADA.`;
+        blocoTipo = ` Esse cliente já é classificado como **PORTA INSTALADA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de PORTA INSTALADA (Passo 3: largura e altura).`;
       } else {
         blocoTipo = ` Tipo do cliente ainda não definido — siga o fluxo normal e pergunte se é PORTA INSTALADA ou REVENDA.`;
       }
