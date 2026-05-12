@@ -1346,6 +1346,20 @@ function inferirCepTexto(texto: string): string | null {
   return match ? match[0].replace(/\D/g, "") : null;
 }
 
+function inferirEntregaTexto(texto: string): { quer_entrega: boolean } | null {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!t.trim()) return null;
+  // Cliente quer BUSCAR/RETIRAR (sem entrega)
+  if (/\b(retirar|retiro|retirada|busc(o|ar|amos)|pego|pegar|vou\s+ai|vou\s+pegar|passo\s+(ai|la|para)\s+(pegar|buscar)|na\s+loja|no\s+local\s+de\s+voces|prefiro\s+(retirar|buscar|pegar)|sem\s+entrega|nao\s+precisa\s+entreg)\b/.test(t)) {
+    return { quer_entrega: false };
+  }
+  // Cliente quer ENTREGA
+  if (/\b(entreg(a|ar|am|uem|ue|uar)|pode\s+entregar|quero\s+entrega|me\s+entreguem|enviem|envio|mandem|manda(r)?|frete|deliver(y)?)\b/.test(t)) {
+    return { quer_entrega: true };
+  }
+  return null;
+}
+
 function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
   const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (!t.trim()) return null;
