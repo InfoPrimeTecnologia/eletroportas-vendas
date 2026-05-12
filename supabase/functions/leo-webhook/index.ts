@@ -419,7 +419,7 @@ td { border-bottom: 1px solid #e6eaf0; padding: 5px; font-size: 8.8px; vertical-
     <div class="card">
       <h2>Especificações</h2>
       ${(o as any).is_pecas_avulsas
-        ? `<strong>Modalidade:</strong> Revenda — peças avulsas<br/><strong>Itens:</strong> ${o.itens.length} peça(s) selecionada(s)`
+        ? `<strong>Modalidade:</strong> ${o.tipo_cliente === "porta_instalada" ? "Porta instalada" : "Revenda"} — peças avulsas<br/><strong>Itens:</strong> ${o.itens.length} peça(s) selecionada(s)`
         : `<strong>Dimensões:</strong> ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m<br/>
       <strong>Área:</strong> ${o.area.toFixed(2).replace(".", ",")}m²<br/>
       <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.incluir_pintura ? o.tipo_pintura.replace("_", " ") : "não inclusa")}`}
@@ -692,7 +692,7 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
 
 # FLUXO DE VENDAS (siga em ordem, pulando passos já cumpridos)
 
-⚠️ O sistema mantém um **[ESTADO]** estruturado (tipo_cliente, largura, altura, tipo_perfil, pintura_perguntado, adicionais_perguntado, cep, frete). É a ÚNICA fonte de verdade — olhe SEMPRE o [ESTADO]. Cada resposta do cliente, chame a tool correspondente para gravar.
+⚠️ O sistema mantém um **[ESTADO]** estruturado (tipo_cliente, subtipo_revenda, largura, altura, tipo_perfil, pintura_perguntado, adicionais_perguntado, entrega_perguntado, quer_entrega, cep, frete). É a ÚNICA fonte de verdade — olhe SEMPRE o [ESTADO]. Cada resposta do cliente, chame a tool correspondente para gravar.
 
 **Passo 1 — Cadastro** (apenas se [CONTEXTO] disser "NÃO CADASTRADO"): colete nome, e-mail e CNPJ/CPF de forma leve. Quando tiver, chame \`cadastrar_cliente\`.
 
@@ -700,22 +700,23 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
    "Você quer **PORTA INSTALADA** (Bahia) ou **REVENDA** (qualquer estado)?"
    Resposta → chame \`definir_tipo_cliente\` IMEDIATAMENTE.
 
-**Passo 2.1 — Subtipo de revenda** (APENAS se tipo_cliente=revenda e sem subtipo_revenda):
-   "Você precisa de um **KIT** completo de porta de enrolar, ou apenas **PEÇAS AVULSAS**?"
+**Passo 2.1 — Subtipo (KIT ou PEÇAS AVULSAS)** (APENAS se já tem tipo_cliente e ainda sem subtipo_revenda):
+   Vale tanto para REVENDA quanto para PORTA INSTALADA.
+   "Você quer um **KIT** completo de porta de enrolar, ou apenas **PEÇAS AVULSAS**?"
    Resposta → chame \`definir_subtipo_revenda\` IMEDIATAMENTE com 'kit' ou 'pecas'.
-   - Se 'kit': segue o fluxo normal (medidas → lâmina → pintura → adicionais → orçamento).
+   - Se 'kit': segue o fluxo normal (medidas → lâmina → pintura → adicionais → entrega → orçamento).
    - Se 'pecas': PULA medidas, lâmina, pintura e adicionais. Vá direto ao Passo 2.2.
 
 **Passo 2.2 — Coleta de peças** (APENAS se subtipo_revenda=pecas):
    Pergunte de forma natural quais peças o cliente quer e em qual quantidade. Pode ser uma lista (ex: "2 motores 500kg, 10m de guia lateral, 1 controle remoto").
    Use \`listar_pecas_disponiveis\` se precisar consultar o catálogo (códigos, preços, descrições do estoque). NÃO invente preços nem códigos — sempre baseie-se no que essa tool retornar.
-   Quando o cliente confirmar a lista final, chame \`definir_pecas_avulsas\` com o array completo de peças. Em seguida chame \`gerar_orcamento\` (sem argumentos) — o PDF terá APENAS as peças solicitadas, sem o kit completo.
+   Quando o cliente confirmar a lista final, chame \`definir_pecas_avulsas\` com o array completo de peças. Depois siga ao Passo 7 (entrega) se for PORTA INSTALADA, ou direto a \`gerar_orcamento\` se for REVENDA.
 
 **Passo 3 — Medidas** (pular se já tiver largura/altura, ou se subtipo_revenda=pecas):
    Pergunte de forma natural a largura e altura em metros (ex: 4x3).
    Resposta → \`definir_medidas\` IMEDIATAMENTE.
 
-**Passo 4 — Lâmina** (pular se já tiver tipo_perfil):
+**Passo 4 — Lâmina** (pular se já tiver tipo_perfil, ou se subtipo_revenda=pecas):
    "Qual lâmina prefere?
    1️⃣ FECHADA (lisa)
    2️⃣ TRANSVISION (com visores)
@@ -725,27 +726,29 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
    NÃO repita a pergunta se conseguir inferir a escolha (ex: "oblong" = oblongo). Em caso de dúvida real, confirme: "Você quis dizer OBLONGO (perfurada)? 👍".
    Resposta → \`definir_lamina\` IMEDIATAMENTE.
 
-**Passo 5 — Pintura** (pular APENAS se [ESTADO] tiver pintura_perguntado=true):
+**Passo 5 — Pintura** (pular APENAS se pintura_perguntado=true, ou se subtipo_revenda=pecas):
    Primeiro pergunte SE quer pintura: "Quer incluir pintura eletrostática na porta?"
    - Se cliente disser NÃO/dispensa → chame \`definir_pintura\` com quer_pintura=false (sem cor) e siga.
    - Se cliente disser SIM → informe as cores disponíveis ("Show. As cores são: branco liso, preta fosco, cinza texturizado, ou cor especial (RAL). Qual prefere?") e quando ele escolher, chame \`definir_pintura\` com quer_pintura=true e tipo_pintura.
    NUNCA inclua pintura no orçamento se o cliente disse que não quer.
 
-**Passo 6 — Adicionais (Portinhola/Alçapão)** (pular APENAS se adicionais_perguntado=true):
+**Passo 6 — Adicionais (Portinhola/Alçapão)** (pular APENAS se adicionais_perguntado=true, ou se subtipo_revenda=pecas):
    "Quer adicionar Portinhola (porta de acesso integrada) ou Alçapão (acesso na própria porta)? Pode ser os dois, um, ou nenhum."
    Resposta → \`definir_adicionais\` IMEDIATAMENTE com os booleanos certos.
 
-**Passo 7 — CEP** (APENAS se tipo_cliente=porta_instalada e sem frete):
-   "Por último, qual o CEP do local da instalação?"
-   Resposta → \`calcular_frete_cep\`. Se fora da BA → \`transferir_humano\`. Se ok → NÃO mencione o frete, vá ao Passo 8.
-   Para REVENDA, pule.
+**Passo 7 — Entrega ou retirada** (APENAS se tipo_cliente=porta_instalada e entrega_perguntado=false):
+   "Você prefere que a gente **entregue** no local, ou prefere **buscar/retirar** com a gente?"
+   - Se quer **buscar/retirar** → chame \`definir_entrega\` com quer_entrega=false. Frete fica zerado e PULA o CEP. Vá ao Passo 8.
+   - Se quer **entrega** → chame \`definir_entrega\` com quer_entrega=true. Em seguida pergunte o CEP e chame \`calcular_frete_cep\`. Se fora da BA → \`transferir_humano\`. Se ok → NÃO mencione o frete, vá ao Passo 8.
+   Para REVENDA, pule este passo.
 
 **Passo 8 — Gerar orçamento**: chame \`gerar_orcamento\` (sem argumentos). Após \`pdf_enviado: true\`, NÃO envie mensagem extra.
 
 # ORDEM RESUMIDA
-- PORTA INSTALADA: tipo → medidas → lâmina → pintura → adicionais → CEP → orçamento.
+- PORTA INSTALADA (kit): tipo → subtipo(kit) → medidas → lâmina → pintura → adicionais → entrega/CEP → orçamento.
+- PORTA INSTALADA (peças avulsas): tipo → subtipo(pecas) → coletar peças → entrega/CEP → orçamento.
 - REVENDA (kit): tipo → subtipo(kit) → medidas → lâmina → pintura → adicionais → orçamento.
-- REVENDA (peças avulsas): tipo → subtipo(pecas) → coletar peças → orçamento (somente das peças).
+- REVENDA (peças avulsas): tipo → subtipo(pecas) → coletar peças → orçamento.
 
 # ANTI-LOOP
 - [ESTADO] é a fonte de verdade. Nunca pergunte algo já preenchido.
@@ -890,13 +893,27 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_subtipo_revenda",
-      description: "Apenas para clientes REVENDA. Grava no banco se o cliente quer um KIT completo de porta de enrolar ('kit') ou apenas PEÇAS AVULSAS ('pecas'). Chame ASSIM QUE o cliente responder. Silenciosa.",
+      description: "Para clientes REVENDA ou PORTA INSTALADA. Grava no banco se o cliente quer um KIT completo de porta de enrolar ('kit') ou apenas PEÇAS AVULSAS ('pecas'). Chame ASSIM QUE o cliente responder. Silenciosa.",
       parameters: {
         type: "object",
         properties: {
           subtipo: { type: "string", enum: ["kit", "pecas"] },
         },
         required: ["subtipo"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "definir_entrega",
+      description: "Para clientes PORTA INSTALADA. Grava no banco se o cliente quer ENTREGA no local (true) ou se prefere BUSCAR/RETIRAR ele mesmo (false). Quando false, o frete fica zerado e NÃO é necessário CEP. Quando true, em seguida pergunte o CEP e chame calcular_frete_cep. Silenciosa.",
+      parameters: {
+        type: "object",
+        properties: {
+          quer_entrega: { type: "boolean", description: "true = quer entrega, false = vai buscar/retirar" },
+        },
+        required: ["quer_entrega"],
       },
     },
   },
@@ -1310,13 +1327,14 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
     const tipo = inferirTipoClienteTexto(txt);
     if (tipo && (!estado.tipo_cliente || estado.tipo_cliente === "indefinido")) estado.tipo_cliente = tipo;
 
-    if (estado.tipo_cliente === "revenda" && !estado.subtipo_revenda) {
+    const tipoDef = estado.tipo_cliente === "revenda" || estado.tipo_cliente === "porta_instalada";
+    if (tipoDef && !estado.subtipo_revenda) {
       const sub = inferirSubtipoRevendaTexto(txt);
       if (sub) estado.subtipo_revenda = sub;
     }
 
     // Se for revenda + peças, NÃO inferir medidas/lâmina/etc
-    const ehPecas = estado.tipo_cliente === "revenda" && estado.subtipo_revenda === "pecas";
+    const ehPecas = estado.subtipo_revenda === "pecas";
 
     if (!ehPecas) {
       const medidas = inferirMedidasTexto(txt);
@@ -1345,7 +1363,7 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const estadoRes = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1366,7 +1384,7 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const textos = [texto, ...((histRes.data || []) as any[]).map((m) => String(m?.content || ""))].filter(Boolean);
   const estado = aplicarInferenciasEmEstado(baseEstado, textos);
 
-  const ehPecas = estado.tipo_cliente === "revenda" && estado.subtipo_revenda === "pecas";
+  const ehPecas = estado.subtipo_revenda === "pecas";
 
   const patch: Record<string, unknown> = {};
   if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
@@ -1430,7 +1448,7 @@ async function carregarEstadoConversa(conversaId: string) {
   const { data, error } = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1447,40 +1465,47 @@ function proximaPerguntaDeterministica(estado: any): string | null {
 
   if (!tipoValido) return "Você quer *PORTA INSTALADA* (Bahia) ou *REVENDA* (qualquer estado)?";
 
-  // Branch de revenda: perguntar subtipo
-  if (tipo === "revenda" && !estado?.subtipo_revenda) {
-    return "Você precisa de um *KIT* completo de porta de enrolar, ou apenas *PEÇAS AVULSAS*?";
+  // Subtipo (kit/pecas) vale tanto para revenda quanto para porta_instalada
+  if (!estado?.subtipo_revenda) {
+    return "Você quer um *KIT* completo de porta de enrolar, ou apenas *PEÇAS AVULSAS*?";
   }
 
-  // Revenda + peças avulsas: precisa apenas da lista de peças
-  if (tipo === "revenda" && estado?.subtipo_revenda === "pecas") {
+  const ehPecas = estado?.subtipo_revenda === "pecas";
+
+  if (ehPecas) {
     const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
     if (pecas.length === 0) {
       return "Perfeito. Quais *peças* você precisa e em qual *quantidade*? Pode me mandar a lista (ex: 2 motores 500kg, 10m de guia lateral, 1 controle remoto).";
     }
-    return null;
+  } else {
+    // Fluxo padrão (kit)
+    const largura = Number(estado?.largura);
+    const altura = Number(estado?.altura);
+    if (!Number.isFinite(largura) || largura <= 0 || !Number.isFinite(altura) || altura <= 0) {
+      return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
+    }
+    if (!estado?.tipo_perfil) {
+      return "Qual lâmina prefere?\n\n1️⃣ FECHADA (lisa)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
+    }
+    if (!estado?.pintura_perguntado) {
+      return "Quer incluir pintura eletrostática na porta?";
+    }
+    if (estado?.quer_pintura && !estado?.tipo_pintura) {
+      return "Show. As cores disponíveis são: *branco liso*, *preta fosco*, *cinza texturizado* ou *cor especial* (RAL). Qual prefere?";
+    }
+    if (!estado?.adicionais_perguntado) {
+      return "Quer adicionar *Portinhola* (porta de acesso integrada) ou *Alçapão* (acesso na própria porta)? Pode ser os dois, um, ou nenhum.";
+    }
   }
 
-  // Fluxo padrão (kit ou porta_instalada)
-  const largura = Number(estado?.largura);
-  const altura = Number(estado?.altura);
-  if (!Number.isFinite(largura) || largura <= 0 || !Number.isFinite(altura) || altura <= 0) {
-    return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
-  }
-  if (!estado?.tipo_perfil) {
-    return "Qual lâmina prefere?\n\n1️⃣ FECHADA (lisa)\n\n2️⃣ TRANSVISION (com visores)\n\n3️⃣ OBLONGO (perfurada)";
-  }
-  if (!estado?.pintura_perguntado) {
-    return "Quer incluir pintura eletrostática na porta?";
-  }
-  if (estado?.quer_pintura && !estado?.tipo_pintura) {
-    return "Show. As cores disponíveis são: *branco liso*, *preta fosco*, *cinza texturizado* ou *cor especial* (RAL). Qual prefere?";
-  }
-  if (!estado?.adicionais_perguntado) {
-    return "Quer adicionar *Portinhola* (porta de acesso integrada) ou *Alçapão* (acesso na própria porta)? Pode ser os dois, um, ou nenhum.";
-  }
-  if (tipo === "porta_instalada" && !estado?.cep) {
-    return "Por último, qual o *CEP do local da instalação*?";
+  // Entrega/CEP só vale para porta_instalada
+  if (tipo === "porta_instalada") {
+    if (!estado?.entrega_perguntado) {
+      return "Você prefere que a gente *entregue* no local, ou prefere *buscar/retirar* com a gente?";
+    }
+    if (estado?.quer_entrega && !estado?.cep) {
+      return "Por último, qual o *CEP do local da entrega*?";
+    }
   }
   return null;
 }
@@ -1489,26 +1514,31 @@ function estadoProntoParaOrcamento(estado: any): boolean {
   const tipo = String(estado?.tipo_cliente || "").toLowerCase();
   const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
   if (!tipoValido) return false;
+  if (!estado?.subtipo_revenda) return false;
 
-  // Revenda + peças: pronto quando há ao menos 1 peça
-  if (tipo === "revenda" && estado?.subtipo_revenda === "pecas") {
+  const ehPecas = estado?.subtipo_revenda === "pecas";
+
+  if (ehPecas) {
     const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
-    return pecas.length > 0;
+    if (pecas.length === 0) return false;
+  } else {
+    const largura = Number(estado?.largura);
+    const altura = Number(estado?.altura);
+    const perfil = String(estado?.tipo_perfil || "").toLowerCase();
+    const perfilValido = ["fechado", "transvision", "oblongo"].includes(perfil);
+    const pinturaOk = Boolean(estado?.pintura_perguntado) && (!estado?.quer_pintura || Boolean(estado?.tipo_pintura));
+    if (!(Number.isFinite(largura) && largura > 0 && largura <= 20 &&
+        Number.isFinite(altura) && altura > 0 && altura <= 20 &&
+        perfilValido && pinturaOk && Boolean(estado?.adicionais_perguntado))) {
+      return false;
+    }
   }
 
-  const largura = Number(estado?.largura);
-  const altura = Number(estado?.altura);
-  const perfil = String(estado?.tipo_perfil || "").toLowerCase();
-  const perfilValido = ["fechado", "transvision", "oblongo"].includes(perfil);
-  const pinturaOk = Boolean(estado?.pintura_perguntado) && (!estado?.quer_pintura || Boolean(estado?.tipo_pintura));
-  return Boolean(
-    Number.isFinite(largura) && largura > 0 && largura <= 20 &&
-    Number.isFinite(altura) && altura > 0 && altura <= 20 &&
-    perfilValido &&
-    pinturaOk &&
-    Boolean(estado?.adicionais_perguntado) &&
-    (tipo !== "porta_instalada" || Boolean(estado?.cep))
-  );
+  if (tipo === "porta_instalada") {
+    if (!estado?.entrega_perguntado) return false;
+    if (estado?.quer_entrega && !estado?.cep) return false;
+  }
+  return true;
 }
 
 async function pdfJaEnviadoConversa(conversation_id: string) {
@@ -1609,8 +1639,8 @@ async function enriquecerPecasComEstoque(itens: any[]): Promise<any[]> {
   return out;
 }
 
-/** Monta um "orçamento" no mesmo formato de calcularOrcamento, mas só com peças avulsas (revenda). */
-function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string) {
+/** Monta um "orçamento" no mesmo formato de calcularOrcamento, mas só com peças avulsas. */
+function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string, opts: { tipo_cliente?: "revenda" | "porta_instalada"; frete?: number; cliente_endereco?: string } = {}) {
   const itens = (itensRaw || []).map((i) => {
     const qty = Number(i.quantidade) || 0;
     const preco = Number(i.preco_unitario) || 0;
@@ -1624,11 +1654,12 @@ function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string) {
     };
   });
   const subtotal = itens.reduce((s, i) => s + i.subtotal, 0);
+  const frete = Number(opts.frete) > 0 ? +Number(opts.frete).toFixed(2) : 0;
   return {
     largura: 0,
     altura: 0,
     area: 0,
-    tipo_cliente: "revenda" as const,
+    tipo_cliente: (opts.tipo_cliente || "revenda") as any,
     tipo_perfil: "—" as any,
     tipo_motor: "—" as any,
     tipo_pintura: "—" as any,
@@ -1636,10 +1667,10 @@ function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string) {
     itens,
     subtotal_produtos: +subtotal.toFixed(2),
     mao_de_obra: 0,
-    frete: 0,
-    total_geral: +subtotal.toFixed(2),
+    frete,
+    total_geral: +(subtotal + frete).toFixed(2),
     cliente_nome,
-    cliente_endereco: undefined,
+    cliente_endereco: opts.cliente_endereco,
     is_pecas_avulsas: true,
   } as any;
 }
@@ -1648,7 +1679,7 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   const r = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1659,30 +1690,41 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   const estado: any = r.data;
 
   const tipoCliente = String(estado?.tipo_cliente || "").toLowerCase();
+  const ehPorta = tipoCliente === "porta_instalada";
+  const freteEstado = estado?.frete != null ? Number(estado.frete) : 0;
+  // Frete só conta se for porta instalada E cliente quer entrega
+  const freteFinal = (ehPorta && estado?.quer_entrega === true && Number.isFinite(freteEstado) && freteEstado > 0) ? freteEstado : 0;
 
   let orcamento: any;
 
-  // Branch revenda + peças avulsas
-  if (tipoCliente === "revenda" && estado?.subtipo_revenda === "pecas") {
+  // Branch peças avulsas (revenda OU porta instalada)
+  if (estado?.subtipo_revenda === "pecas") {
     const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
     if (pecas.length === 0) return { ok: false, faltando: ["pecas_avulsas"] };
+    if (ehPorta && !estado?.entrega_perguntado) return { ok: false, faltando: ["entrega"] };
+    if (ehPorta && estado?.quer_entrega === true && !estado?.cep) return { ok: false, faltando: ["cep"] };
     const enriquecidas = await enriquecerPecasComEstoque(pecas);
-    orcamento = montarOrcamentoPecas(enriquecidas, nome);
+    orcamento = montarOrcamentoPecas(enriquecidas, nome, {
+      tipo_cliente: ehPorta ? "porta_instalada" : "revenda",
+      frete: freteFinal,
+      cliente_endereco: estado?.endereco_instalacao || undefined,
+    });
   } else {
     const largura = Number(estado?.largura);
     const altura = Number(estado?.altura);
     const tipoPerfil = String(estado?.tipo_perfil || "").toLowerCase();
-    const frete = estado?.frete != null ? Number(estado.frete) : 0;
 
     const faltando: string[] = [];
     if (tipoCliente !== "porta_instalada" && tipoCliente !== "revenda") faltando.push("tipo_cliente");
+    if (!estado?.subtipo_revenda) faltando.push("subtipo_revenda");
     if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
     if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
     if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
     if (!estado?.pintura_perguntado) faltando.push("pintura");
     if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
     if (!estado?.adicionais_perguntado) faltando.push("adicionais");
-    if (tipoCliente === "porta_instalada" && (!Number.isFinite(frete) || frete <= 0)) faltando.push("frete");
+    if (ehPorta && !estado?.entrega_perguntado) faltando.push("entrega");
+    if (ehPorta && estado?.quer_entrega === true && !estado?.cep) faltando.push("cep");
     if (faltando.length) return { ok: false, faltando };
 
     orcamento = calcularOrcamento({
@@ -1692,7 +1734,7 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
       tipo_perfil: tipoPerfil as any,
       tipo_pintura: estado?.quer_pintura ? estado?.tipo_pintura : undefined,
       incluir_pintura: Boolean(estado?.quer_pintura),
-      frete,
+      frete: freteFinal,
       cliente_nome: nome,
       cliente_endereco: estado?.endereco_instalacao || undefined,
       adicionais: {
@@ -2336,7 +2378,7 @@ Deno.serve(async (req) => {
       if (ehRevenda) {
         blocoTipo = ` Esse cliente já é classificado como **REVENDA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de REVENDA (Passo 2.1: KIT ou PEÇAS AVULSAS).`;
       } else if (ehInstalada) {
-        blocoTipo = ` Esse cliente já é classificado como **PORTA INSTALADA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de PORTA INSTALADA (Passo 3: largura e altura).`;
+        blocoTipo = ` Esse cliente já é classificado como **PORTA INSTALADA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de PORTA INSTALADA (Passo 2.1: KIT completo ou PEÇAS AVULSAS).`;
       } else {
         blocoTipo = ` Tipo do cliente ainda não definido — siga o fluxo normal e pergunte se é PORTA INSTALADA ou REVENDA.`;
       }
@@ -2349,25 +2391,25 @@ Deno.serve(async (req) => {
     const montarEstado = async (): Promise<string> => {
       const { data: c } = await supabase
         .from("leo_conversations")
-        .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+        .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
         .eq("id", conversa.id)
         .maybeSingle();
       const v = (x: any) => (x === null || x === undefined || x === "" || x === "indefinido") ? "PENDENTE" : String(x);
       const tc = v(c?.tipo_cliente);
-      const ehRevenda = c?.tipo_cliente === "revenda";
-      const ehPecas = ehRevenda && c?.subtipo_revenda === "pecas";
-      const precisaFrete = c?.tipo_cliente === "porta_instalada";
+      const tipoValido = c?.tipo_cliente === "revenda" || c?.tipo_cliente === "porta_instalada";
+      const ehPecas = c?.subtipo_revenda === "pecas";
+      const ehPorta = c?.tipo_cliente === "porta_instalada";
 
       const linhas: string[] = [`tipo_cliente=${tc}`];
 
-      if (ehRevenda) {
+      if (tipoValido) {
         linhas.push(`subtipo_revenda=${v(c?.subtipo_revenda)}`);
       }
 
       if (ehPecas) {
         const pecas = Array.isArray((c as any)?.pecas_avulsas) ? (c as any).pecas_avulsas : [];
         linhas.push(`pecas_avulsas=${pecas.length === 0 ? "PENDENTE" : `${pecas.length} item(ns)`}`);
-      } else {
+      } else if (c?.subtipo_revenda === "kit") {
         const pinturaStr = c?.pintura_perguntado
           ? (c?.quer_pintura ? `cor=${c?.tipo_pintura || "PENDENTE_COR"}` : "dispensou")
           : "PENDENTE";
@@ -2381,7 +2423,13 @@ Deno.serve(async (req) => {
           `pintura_perguntado=${pinturaStr}`,
           `adicionais_perguntado=${adicionaisStr}`,
         );
-        if (precisaFrete) linhas.push(`cep=${v(c?.cep)}`);
+      }
+
+      if (ehPorta) {
+        const entregaStr = c?.entrega_perguntado
+          ? (c?.quer_entrega ? `quer_entrega=true (CEP=${v(c?.cep)})` : "quer_entrega=false (cliente vai BUSCAR — sem frete)")
+          : "PENDENTE";
+        linhas.push(`entrega=${entregaStr}`);
       }
 
       const pendentes = linhas.filter((l) => l.endsWith("=PENDENTE")).map((l) => l.split("=")[0]);
@@ -2474,58 +2522,61 @@ Deno.serve(async (req) => {
           // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
           const { data: estado } = await supabase
             .from("leo_conversations")
-            .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+            .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
             .eq("id", conversa.id)
             .maybeSingle();
 
           const tcRawV = String(estado?.tipo_cliente || "").toLowerCase().trim();
           const tcValid = tcRawV === "porta_instalada" || tcRawV === "revenda";
-          const ehPecasAvulsas = tcRawV === "revenda" && estado?.subtipo_revenda === "pecas";
+          const ehPecasAvulsas = estado?.subtipo_revenda === "pecas";
 
           const faltando: string[] = [];
           if (!tcValid) faltando.push("tipo_cliente");
+          if (tcValid && !estado?.subtipo_revenda) faltando.push("subtipo_revenda");
 
           if (ehPecasAvulsas) {
             const pecas = Array.isArray((estado as any)?.pecas_avulsas) ? (estado as any).pecas_avulsas : [];
             if (pecas.length === 0) faltando.push("pecas_avulsas");
-          } else {
+          } else if (estado?.subtipo_revenda === "kit") {
             const larguraNum = Number(estado?.largura);
             const alturaNum = Number(estado?.altura);
             const perfilRaw = String(estado?.tipo_perfil || "").toLowerCase();
             const perfilValid = ["fechado", "transvision", "oblongo"].includes(perfilRaw);
-            const freteNum = estado?.frete != null ? Number(estado.frete) : NaN;
 
-            if (tcRawV === "revenda" && !estado?.subtipo_revenda) faltando.push("subtipo_revenda");
             if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
             if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
             if (!perfilValid) faltando.push("tipo_perfil");
             if (!estado?.pintura_perguntado) faltando.push("pintura");
             if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
             if (!estado?.adicionais_perguntado) faltando.push("adicionais");
-            if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
-              faltando.push("frete");
-            }
+          }
+
+          if (tcValid && tcRawV === "porta_instalada") {
+            if (!estado?.entrega_perguntado) faltando.push("entrega");
+            else if (estado?.quer_entrega && !estado?.cep) faltando.push("cep");
           }
 
           if (faltando.length > 0) {
             gerarOrcamentoFalhas++;
             console.warn(`🚫 gerar_orcamento BLOQUEADO (tentativa ${gerarOrcamentoFalhas}) — [ESTADO] faltando:`, faltando.join(", "));
             const proximo = faltando[0];
-            const proximaPergunta = proximo === "frete"
-              ? "Pergunte AGORA: 'Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho.' NÃO chame nenhuma tool nesta resposta."
-              : proximo === "adicionais"
-                ? "Pergunte AGORA, de forma natural, se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando ele responder, chame definir_adicionais. NÃO chame gerar_orcamento agora."
-                : (proximo === "largura" || proximo === "altura")
-                  ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
-                  : proximo === "tipo_perfil"
-                    ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
-                    : proximo === "tipo_cliente"
-                      ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
-                      : proximo === "subtipo_revenda"
-                        ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
-                        : proximo === "pecas_avulsas"
-                          ? "Pergunte AGORA quais peças e quantidades o cliente precisa. Quando ele confirmar, chame definir_pecas_avulsas com a lista. NÃO chame gerar_orcamento agora."
-                          : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
+            const proximaPergunta = proximo === "entrega"
+              ? "Pergunte AGORA: 'Você prefere que a gente **entregue** no local, ou prefere **buscar/retirar** com a gente?' Quando responder, chame definir_entrega. NÃO chame nenhuma outra tool."
+              : proximo === "cep"
+                ? "Pergunte AGORA: 'Qual o **CEP do local da entrega**?' Quando responder, chame calcular_frete_cep. NÃO chame nenhuma outra tool."
+                : proximo === "adicionais"
+                  ? "Pergunte AGORA, de forma natural, se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando ele responder, chame definir_adicionais. NÃO chame gerar_orcamento agora."
+                  : (proximo === "largura" || proximo === "altura")
+                    ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
+                    : proximo === "tipo_perfil"
+                      ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
+                      : proximo === "tipo_cliente"
+                        ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
+                        : proximo === "subtipo_revenda"
+                          ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
+                          : proximo === "pecas_avulsas"
+                            ? "Pergunte AGORA quais peças e quantidades o cliente precisa. Quando ele confirmar, chame definir_pecas_avulsas com a lista. NÃO chame gerar_orcamento agora."
+                            : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
               erro: "DADOS_INSUFICIENTES",
@@ -2676,11 +2727,11 @@ Deno.serve(async (req) => {
               .eq("id", conversa.id);
             const { data: cv2 } = await supabase
               .from("leo_conversations")
-              .select("tipo_cliente, cep")
+              .select("tipo_cliente, entrega_perguntado")
               .eq("id", conversa.id)
               .maybeSingle();
-            const proxima = cv2?.tipo_cliente === "porta_instalada" && !cv2?.cep
-              ? "Adicionais gravados. NÃO confirme. Siga DIRETO ao Passo 6: pergunte o CEP do local da instalação."
+            const proxima = cv2?.tipo_cliente === "porta_instalada" && !cv2?.entrega_perguntado
+              ? "Adicionais gravados. NÃO confirme. Siga DIRETO ao Passo 7: pergunte se o cliente quer ENTREGA no local ou prefere BUSCAR/RETIRAR. Quando responder, chame definir_entrega."
               : "Adicionais gravados. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
             toolResult = { ok: true, portinhola, alcapao, instrucao: proxima };
           }
@@ -2698,6 +2749,8 @@ Deno.serve(async (req) => {
                 frete: r.frete,
                 endereco_instalacao: enderecoResumo || null,
                 tipo_cliente: "porta_instalada",
+                entrega_perguntado: true,
+                quer_entrega: true,
                 ultima_mensagem_at: new Date().toISOString(),
               })
               .eq("id", conversa.id);
@@ -2726,9 +2779,7 @@ Deno.serve(async (req) => {
             toolResult = {
               ok: true,
               tipo_cliente: tcNorm,
-              instrucao: tcNorm === "revenda"
-                ? "Tipo REVENDA gravado. NÃO confirme. Siga DIRETO ao Passo 2.1: pergunte se ele precisa de KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS."
-                : "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta (ex: 4x3).",
+              instrucao: "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 2.1: pergunte se ele quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS.",
             };
           }
         } else if (fnName === "definir_subtipo_revenda") {
@@ -2741,14 +2792,42 @@ Deno.serve(async (req) => {
               .from("leo_conversations")
               .update({ subtipo_revenda: subNorm, ultima_mensagem_at: new Date().toISOString() })
               .eq("id", conversa.id);
-            toolResult = {
-              ok: true,
-              subtipo: subNorm,
-              instrucao: subNorm === "pecas"
-                ? "Subtipo PEÇAS AVULSAS gravado. NÃO confirme. Siga DIRETO ao Passo 2.2: pergunte quais peças e quantidades o cliente precisa. Use listar_pecas_disponiveis se precisar consultar o catálogo."
-                : "Subtipo KIT gravado. NÃO confirme. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.",
-            };
+            // Lê tipo_cliente para decidir próxima orientação
+            const { data: cv } = await supabase
+              .from("leo_conversations")
+              .select("tipo_cliente")
+              .eq("id", conversa.id)
+              .maybeSingle();
+            const ehPorta = cv?.tipo_cliente === "porta_instalada";
+            let instrucao: string;
+            if (subNorm === "pecas") {
+              instrucao = "Subtipo PEÇAS AVULSAS gravado. NÃO confirme. Siga DIRETO ao Passo 2.2: pergunte quais peças e quantidades o cliente precisa. Use listar_pecas_disponiveis se precisar consultar o catálogo.";
+            } else {
+              instrucao = "Subtipo KIT gravado. NÃO confirme. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.";
+            }
+            toolResult = { ok: true, subtipo: subNorm, tipo_cliente: cv?.tipo_cliente, instrucao };
           }
+        } else if (fnName === "definir_entrega") {
+          const querEntrega = Boolean(args.quer_entrega);
+          const update: Record<string, unknown> = {
+            entrega_perguntado: true,
+            quer_entrega: querEntrega,
+            ultima_mensagem_at: new Date().toISOString(),
+          };
+          if (!querEntrega) {
+            // Cliente vai buscar — zera frete e CEP
+            update.frete = 0;
+            update.cep = null;
+            update.endereco_instalacao = null;
+          }
+          await supabase.from("leo_conversations").update(update).eq("id", conversa.id);
+          toolResult = {
+            ok: true,
+            quer_entrega: querEntrega,
+            instrucao: querEntrega
+              ? "Cliente quer ENTREGA. NÃO confirme. Pergunte AGORA o CEP do local da entrega (depois chame calcular_frete_cep)."
+              : "Cliente vai BUSCAR/RETIRAR. Frete zerado. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).",
+          };
         } else if (fnName === "listar_pecas_disponiveis") {
           const busca = String(args.busca || "").trim();
           let q = dashboardDb.from("estoque").select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida, quantidade").limit(50);
@@ -2774,12 +2853,15 @@ Deno.serve(async (req) => {
               .from("leo_conversations")
               .update({ pecas_avulsas: enriquecidas, ultima_mensagem_at: new Date().toISOString() })
               .eq("id", conversa.id);
-            toolResult = {
-              ok: true,
-              total: enriquecidas.length,
-              itens: enriquecidas,
-              instrucao: "Peças gravadas no [ESTADO]. NÃO liste valores ao cliente. Chame gerar_orcamento agora (sem argumentos).",
-            };
+            const { data: cv3 } = await supabase
+              .from("leo_conversations")
+              .select("tipo_cliente, entrega_perguntado")
+              .eq("id", conversa.id)
+              .maybeSingle();
+            const proxima = cv3?.tipo_cliente === "porta_instalada" && !cv3?.entrega_perguntado
+              ? "Peças gravadas. NÃO confirme nem liste valores. Pergunte AGORA se o cliente quer ENTREGA no local ou prefere BUSCAR/RETIRAR. Quando responder, chame definir_entrega."
+              : "Peças gravadas. NÃO liste valores ao cliente. Chame gerar_orcamento agora (sem argumentos).";
+            toolResult = { ok: true, total: enriquecidas.length, itens: enriquecidas, instrucao: proxima };
           }
         } else if (fnName === "transferir_humano") {
           if (ticketId) await transferirParaHumano(ticketId);
