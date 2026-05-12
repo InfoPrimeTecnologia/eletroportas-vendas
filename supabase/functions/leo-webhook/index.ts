@@ -1455,8 +1455,8 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
       const lamina = inferirLaminaTexto(txt);
       if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
 
-      const adicionais = inferirAdicionaisTexto(txt, Boolean(estado.tipo_perfil && !estado.adicionais_perguntado));
-      if (adicionais && estado.tipo_perfil && (!estado.adicionais_perguntado || sub === "kit")) {
+      const adicionais = inferirAdicionaisTexto(txt, false);
+      if (adicionais && estado.tipo_perfil && !estado.adicionais_perguntado) {
         estado.adicionais = adicionais;
         estado.adicionais_perguntado = true;
       }
