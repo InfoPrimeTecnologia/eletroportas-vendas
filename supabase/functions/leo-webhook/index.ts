@@ -2438,28 +2438,37 @@ Deno.serve(async (req) => {
           // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
           const { data: estado } = await supabase
             .from("leo_conversations")
-            .select("tipo_cliente, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+            .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
             .eq("id", conversa.id)
             .maybeSingle();
 
-          const larguraNum = Number(estado?.largura);
-          const alturaNum = Number(estado?.altura);
           const tcRawV = String(estado?.tipo_cliente || "").toLowerCase().trim();
           const tcValid = tcRawV === "porta_instalada" || tcRawV === "revenda";
-          const perfilRaw = String(estado?.tipo_perfil || "").toLowerCase();
-          const perfilValid = ["fechado", "transvision", "oblongo"].includes(perfilRaw);
-          const freteNum = estado?.frete != null ? Number(estado.frete) : NaN;
+          const ehPecasAvulsas = tcRawV === "revenda" && estado?.subtipo_revenda === "pecas";
 
           const faltando: string[] = [];
           if (!tcValid) faltando.push("tipo_cliente");
-          if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
-          if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
-          if (!perfilValid) faltando.push("tipo_perfil");
-          if (!estado?.pintura_perguntado) faltando.push("pintura");
-          if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
-          if (!estado?.adicionais_perguntado) faltando.push("adicionais");
-          if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
-            faltando.push("frete");
+
+          if (ehPecasAvulsas) {
+            const pecas = Array.isArray((estado as any)?.pecas_avulsas) ? (estado as any).pecas_avulsas : [];
+            if (pecas.length === 0) faltando.push("pecas_avulsas");
+          } else {
+            const larguraNum = Number(estado?.largura);
+            const alturaNum = Number(estado?.altura);
+            const perfilRaw = String(estado?.tipo_perfil || "").toLowerCase();
+            const perfilValid = ["fechado", "transvision", "oblongo"].includes(perfilRaw);
+            const freteNum = estado?.frete != null ? Number(estado.frete) : NaN;
+
+            if (tcRawV === "revenda" && !estado?.subtipo_revenda) faltando.push("subtipo_revenda");
+            if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
+            if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
+            if (!perfilValid) faltando.push("tipo_perfil");
+            if (!estado?.pintura_perguntado) faltando.push("pintura");
+            if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
+            if (!estado?.adicionais_perguntado) faltando.push("adicionais");
+            if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
+              faltando.push("frete");
+            }
           }
 
           if (faltando.length > 0) {
@@ -2476,7 +2485,11 @@ Deno.serve(async (req) => {
                     ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
                     : proximo === "tipo_cliente"
                       ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
-                      : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
+                      : proximo === "subtipo_revenda"
+                        ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
+                        : proximo === "pecas_avulsas"
+                          ? "Pergunte AGORA quais peças e quantidades o cliente precisa. Quando ele confirmar, chame definir_pecas_avulsas com a lista. NÃO chame gerar_orcamento agora."
+                          : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
               erro: "DADOS_INSUFICIENTES",
@@ -2493,51 +2506,24 @@ Deno.serve(async (req) => {
           }
 
           try {
-            const o = calcularOrcamento({
-              largura: larguraNum,
-              altura: alturaNum,
-              tipo_cliente: tcRawV as any,
-              tipo_perfil: perfilRaw as any,
-              tipo_motor: args.tipo_motor,
-              tipo_pintura: estado?.quer_pintura ? (estado?.tipo_pintura || args.tipo_pintura) : undefined,
-              incluir_pintura: Boolean(estado?.quer_pintura),
-              frete: Number.isFinite(freteNum) ? freteNum : 0,
-              cliente_nome: nome,
-              cliente_endereco: estado?.endereco_instalacao || undefined,
-              adicionais: {
-                portinhola: Boolean((estado?.adicionais as any)?.portinhola),
-                alcapao: Boolean((estado?.adicionais as any)?.alcapao),
-              },
-            });
-
-            const html = gerarHtmlOrcamento(o);
-            const filename = `orcamento_${Date.now()}.pdf`;
-            const pdfB64 = await gerarPdfDocrya(html, filename);
-
-            if (pdfB64) {
-              const captionPdf = "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
-              const pdfEnviado = await enviarPdfBase64(telefone, pdfB64, filename, captionPdf);
-              if (pdfEnviado) {
-                pdfEnviadoNesteTurno = true;
-                pdfCaptionEnviada = captionPdf;
-                // ➕ DASHBOARD: salva orçamento + anexo PDF e move lead para "orcamento_enviado"
-                await registrarOrcamentoEAvancarFunil({
-                  telefone,
-                  nome: conversa.nome_cliente || nome || "",
-                  orcamento: o,
-                  pdfBase64: pdfB64,
-                  filename,
-                });
-              }
+            const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
+            if (resultadoPdf.pdf_enviado && resultadoPdf.orcamento) {
+              pdfEnviadoNesteTurno = true;
+              pdfCaptionEnviada = resultadoPdf.caption || "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
+              await registrarOrcamentoEAvancarFunil({
+                telefone,
+                nome: conversa.nome_cliente || nome || "",
+                orcamento: resultadoPdf.orcamento,
+                pdfBase64: resultadoPdf.pdfBase64!,
+                filename: resultadoPdf.filename || `orcamento_${Date.now()}.pdf`,
+              });
               toolResult = {
-                ok: pdfEnviado,
-                pdf_enviado: pdfEnviado,
-                instrucao: pdfEnviado
-                  ? "PDF enviado. NÃO envie nova mensagem. NÃO mencione valores."
-                  : "Houve instabilidade no envio do arquivo — informe que um atendente vai encaminhar em breve.",
+                ok: true,
+                pdf_enviado: true,
+                instrucao: "PDF enviado. NÃO envie nova mensagem. NÃO mencione valores.",
               };
             } else {
-              toolResult = { ok: false, error: "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
+              toolResult = { ok: false, error: resultadoPdf.error || "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
             }
           } catch (e: any) {
             console.error("❌ Erro em gerar_orcamento:", e?.message, e);
