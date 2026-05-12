@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { legacySupabase } from "@/integrations/supabase/legacyClient";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -37,18 +38,20 @@ const ValidacaoSerralheiro = () => {
 
   const decidir = useMutation({
     mutationFn: async ({ cnpj, aprovado }: { cnpj: string; aprovado: boolean }) => {
-      const novoTipo = aprovado ? "Revenda" : "Porta Instalada";
-      const { error } = await (legacySupabase as any)
-        .from("Clientes")
-        .update({ tipo_cliente: novoTipo })
-        .eq("CLI_CNPJ", cnpj);
+      const { data, error } = await supabase.functions.invoke("validar-serralheiro", {
+        body: { cnpj, aprovado },
+      });
       if (error) throw error;
-      return { aprovado };
+      if (!(data as any)?.ok) throw new Error((data as any)?.error || "Falha ao validar cliente");
+      return { aprovado, mensagem_enviada: Boolean((data as any)?.mensagem_enviada) };
     },
-    onSuccess: ({ aprovado }) => {
+    onSuccess: ({ aprovado, mensagem_enviada }) => {
       qc.invalidateQueries({ queryKey: ["validacao-serralheiro"] });
       qc.invalidateQueries({ queryKey: ["clientes"] });
-      toast.success(aprovado ? "Cliente aprovado como Revenda" : "Cliente reprovado — registrado como Porta Instalada");
+      const base = aprovado
+        ? "Cliente aprovado como Revenda"
+        : "Cliente reprovado — registrado como Porta Instalada";
+      toast.success(mensagem_enviada ? `${base}. Mensagem enviada ao cliente.` : `${base}. ⚠️ Não foi possível enviar a mensagem.`);
     },
     onError: (e: any) => toast.error(e?.message || "Falha ao atualizar cliente"),
   });
