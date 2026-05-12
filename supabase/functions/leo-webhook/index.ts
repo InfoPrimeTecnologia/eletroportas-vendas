@@ -1435,6 +1435,14 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
       const cep = inferirCepTexto(txt);
       if (cep && estado.tipo_cliente === "porta_instalada" && !estado.cep) estado.cep = cep;
     }
+
+    if (estado.tipo_cliente === "porta_instalada" && !estado.entrega_perguntado) {
+      const ent = inferirEntregaTexto(txt);
+      if (ent) {
+        estado.entrega_perguntado = true;
+        estado.quer_entrega = ent.quer_entrega;
+      }
+    }
   }
   return estado;
 }
