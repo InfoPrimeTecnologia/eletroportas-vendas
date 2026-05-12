@@ -1303,11 +1303,14 @@ function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo
   return null;
 }
 
-function inferirAdicionaisTexto(texto: string): { portinhola: boolean; alcapao: boolean } | null {
+function inferirAdicionaisTexto(texto: string, permitirNegacaoGenerica = false): { portinhola: boolean; alcapao: boolean } | null {
   const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (!t.trim()) return null;
 
-  const querNenhum = /\b(nenhum|nenhuma|nao|não|sem|dispenso|obrigado|obrigada)\b/.test(t)
+  const negacaoExplicita = /\b(nenhum|nenhuma)\b/.test(t)
+    || /\b(sem|nao quero|não quero|dispenso|dispensar)\b.*\b(portinhola|alcapao|alcapão|alcapa|adicionais?)\b/.test(t);
+  const negacaoGenerica = permitirNegacaoGenerica && /\b(nao|não|sem|dispenso|dispensa|obrigado|obrigada)\b/.test(t);
+  const querNenhum = (negacaoExplicita || negacaoGenerica)
     && !/\b(portinhola|alcapao|alcapão|alcapa|os dois|ambos|duas|dois)\b/.test(t);
   if (querNenhum) return { portinhola: false, alcapao: false };
 
@@ -1363,11 +1366,13 @@ function inferirEntregaTexto(texto: string): { quer_entrega: boolean } | null {
 function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
   const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (!t.trim()) return null;
+  // "porta de 4x5 com lâmina oblongo" é intenção clara de KIT, mesmo se a conversa anterior era peças avulsas.
+  if (inferirMedidasTexto(texto) && /\b(porta|kit|lamina|lâmina)\b/.test(t)) return "kit";
+  if (/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "kit";
   if (/\b(pec[aá]s?\s*avuls(a|as)|avuls(a|as|o)|somente\s*pec|so\s*pec|apenas\s*pec|peca|pecas|pe[cç]a)\b/.test(t)) return "pecas";
   // Se o cliente já informou item + quantidade (ex: "queria orçar 5 motores de 200"),
   // isso é intenção clara de PEÇAS AVULSAS. Não repetir a pergunta KIT/PEÇAS.
   if (inferirPecasAvulsasTexto(texto).length > 0 && !/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "pecas";
-  if (/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "kit";
   return null;
 }
 
