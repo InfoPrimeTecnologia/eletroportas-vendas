@@ -16,6 +16,7 @@ import NotaFiscalPage from "./pages/NotaFiscal";
 import Usuarios from "./pages/Usuarios";
 import Relatorios from "./pages/Relatorios";
 import AgenteLeo from "./pages/AgenteLeo";
+import ValidacaoSerralheiro from "./pages/ValidacaoSerralheiro";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
