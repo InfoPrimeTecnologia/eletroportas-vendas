@@ -15,6 +15,7 @@ import {
   Zap,
   LogOut,
   BarChart3,
+  ShieldCheck,
 } from "lucide-react";
 import {
   Sidebar,
