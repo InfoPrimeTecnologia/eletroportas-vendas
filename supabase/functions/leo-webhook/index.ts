@@ -2378,7 +2378,7 @@ Deno.serve(async (req) => {
       const ehInstalada = tipoNorm.includes("instalada") || tipoNorm === "porta_instalada";
       let blocoTipo = "";
       if (ehRevenda) {
-        blocoTipo = ` Esse cliente já é classificado como **REVENDA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de REVENDA (Passo 2.1: KIT ou PEÇAS AVULSAS).`;
+        blocoTipo = ` Esse cliente já é classificado como **REVENDA** no nosso sistema. NÃO pergunte se é cliente final ou serralheiro — siga DIRETO o fluxo de REVENDA (Passo 2.1: KIT ou PEÇAS AVULSAS).`;
       } else if (ehInstalada) {
         blocoTipo = ` Esse cliente já é classificado como **PORTA INSTALADA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de PORTA INSTALADA (Passo 2.1: KIT completo ou PEÇAS AVULSAS).`;
       } else {
