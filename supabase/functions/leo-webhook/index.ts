@@ -134,7 +134,8 @@ async function cadastrarCliente(input: {
     CLI_CPF: isCPF ? documento : null,
   };
   if (input.tipo_cliente) {
-    payload.tipo_cliente = input.tipo_cliente === "porta_instalada" ? "Porta Instalada" : "Revenda";
+    // Revenda entra como "Pendente Serralheiro" até aprovação humana na dashboard
+    payload.tipo_cliente = input.tipo_cliente === "porta_instalada" ? "Porta Instalada" : "Pendente Serralheiro";
   }
 
   // Verifica se já existe pelo CNPJ (PK) — evita duplicate key
