@@ -1355,19 +1355,26 @@ function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
 }
 
 function inferirPecasAvulsasTexto(texto: string): any[] {
-  const entrada = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  let entrada = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (!entrada.trim()) return [];
-  const partes = entrada.split(/(?:,|;|\s+e\s+)/).map((p) => p.trim()).filter(Boolean);
+  // Mapeia "uma/um/duas/dois/tres/..." → número
+  const numerosExtenso: Record<string, string> = {
+    "uma": "1", "um": "1", "duas": "2", "dois": "2", "tres": "3", "quatro": "4",
+    "cinco": "5", "seis": "6", "sete": "7", "oito": "8", "nove": "9", "dez": "10"
+  };
+  entrada = entrada.replace(/\b(uma|um|duas|dois|tres|quatro|cinco|seis|sete|oito|nove|dez)\b/g, (m) => numerosExtenso[m] || m);
+  const partes = entrada.split(/(?:,|;|\s+e\s+|\s*\+\s*|\n)/).map((p) => p.trim()).filter(Boolean);
   const itens: any[] = [];
   for (const parte of partes) {
-    const inicio = parte.match(/(?:^|\b)(\d+(?:[,.]\d+)?)\s*(?:x\s*)?(.+?)\s*$/i);
-    const fim = inicio ? null : parte.match(/(.+?)\s+(\d+(?:[,.]\d+)?)\s*$/i);
+    const inicio = parte.match(/(?:^|\b)(\d+(?:[,.]\d+)?)\s*(?:x\s*|un\s*|unidades?\s*|pcs?\s*)?(.+?)\s*$/i);
+    const fim = inicio ? null : parte.match(/(.+?)\s+(\d+(?:[,.]\d+)?)\s*(?:un|unidades?|pcs?)?\s*$/i);
     if (!inicio && !fim) continue;
     const quantidade = Number(String(inicio ? inicio[1] : fim?.[2]).replace(",", "."));
-    let nome = String(inicio ? inicio[2] : fim?.[1] || "").replace(/\b(de|da|do|para|com)\b/g, " ").replace(/\s+/g, " ").trim();
+    let nome = String(inicio ? inicio[2] : fim?.[1] || "").replace(/\b(de|da|do|para|com|tipo|modelo)\b/g, " ").replace(/\s+/g, " ").trim();
     nome = nome.replace(/^(m|mt|metro|metros)\s+/g, "").trim();
-    nome = nome.replace(/\bmotores\b/g, "motor").replace(/\bcontroles\b/g, "controle").replace(/\bcentrais\b/g, "central");
-    nome = nome.replace(/\bmotor\s+(\d{2,4})(?!\s*kg)\b/g, "motor $1kg");
+    nome = nome.replace(/\bmotores\b/g, "motor").replace(/\bcontroles\b/g, "controle").replace(/\bcentrais\b/g, "central").replace(/\bguias\b/g, "guia");
+    // Normaliza "motor 200" → "motor 200kg" (assume kg quando vier número solto)
+    nome = nome.replace(/\b(motor)\s+(\d{2,4})(?!\s*kg)\b/g, "$1 $2kg");
     if (Number.isFinite(quantidade) && quantidade > 0 && nome.length >= 3) {
       itens.push({ produto_nome: nome, quantidade });
     }
