@@ -893,13 +893,27 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_subtipo_revenda",
-      description: "Apenas para clientes REVENDA. Grava no banco se o cliente quer um KIT completo de porta de enrolar ('kit') ou apenas PEÇAS AVULSAS ('pecas'). Chame ASSIM QUE o cliente responder. Silenciosa.",
+      description: "Para clientes REVENDA ou PORTA INSTALADA. Grava no banco se o cliente quer um KIT completo de porta de enrolar ('kit') ou apenas PEÇAS AVULSAS ('pecas'). Chame ASSIM QUE o cliente responder. Silenciosa.",
       parameters: {
         type: "object",
         properties: {
           subtipo: { type: "string", enum: ["kit", "pecas"] },
         },
         required: ["subtipo"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "definir_entrega",
+      description: "Para clientes PORTA INSTALADA. Grava no banco se o cliente quer ENTREGA no local (true) ou se prefere BUSCAR/RETIRAR ele mesmo (false). Quando false, o frete fica zerado e NÃO é necessário CEP. Quando true, em seguida pergunte o CEP e chame calcular_frete_cep. Silenciosa.",
+      parameters: {
+        type: "object",
+        properties: {
+          quer_entrega: { type: "boolean", description: "true = quer entrega, false = vai buscar/retirar" },
+        },
+        required: ["quer_entrega"],
       },
     },
   },
