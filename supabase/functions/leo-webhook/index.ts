@@ -1303,11 +1303,14 @@ function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo
   return null;
 }
 
-function inferirAdicionaisTexto(texto: string): { portinhola: boolean; alcapao: boolean } | null {
+function inferirAdicionaisTexto(texto: string, permitirNegacaoGenerica = false): { portinhola: boolean; alcapao: boolean } | null {
   const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (!t.trim()) return null;
 
-  const querNenhum = /\b(nenhum|nenhuma|nao|não|sem|dispenso|obrigado|obrigada)\b/.test(t)
+  const negacaoExplicita = /\b(nenhum|nenhuma)\b/.test(t)
+    || /\b(sem|nao quero|não quero|dispenso|dispensar)\b.*\b(portinhola|alcapao|alcapão|alcapa|adicionais?)\b/.test(t);
+  const negacaoGenerica = permitirNegacaoGenerica && /\b(nao|não|sem|dispenso|dispensa|obrigado|obrigada)\b/.test(t);
+  const querNenhum = (negacaoExplicita || negacaoGenerica)
     && !/\b(portinhola|alcapao|alcapão|alcapa|os dois|ambos|duas|dois)\b/.test(t);
   if (querNenhum) return { portinhola: false, alcapao: false };
 
@@ -1363,11 +1366,13 @@ function inferirEntregaTexto(texto: string): { quer_entrega: boolean } | null {
 function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
   const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (!t.trim()) return null;
+  // "porta de 4x5 com lâmina oblongo" é intenção clara de KIT, mesmo se a conversa anterior era peças avulsas.
+  if (inferirMedidasTexto(texto) && /\b(porta|kit|lamina|lâmina)\b/.test(t)) return "kit";
+  if (/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "kit";
   if (/\b(pec[aá]s?\s*avuls(a|as)|avuls(a|as|o)|somente\s*pec|so\s*pec|apenas\s*pec|peca|pecas|pe[cç]a)\b/.test(t)) return "pecas";
   // Se o cliente já informou item + quantidade (ex: "queria orçar 5 motores de 200"),
   // isso é intenção clara de PEÇAS AVULSAS. Não repetir a pergunta KIT/PEÇAS.
   if (inferirPecasAvulsasTexto(texto).length > 0 && !/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "pecas";
-  if (/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "kit";
   return null;
 }
 
@@ -1401,14 +1406,39 @@ function inferirPecasAvulsasTexto(texto: string): any[] {
 
 function aplicarInferenciasEmEstado(base: any, textos: string[]) {
   const estado = { ...(base || {}) };
+  let subtipoTravadoPorTexto = false;
   for (const txt of textos) {
     const tipo = inferirTipoClienteTexto(txt);
     if (tipo && (!estado.tipo_cliente || estado.tipo_cliente === "indefinido")) estado.tipo_cliente = tipo;
 
     const tipoDef = estado.tipo_cliente === "revenda" || estado.tipo_cliente === "porta_instalada";
-    if (tipoDef && !estado.subtipo_revenda) {
+    if (tipoDef) {
       const sub = inferirSubtipoRevendaTexto(txt);
-      if (sub) estado.subtipo_revenda = sub;
+      if (sub && !subtipoTravadoPorTexto && sub !== estado.subtipo_revenda) {
+        estado.subtipo_revenda = sub;
+        subtipoTravadoPorTexto = true;
+        if (sub === "kit") {
+          // Nova cotação de KIT no meio de uma conversa de peças: limpa dados incompatíveis
+          // para forçar um PDF novo e não reutilizar o orçamento antigo.
+          estado.pecas_avulsas = [];
+          estado.pintura_perguntado = false;
+          estado.quer_pintura = null;
+          estado.tipo_pintura = null;
+          estado.adicionais = { portinhola: false, alcapao: false };
+          estado.adicionais_perguntado = false;
+        } else if (sub === "pecas") {
+          estado.largura = null;
+          estado.altura = null;
+          estado.tipo_perfil = null;
+          estado.pintura_perguntado = false;
+          estado.quer_pintura = null;
+          estado.tipo_pintura = null;
+          estado.adicionais = { portinhola: false, alcapao: false };
+          estado.adicionais_perguntado = false;
+        }
+      } else if (sub) {
+        subtipoTravadoPorTexto = true;
+      }
     }
 
     // Se for revenda + peças, NÃO inferir medidas/lâmina/etc
@@ -1429,7 +1459,7 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
       const lamina = inferirLaminaTexto(txt);
       if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
 
-      const adicionais = inferirAdicionaisTexto(txt);
+      const adicionais = inferirAdicionaisTexto(txt, false);
       if (adicionais && estado.tipo_perfil && !estado.adicionais_perguntado) {
         estado.adicionais = adicionais;
         estado.adicionais_perguntado = true;
@@ -1478,10 +1508,38 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const estado = aplicarInferenciasEmEstado(baseEstado, textos);
 
   const ehPecas = estado.subtipo_revenda === "pecas";
+  if (!ehPecas && estado.tipo_perfil && baseEstado?.pintura_perguntado && !baseEstado?.adicionais_perguntado) {
+    const adicionaisDaRespostaAtual = inferirAdicionaisTexto(texto, true);
+    if (adicionaisDaRespostaAtual) {
+      estado.adicionais = adicionaisDaRespostaAtual;
+      estado.adicionais_perguntado = true;
+    }
+  }
 
   const patch: Record<string, unknown> = {};
   if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
-  if (estado.subtipo_revenda && !baseEstado?.subtipo_revenda) patch.subtipo_revenda = estado.subtipo_revenda;
+  const subtipoAtual = baseEstado?.subtipo_revenda || null;
+  const mudouSubtipo = Boolean(estado.subtipo_revenda && estado.subtipo_revenda !== subtipoAtual);
+  if (estado.subtipo_revenda && (!subtipoAtual || mudouSubtipo)) {
+    patch.subtipo_revenda = estado.subtipo_revenda;
+    if (estado.subtipo_revenda === "kit") {
+      patch.pecas_avulsas = [];
+      patch.pintura_perguntado = false;
+      patch.quer_pintura = null;
+      patch.tipo_pintura = null;
+      patch.adicionais = { portinhola: false, alcapao: false };
+      patch.adicionais_perguntado = false;
+    } else if (estado.subtipo_revenda === "pecas") {
+      patch.largura = null;
+      patch.altura = null;
+      patch.tipo_perfil = null;
+      patch.pintura_perguntado = false;
+      patch.quer_pintura = null;
+      patch.tipo_pintura = null;
+      patch.adicionais = { portinhola: false, alcapao: false };
+      patch.adicionais_perguntado = false;
+    }
+  }
 
   if (ehPecas && (!Array.isArray(baseEstado?.pecas_avulsas) || baseEstado.pecas_avulsas.length === 0)) {
     const pecas = Array.isArray(estado.pecas_avulsas) ? estado.pecas_avulsas : [];
@@ -1489,9 +1547,9 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   }
 
   if (!ehPecas) {
-    if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
-    if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
-    if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
+    if (estado.largura != null && (mudouSubtipo || baseEstado?.largura == null || Number(baseEstado?.largura) !== Number(estado.largura))) patch.largura = estado.largura;
+    if (estado.altura != null && (mudouSubtipo || baseEstado?.altura == null || Number(baseEstado?.altura) !== Number(estado.altura))) patch.altura = estado.altura;
+    if (estado.tipo_perfil && (mudouSubtipo || !baseEstado?.tipo_perfil || String(baseEstado?.tipo_perfil).toLowerCase() !== String(estado.tipo_perfil).toLowerCase())) patch.tipo_perfil = estado.tipo_perfil;
 
     // Pintura: só infere após o perfil estar definido
     if (estado.tipo_perfil && !baseEstado?.pintura_perguntado) {
@@ -1506,7 +1564,7 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
       }
     }
 
-    if (estado.adicionais_perguntado && !baseEstado?.adicionais_perguntado) {
+    if (estado.adicionais_perguntado && (mudouSubtipo || !baseEstado?.adicionais_perguntado)) {
       patch.adicionais = estado.adicionais || { portinhola: false, alcapao: false };
       patch.adicionais_perguntado = true;
     }
