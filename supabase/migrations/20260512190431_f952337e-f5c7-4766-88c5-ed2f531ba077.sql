@@ -1,0 +1,1 @@
+UPDATE public.leo_conversations SET pecas_avulsas='[]'::jsonb, subtipo_revenda=NULL WHERE telefone='557391094176' AND pecas_avulsas::text ILIKE '%cpf%';
