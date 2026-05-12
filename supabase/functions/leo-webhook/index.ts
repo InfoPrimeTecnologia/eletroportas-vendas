@@ -1504,6 +1504,13 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const estado = aplicarInferenciasEmEstado(baseEstado, textos);
 
   const ehPecas = estado.subtipo_revenda === "pecas";
+  if (!ehPecas && estado.tipo_perfil && baseEstado?.pintura_perguntado && !baseEstado?.adicionais_perguntado) {
+    const adicionaisDaRespostaAtual = inferirAdicionaisTexto(texto, true);
+    if (adicionaisDaRespostaAtual) {
+      estado.adicionais = adicionaisDaRespostaAtual;
+      estado.adicionais_perguntado = true;
+    }
+  }
 
   const patch: Record<string, unknown> = {};
   if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
