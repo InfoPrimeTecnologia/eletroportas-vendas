@@ -2770,9 +2770,7 @@ Deno.serve(async (req) => {
             toolResult = {
               ok: true,
               tipo_cliente: tcNorm,
-              instrucao: tcNorm === "revenda"
-                ? "Tipo REVENDA gravado. NÃO confirme. Siga DIRETO ao Passo 2.1: pergunte se ele precisa de KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS."
-                : "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta (ex: 4x3).",
+              instrucao: "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 2.1: pergunte se ele quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS.",
             };
           }
         } else if (fnName === "definir_subtipo_revenda") {
@@ -2785,14 +2783,42 @@ Deno.serve(async (req) => {
               .from("leo_conversations")
               .update({ subtipo_revenda: subNorm, ultima_mensagem_at: new Date().toISOString() })
               .eq("id", conversa.id);
-            toolResult = {
-              ok: true,
-              subtipo: subNorm,
-              instrucao: subNorm === "pecas"
-                ? "Subtipo PEÇAS AVULSAS gravado. NÃO confirme. Siga DIRETO ao Passo 2.2: pergunte quais peças e quantidades o cliente precisa. Use listar_pecas_disponiveis se precisar consultar o catálogo."
-                : "Subtipo KIT gravado. NÃO confirme. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.",
-            };
+            // Lê tipo_cliente para decidir próxima orientação
+            const { data: cv } = await supabase
+              .from("leo_conversations")
+              .select("tipo_cliente")
+              .eq("id", conversa.id)
+              .maybeSingle();
+            const ehPorta = cv?.tipo_cliente === "porta_instalada";
+            let instrucao: string;
+            if (subNorm === "pecas") {
+              instrucao = "Subtipo PEÇAS AVULSAS gravado. NÃO confirme. Siga DIRETO ao Passo 2.2: pergunte quais peças e quantidades o cliente precisa. Use listar_pecas_disponiveis se precisar consultar o catálogo.";
+            } else {
+              instrucao = "Subtipo KIT gravado. NÃO confirme. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.";
+            }
+            toolResult = { ok: true, subtipo: subNorm, tipo_cliente: cv?.tipo_cliente, instrucao };
           }
+        } else if (fnName === "definir_entrega") {
+          const querEntrega = Boolean(args.quer_entrega);
+          const update: Record<string, unknown> = {
+            entrega_perguntado: true,
+            quer_entrega: querEntrega,
+            ultima_mensagem_at: new Date().toISOString(),
+          };
+          if (!querEntrega) {
+            // Cliente vai buscar — zera frete e CEP
+            update.frete = 0;
+            update.cep = null;
+            update.endereco_instalacao = null;
+          }
+          await supabase.from("leo_conversations").update(update).eq("id", conversa.id);
+          toolResult = {
+            ok: true,
+            quer_entrega: querEntrega,
+            instrucao: querEntrega
+              ? "Cliente quer ENTREGA. NÃO confirme. Pergunte AGORA o CEP do local da entrega (depois chame calcular_frete_cep)."
+              : "Cliente vai BUSCAR/RETIRAR. Frete zerado. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).",
+          };
         } else if (fnName === "listar_pecas_disponiveis") {
           const busca = String(args.busca || "").trim();
           let q = dashboardDb.from("estoque").select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida, quantidade").limit(50);
