@@ -122,6 +122,16 @@ const App = () => (
               }
             />
             <Route
+              path="/validacao-serralheiro"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ValidacaoSerralheiro />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/agente-leo"
               element={
                 <ProtectedRoute>
