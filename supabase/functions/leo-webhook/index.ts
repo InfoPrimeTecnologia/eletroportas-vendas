@@ -2573,7 +2573,7 @@ Deno.serve(async (req) => {
                     : proximo === "tipo_perfil"
                       ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
                       : proximo === "tipo_cliente"
-                        ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
+                        ? "Pergunte AGORA, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'. NÃO chame nenhuma tool."
                         : proximo === "subtipo_revenda"
                           ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
                           : proximo === "pecas_avulsas"
