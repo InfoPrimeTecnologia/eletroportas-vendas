@@ -1768,6 +1768,8 @@ function precoFallbackPeca(item: any): { preco: number; codigo: string; nome: st
   }
   if (/\bcontrole\b/.test(alvo)) return { preco: PRECOS.controle_remoto, codigo: "CONTROLE-REMOTO", nome: "Controle remoto" };
   if (/\bcentral\b/.test(alvo)) return { preco: PRECOS.central_comando, codigo: "CENTRAL-COMANDO", nome: "Central de comando" };
+  if (/\bportinhola\b/.test(alvo)) return { preco: PRECOS.portinhola, codigo: "ADIC-001", nome: "Portinhola" };
+  if (/\b(alcapao|alcapa)\b/.test(alvo)) return { preco: PRECOS.alcapao, codigo: "ADIC-002", nome: "Alçapão" };
   return null;
 }
 
@@ -1819,8 +1821,10 @@ async function enriquecerPecasComEstoque(itens: any[]): Promise<any[]> {
     const precoInformado = Number(item.preco_unitario);
     const precoEstoque = Number(row?.preco_venda);
     const precoFallback = Number(fallback?.preco);
+    const skuInformado = String(item.codigo_sku || "").trim();
+    const skuValido = skuInformado && skuInformado !== "AVULSA" ? skuInformado : null;
     out.push({
-      codigo_sku: item.codigo_sku || row?.codigo_sku || fallback?.codigo || "AVULSA",
+      codigo_sku: skuValido || row?.codigo_sku || fallback?.codigo || "AVULSA",
       produto_nome: row?.produto_nome || fallback?.nome || item.produto_nome,
       descricao: row?.descricao || row?.produto_nome || fallback?.nome || item.produto_nome,
       quantidade: Number(item.quantidade) || 0,
