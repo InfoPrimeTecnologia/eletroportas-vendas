@@ -1339,10 +1339,11 @@ function inferirPecasAvulsasTexto(texto: string): any[] {
   const partes = entrada.split(/(?:,|;|\s+e\s+)/).map((p) => p.trim()).filter(Boolean);
   const itens: any[] = [];
   for (const parte of partes) {
-    const m = parte.match(/(?:^|\b)(\d+(?:[,.]\d+)?)\s*(?:x\s*)?(.+?)\s*$/i) || parte.match(/(.+?)\s+(\d+(?:[,.]\d+)?)\s*$/i);
-    if (!m) continue;
-    const quantidade = Number(String(m[1]).replace(",", "."));
-    let nome = String(m[2] || "").replace(/\b(de|da|do|para|com)\b/g, " ").replace(/\s+/g, " ").trim();
+    const inicio = parte.match(/(?:^|\b)(\d+(?:[,.]\d+)?)\s*(?:x\s*)?(.+?)\s*$/i);
+    const fim = inicio ? null : parte.match(/(.+?)\s+(\d+(?:[,.]\d+)?)\s*$/i);
+    if (!inicio && !fim) continue;
+    const quantidade = Number(String(inicio ? inicio[1] : fim?.[2]).replace(",", "."));
+    let nome = String(inicio ? inicio[2] : fim?.[1] || "").replace(/\b(de|da|do|para|com)\b/g, " ").replace(/\s+/g, " ").trim();
     nome = nome.replace(/\bmotores\b/g, "motor").replace(/\bcontroles\b/g, "controle").replace(/\bcentrais\b/g, "central");
     nome = nome.replace(/\bmotor\s+(\d{2,4})(?!\s*kg)\b/g, "motor $1kg");
     if (Number.isFinite(quantidade) && quantidade > 0 && nome.length >= 3) {
