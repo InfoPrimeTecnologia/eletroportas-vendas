@@ -1379,7 +1379,10 @@ function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
 function inferirPecasAvulsasTexto(texto: string): any[] {
   let entrada = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (!entrada.trim()) return [];
-  // Mapeia "uma/um/duas/dois/tres/..." → número
+  // Se a mensagem é claramente identificação (CPF/CNPJ/RG), nunca extrair peças dela
+  if (/\b(cpf|cnpj|rg|inscricao|inscrição)\b/.test(entrada)) return [];
+  // Remove sequências de 11+ dígitos (CPF/CNPJ/telefone) para não virarem "quantidade"
+  entrada = entrada.replace(/\b\d{11,}\b/g, " ");
   const numerosExtenso: Record<string, string> = {
     "uma": "1", "um": "1", "duas": "2", "dois": "2", "tres": "3", "quatro": "4",
     "cinco": "5", "seis": "6", "sete": "7", "oito": "8", "nove": "9", "dez": "10"
@@ -1387,19 +1390,21 @@ function inferirPecasAvulsasTexto(texto: string): any[] {
   entrada = entrada.replace(/\b(uma|um|duas|dois|tres|quatro|cinco|seis|sete|oito|nove|dez)\b/g, (m) => numerosExtenso[m] || m);
   const partes = entrada.split(/(?:,|;|\s+e\s+|\s*\+\s*|\n)/).map((p) => p.trim()).filter(Boolean);
   const itens: any[] = [];
+  // Whitelist de produtos conhecidos — evita capturar lixo como "cpf"
+  const PRODUTOS_VALIDOS = /\b(motor|automatizador|controle|central|guia|lamina|lâmina|portinhola|alcapao|alçapão|fechadura|trava|eixo|mola|cabo|kit|porta)\b/;
   for (const parte of partes) {
-    const inicio = parte.match(/(?:^|\b)(\d+(?:[,.]\d+)?)\s*(?:x\s*|un\s*|unidades?\s*|pcs?\s*)?(.+?)\s*$/i);
-    const fim = inicio ? null : parte.match(/(.+?)\s+(\d+(?:[,.]\d+)?)\s*(?:un|unidades?|pcs?)?\s*$/i);
+    const inicio = parte.match(/(?:^|\b)(\d{1,4}(?:[,.]\d+)?)\s*(?:x\s*|un\s*|unidades?\s*|pcs?\s*)?(.+?)\s*$/i);
+    const fim = inicio ? null : parte.match(/(.+?)\s+(\d{1,4}(?:[,.]\d+)?)\s*(?:un|unidades?|pcs?)?\s*$/i);
     if (!inicio && !fim) continue;
     const quantidade = Number(String(inicio ? inicio[1] : fim?.[2]).replace(",", "."));
     let nome = String(inicio ? inicio[2] : fim?.[1] || "").replace(/\b(de|da|do|para|com|tipo|modelo)\b/g, " ").replace(/\s+/g, " ").trim();
     nome = nome.replace(/^(m|mt|metro|metros)\s+/g, "").trim();
     nome = nome.replace(/\bmotores\b/g, "motor").replace(/\bcontroles\b/g, "controle").replace(/\bcentrais\b/g, "central").replace(/\bguias\b/g, "guia");
-    // Normaliza "motor 200" → "motor 200kg" (assume kg quando vier número solto)
-    nome = nome.replace(/\b(motor)\s+(\d{2,4})(?!\s*kg)\b/g, "$1 $2kg");
-    if (Number.isFinite(quantidade) && quantidade > 0 && nome.length >= 3) {
-      itens.push({ produto_nome: nome, quantidade });
-    }
+    nome = nome.replace(/\b(motor|automatizador)\s+(\d{2,4})(?!\s*kg)\b/g, "$1 $2kg");
+    if (!Number.isFinite(quantidade) || quantidade <= 0 || quantidade > 9999) continue;
+    if (nome.length < 3) continue;
+    if (!PRODUTOS_VALIDOS.test(nome)) continue;
+    itens.push({ produto_nome: nome, quantidade });
   }
   return itens;
 }
