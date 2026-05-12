@@ -1733,7 +1733,7 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
       tipo_perfil: tipoPerfil as any,
       tipo_pintura: estado?.quer_pintura ? estado?.tipo_pintura : undefined,
       incluir_pintura: Boolean(estado?.quer_pintura),
-      frete,
+      frete: freteFinal,
       cliente_nome: nome,
       cliente_endereco: estado?.endereco_instalacao || undefined,
       adicionais: {
