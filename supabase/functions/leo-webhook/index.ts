@@ -416,14 +416,16 @@ td { border-bottom: 1px solid #e6eaf0; padding: 5px; font-size: 8.8px; vertical-
   <div class="col" style="padding-right:0">
     <div class="card">
       <h2>Especificações</h2>
-      <strong>Dimensões:</strong> ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m<br/>
+      ${(o as any).is_pecas_avulsas
+        ? `<strong>Modalidade:</strong> Revenda — peças avulsas<br/><strong>Itens:</strong> ${o.itens.length} peça(s) selecionada(s)`
+        : `<strong>Dimensões:</strong> ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m<br/>
       <strong>Área:</strong> ${o.area.toFixed(2).replace(".", ",")}m²<br/>
-      <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.incluir_pintura ? o.tipo_pintura.replace("_", " ") : "não inclusa")}
+      <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.incluir_pintura ? o.tipo_pintura.replace("_", " ") : "não inclusa")}`}
     </div>
   </div>
 </div>
 
-<div class="delivery">PREVISÃO DE ENTREGA: até 15 dias após assinatura do pedido, sujeito à confirmação comercial e disponibilidade.</div>
+<div class="delivery">PREVISÃO DE ENTREGA: ${(o as any).is_pecas_avulsas ? "conforme disponibilidade de estoque, confirmada pelo atendimento comercial." : "até 15 dias após assinatura do pedido, sujeito à confirmação comercial e disponibilidade."}</div>
 
 <div class="section-title">Itens do orçamento</div>
 <table>
