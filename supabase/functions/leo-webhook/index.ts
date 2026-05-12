@@ -1680,12 +1680,23 @@ async function ultimoPdfSnapshot(conversation_id: string): Promise<any | null> {
 }
 
 /** Compara estado atual da conversa com o snapshot do último PDF — se algo mudou, é OUTRO orçamento. */
+function normalizarPecasParaComparacao(pecas: any): string {
+  if (!Array.isArray(pecas)) return "[]";
+  const arr = pecas.map((p: any) => ({
+    nome: String(p?.produto_nome || p?.descricao || "").trim().toLowerCase(),
+    qtd: Number(p?.quantidade || p?.qty || 0),
+    sku: String(p?.codigo_sku || "").trim().toLowerCase(),
+  })).filter((p) => p.nome || p.sku);
+  arr.sort((a, b) => (a.sku + a.nome).localeCompare(b.sku + b.nome));
+  return JSON.stringify(arr);
+}
+
 async function medidasMudaramDesdeUltimoPdf(conversation_id: string): Promise<boolean> {
   const snap = await ultimoPdfSnapshot(conversation_id);
   if (!snap) return true; // nenhum PDF salvo com snapshot → tratar como mudança/permitir
   const { data: c } = await supabase
     .from("leo_conversations")
-    .select("tipo_cliente, largura, altura, tipo_perfil, cep, adicionais")
+    .select("tipo_cliente, largura, altura, tipo_perfil, cep, adicionais, pecas_avulsas, subtipo_revenda")
     .eq("id", conversation_id)
     .maybeSingle();
   if (!c) return false;
@@ -1694,14 +1705,18 @@ async function medidasMudaramDesdeUltimoPdf(conversation_id: string): Promise<bo
   const bool = (v: any) => Boolean(v);
   const adAtual = (c.adicionais as any) || {};
   const adSnap = (snap.adicionais as any) || {};
+  const pecasAtual = normalizarPecasParaComparacao((c as any).pecas_avulsas);
+  const pecasSnap = normalizarPecasParaComparacao((snap as any).pecas_avulsas);
   return !(
     eq(c.tipo_cliente, snap.tipo_cliente) &&
+    eq((c as any).subtipo_revenda, (snap as any).subtipo_revenda) &&
     num(c.largura, snap.largura) &&
     num(c.altura, snap.altura) &&
     eq(c.tipo_perfil, snap.tipo_perfil) &&
     eq(c.cep, snap.cep) &&
     bool(adAtual.portinhola) === bool(adSnap.portinhola) &&
-    bool(adAtual.alcapao) === bool(adSnap.alcapao)
+    bool(adAtual.alcapao) === bool(adSnap.alcapao) &&
+    pecasAtual === pecasSnap
   );
 }
 
