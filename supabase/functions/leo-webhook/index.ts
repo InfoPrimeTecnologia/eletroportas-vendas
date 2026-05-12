@@ -1856,7 +1856,7 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   const r = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
+      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -2735,7 +2735,7 @@ Deno.serve(async (req) => {
           // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
           const { data: estado } = await supabase
             .from("leo_conversations")
-            .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
+            .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
             .eq("id", conversa.id)
             .maybeSingle();
 
