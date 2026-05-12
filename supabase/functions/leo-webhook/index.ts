@@ -713,6 +713,7 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
 5. UMA pergunta por vez. Curto e direto.
 6. Mesmo depois do PDF enviado, continue respondendo normalmente. Só gere novo PDF se o cliente pedir.
 7. Dúvidas gerais ("quando instala?", "tem garantia?") → responda em texto, NÃO chame \`gerar_orcamento\`.
+8. **ANTI-LOOP — PENSE COMO HUMANO**: Se o cliente já respondeu (mesmo de forma curta, com erro, abreviado, ou sem todos os detalhes), NUNCA repita a mesma pergunta literal. Sempre tente INTERPRETAR a intenção. Se conseguir mapear (ex: "5 motores 200" → 5 motores de 200kg; "lisa" → fechada; "tem visor" → transvision), grave via tool e siga. Se houver dúvida REAL, faça uma pergunta de CONFIRMAÇÃO específica ("Você quis dizer 5 motores de 200kg, certo? 👍") OU peça SÓ o pedaço que faltou ("Beleza, 5 motores. De qual potência? Temos 200kg, 300kg, 500kg…"). NUNCA reenvie a pergunta original sem variação — isso é falha grave.
 
 # FLUXO DE VENDAS (siga em ordem, pulando passos já cumpridos)
 
@@ -736,7 +737,13 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
 **Passo 2.2 — Coleta de peças** (APENAS se subtipo_revenda=pecas):
    Pergunte de forma natural quais peças o cliente quer e em qual quantidade (ex: "2 motores 500kg, 10m de guia lateral, 1 controle remoto").
    Use \`listar_pecas_disponiveis\` se precisar consultar o catálogo (códigos, preços, descrições do estoque). NÃO invente preços nem códigos.
-   ⚡ ASSIM QUE o cliente listar peças com quantidade (ex: "5 motores de 200kg"), chame \`definir_pecas_avulsas\` IMEDIATAMENTE com o array de itens. NÃO peça confirmação extra antes de gravar — apenas grave e siga. Só pergunte de novo se faltar quantidade ou o item for ambíguo. Depois siga ao Passo 7 (entrega) se PORTA INSTALADA, ou direto a \`gerar_orcamento\` se REVENDA.
+   ⚡ INTERPRETE COM INTELIGÊNCIA. Exemplos do que o cliente pode dizer e como você deve agir:
+     • "5 motores de 200kg" → CHAME \`definir_pecas_avulsas\` IMEDIATAMENTE com [{produto_nome:"motor 200kg", quantidade:5}]. Não repergunte.
+     • "5 motores de 200" (sem unidade) → ASSUMA kg (é o padrão do segmento) e grave. Se quiser, confirme depois: "Confirmando: 5 motores de 200kg, certo?"
+     • "preciso de motor" (sem qtd e sem potência) → pergunte SÓ o que falta: "Beleza! Quantos motores e de qual potência (200kg, 300kg, 500kg, 800kg, 1000kg, 1500kg)?"
+     • "uma central e 2 controles" → grave [{produto_nome:"central", quantidade:1},{produto_nome:"controle", quantidade:2}].
+   ❌ JAMAIS reenvie a frase "Quais peças você precisa…" depois que o cliente já tentou responder. Se não entendeu, faça pergunta DIFERENTE e específica sobre o que faltou.
+   Após gravar, siga ao Passo 7 (entrega) se PORTA INSTALADA, ou direto a \`gerar_orcamento\` se REVENDA.
 
 **Passo 3 — Medidas** (pular se já tiver largura/altura, ou se subtipo_revenda=pecas):
    Pergunte de forma natural a largura e altura em metros (ex: 4x3).
@@ -1348,19 +1355,26 @@ function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
 }
 
 function inferirPecasAvulsasTexto(texto: string): any[] {
-  const entrada = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  let entrada = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (!entrada.trim()) return [];
-  const partes = entrada.split(/(?:,|;|\s+e\s+)/).map((p) => p.trim()).filter(Boolean);
+  // Mapeia "uma/um/duas/dois/tres/..." → número
+  const numerosExtenso: Record<string, string> = {
+    "uma": "1", "um": "1", "duas": "2", "dois": "2", "tres": "3", "quatro": "4",
+    "cinco": "5", "seis": "6", "sete": "7", "oito": "8", "nove": "9", "dez": "10"
+  };
+  entrada = entrada.replace(/\b(uma|um|duas|dois|tres|quatro|cinco|seis|sete|oito|nove|dez)\b/g, (m) => numerosExtenso[m] || m);
+  const partes = entrada.split(/(?:,|;|\s+e\s+|\s*\+\s*|\n)/).map((p) => p.trim()).filter(Boolean);
   const itens: any[] = [];
   for (const parte of partes) {
-    const inicio = parte.match(/(?:^|\b)(\d+(?:[,.]\d+)?)\s*(?:x\s*)?(.+?)\s*$/i);
-    const fim = inicio ? null : parte.match(/(.+?)\s+(\d+(?:[,.]\d+)?)\s*$/i);
+    const inicio = parte.match(/(?:^|\b)(\d+(?:[,.]\d+)?)\s*(?:x\s*|un\s*|unidades?\s*|pcs?\s*)?(.+?)\s*$/i);
+    const fim = inicio ? null : parte.match(/(.+?)\s+(\d+(?:[,.]\d+)?)\s*(?:un|unidades?|pcs?)?\s*$/i);
     if (!inicio && !fim) continue;
     const quantidade = Number(String(inicio ? inicio[1] : fim?.[2]).replace(",", "."));
-    let nome = String(inicio ? inicio[2] : fim?.[1] || "").replace(/\b(de|da|do|para|com)\b/g, " ").replace(/\s+/g, " ").trim();
+    let nome = String(inicio ? inicio[2] : fim?.[1] || "").replace(/\b(de|da|do|para|com|tipo|modelo)\b/g, " ").replace(/\s+/g, " ").trim();
     nome = nome.replace(/^(m|mt|metro|metros)\s+/g, "").trim();
-    nome = nome.replace(/\bmotores\b/g, "motor").replace(/\bcontroles\b/g, "controle").replace(/\bcentrais\b/g, "central");
-    nome = nome.replace(/\bmotor\s+(\d{2,4})(?!\s*kg)\b/g, "motor $1kg");
+    nome = nome.replace(/\bmotores\b/g, "motor").replace(/\bcontroles\b/g, "controle").replace(/\bcentrais\b/g, "central").replace(/\bguias\b/g, "guia");
+    // Normaliza "motor 200" → "motor 200kg" (assume kg quando vier número solto)
+    nome = nome.replace(/\b(motor)\s+(\d{2,4})(?!\s*kg)\b/g, "$1 $2kg");
     if (Number.isFinite(quantidade) && quantidade > 0 && nome.length >= 3) {
       itens.push({ produto_nome: nome, quantidade });
     }
