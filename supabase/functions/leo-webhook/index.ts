@@ -1743,6 +1743,19 @@ function pontuarEstoqueParaPeca(row: any, item: any): number {
   return score;
 }
 
+function precoFallbackPeca(item: any): { preco: number; codigo: string; nome: string } | null {
+  const alvo = normalizarBuscaEstoque(`${item?.produto_nome || ""} ${item?.descricao || ""}`);
+  const kg = alvo.match(/\b(\d{2,4})\s*kg?\b/)?.[1];
+  if (/\b(motor|automatizador)\b/.test(alvo) && kg) {
+    const chave = `motor_${kg}kg`;
+    const preco = Number((PRECOS as any)[chave] || 0);
+    if (preco > 0) return { preco, codigo: `MOTOR-${kg}KG`, nome: `Motor ${kg}kg` };
+  }
+  if (/\bcontrole\b/.test(alvo)) return { preco: PRECOS.controle_remoto, codigo: "CONTROLE-REMOTO", nome: "Controle remoto" };
+  if (/\bcentral\b/.test(alvo)) return { preco: PRECOS.central_comando, codigo: "CENTRAL-COMANDO", nome: "Central de comando" };
+  return null;
+}
+
 async function buscarEstoqueParaPeca(item: any) {
   if (item.codigo_sku && item.codigo_sku !== "AVULSA") {
     const { data } = await dashboardDb
