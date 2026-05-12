@@ -1406,6 +1406,7 @@ function inferirPecasAvulsasTexto(texto: string): any[] {
 
 function aplicarInferenciasEmEstado(base: any, textos: string[]) {
   const estado = { ...(base || {}) };
+  let subtipoTravadoPorTexto = false;
   for (const txt of textos) {
     const tipo = inferirTipoClienteTexto(txt);
     if (tipo && (!estado.tipo_cliente || estado.tipo_cliente === "indefinido")) estado.tipo_cliente = tipo;
@@ -1413,8 +1414,9 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
     const tipoDef = estado.tipo_cliente === "revenda" || estado.tipo_cliente === "porta_instalada";
     if (tipoDef) {
       const sub = inferirSubtipoRevendaTexto(txt);
-      if (sub && sub !== estado.subtipo_revenda) {
+      if (sub && !subtipoTravadoPorTexto && sub !== estado.subtipo_revenda) {
         estado.subtipo_revenda = sub;
+        subtipoTravadoPorTexto = true;
         if (sub === "kit") {
           // Nova cotação de KIT no meio de uma conversa de peças: limpa dados incompatíveis
           // para forçar um PDF novo e não reutilizar o orçamento antigo.
@@ -1434,6 +1436,8 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
           estado.adicionais = { portinhola: false, alcapao: false };
           estado.adicionais_perguntado = false;
         }
+      } else if (sub) {
+        subtipoTravadoPorTexto = true;
       }
     }
 
