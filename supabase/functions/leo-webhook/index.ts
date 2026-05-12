@@ -2590,8 +2590,8 @@ Deno.serve(async (req) => {
                         ? "Pergunte AGORA, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'. NÃO chame nenhuma tool."
                         : proximo === "subtipo_revenda"
                           ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
-                          : proximo === "pecas_avulsas"
-                            ? "Pergunte AGORA quais peças e quantidades o cliente precisa. Quando ele confirmar, chame definir_pecas_avulsas com a lista. NÃO chame gerar_orcamento agora."
+                        : proximo === "pecas_avulsas"
+                          ? "Se o cliente AINDA NÃO listou peças, pergunte AGORA quais peças e quantidades. Se ELE JÁ listou (ex: '5 motores 200kg'), chame definir_pecas_avulsas IMEDIATAMENTE com o array de itens — sem pedir confirmação extra. NÃO chame gerar_orcamento agora."
                             : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
