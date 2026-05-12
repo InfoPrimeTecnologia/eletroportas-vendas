@@ -57,6 +57,34 @@ function normalizarTelefone(t: string): string {
   return (t || "").replace(/\D/g, "");
 }
 
+function ehPendenteSerralheiro(tipo: unknown): boolean {
+  const t = String(tipo || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return t.includes("pendente") && t.includes("serralheiro");
+}
+
+function montarMensagemPendenteSerralheiro(nome?: string | null): string {
+  const primeiroNome = (nome || "").trim().split(/\s+/)[0] || "";
+  return `${primeiroNome ? primeiroNome + ", " : ""}seu cadastro como *Serralheiro* ainda está *pendente de aprovação* pela nossa equipe. ⏳\n\nAssim que for liberado, eu sigo com você normalmente para gerar o orçamento. Obrigado pela paciência! 🙏`;
+}
+
+function telefoneClienteBate(cliFone: unknown, telefone: string): boolean {
+  const alvo = normalizarTelefone(telefone);
+  const fone = normalizarTelefone(String(cliFone || ""));
+  if (!alvo || !fone) return false;
+  const alvoSemPais = alvo.startsWith("55") ? alvo.slice(2) : alvo;
+  const foneSemPais = fone.startsWith("55") ? fone.slice(2) : fone;
+  return fone === alvo || fone === alvoSemPais || foneSemPais === alvoSemPais || fone.endsWith(alvo.slice(-10)) || alvo.endsWith(fone.slice(-10));
+}
+
+function escolherClienteMaisRelevante(clientes: any[], telefone: string) {
+  const matches = (clientes || []).filter((c) => telefoneClienteBate(c?.CLI_FONE, telefone));
+  const lista = matches.length ? matches : (clientes || []);
+  return lista.find((c) => ehPendenteSerralheiro(c?.tipo_cliente))
+    || lista.find((c) => /revenda|instalada|porta_instalada/i.test(String(c?.tipo_cliente || "")))
+    || lista[0]
+    || null;
+}
+
 // Busca cliente no backend legado pelo telefone
 async function buscarClientePorTelefone(telefone: string) {
   const tel = normalizarTelefone(telefone);
@@ -78,25 +106,21 @@ async function buscarClientePorTelefone(telefone: string) {
     .from("Clientes")
     .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE, CLI_CPF, tipo_cliente")
     .in("CLI_FONE", variacoes)
-    .limit(1);
+    .limit(20);
   if (error) {
     console.error("buscarClientePorTelefone erro:", error?.message || error);
     return null;
   }
-  if (data && data.length > 0) return data[0];
+  if (data && data.length > 0) return escolherClienteMaisRelevante(data, tel);
 
   // Fallback: compara apenas os dígitos (caso o banco tenha guardado com máscara como "(71) 9...")
   const { data: todos } = await legacyDb
     .from("Clientes")
     .select("CLI_CNPJ, CLI_NOME, CLI_EMAIL, CLI_FONE, CLI_CPF, tipo_cliente")
     .ilike("CLI_FONE", `%${tel.slice(-8)}%`)
-    .limit(20);
+    .limit(50);
   if (Array.isArray(todos)) {
-    const alvo = tel.slice(-10); // DDD + 8 dígitos finais
-    const match = todos.find((c: any) => {
-      const digitos = String(c.CLI_FONE || "").replace(/\D/g, "");
-      return digitos.endsWith(alvo) && digitos.length >= 10;
-    });
+    const match = escolherClienteMaisRelevante(todos, tel);
     if (match) return match;
   }
   return null;
@@ -1323,6 +1347,27 @@ function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
   return null;
 }
 
+function inferirPecasAvulsasTexto(texto: string): any[] {
+  const entrada = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!entrada.trim()) return [];
+  const partes = entrada.split(/(?:,|;|\s+e\s+)/).map((p) => p.trim()).filter(Boolean);
+  const itens: any[] = [];
+  for (const parte of partes) {
+    const inicio = parte.match(/(?:^|\b)(\d+(?:[,.]\d+)?)\s*(?:x\s*)?(.+?)\s*$/i);
+    const fim = inicio ? null : parte.match(/(.+?)\s+(\d+(?:[,.]\d+)?)\s*$/i);
+    if (!inicio && !fim) continue;
+    const quantidade = Number(String(inicio ? inicio[1] : fim?.[2]).replace(",", "."));
+    let nome = String(inicio ? inicio[2] : fim?.[1] || "").replace(/\b(de|da|do|para|com)\b/g, " ").replace(/\s+/g, " ").trim();
+    nome = nome.replace(/^(m|mt|metro|metros)\s+/g, "").trim();
+    nome = nome.replace(/\bmotores\b/g, "motor").replace(/\bcontroles\b/g, "controle").replace(/\bcentrais\b/g, "central");
+    nome = nome.replace(/\bmotor\s+(\d{2,4})(?!\s*kg)\b/g, "motor $1kg");
+    if (Number.isFinite(quantidade) && quantidade > 0 && nome.length >= 3) {
+      itens.push({ produto_nome: nome, quantidade });
+    }
+  }
+  return itens;
+}
+
 function aplicarInferenciasEmEstado(base: any, textos: string[]) {
   const estado = { ...(base || {}) };
   for (const txt of textos) {
@@ -1337,6 +1382,11 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
 
     // Se for revenda + peças, NÃO inferir medidas/lâmina/etc
     const ehPecas = estado.subtipo_revenda === "pecas";
+
+    if (ehPecas && (!Array.isArray(estado.pecas_avulsas) || estado.pecas_avulsas.length === 0)) {
+      const pecas = inferirPecasAvulsasTexto(txt);
+      if (pecas.length > 0) estado.pecas_avulsas = pecas;
+    }
 
     if (!ehPecas) {
       const medidas = inferirMedidasTexto(txt);
@@ -1391,6 +1441,11 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const patch: Record<string, unknown> = {};
   if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
   if (estado.subtipo_revenda && !baseEstado?.subtipo_revenda) patch.subtipo_revenda = estado.subtipo_revenda;
+
+  if (ehPecas && (!Array.isArray(baseEstado?.pecas_avulsas) || baseEstado.pecas_avulsas.length === 0)) {
+    const pecas = Array.isArray(estado.pecas_avulsas) ? estado.pecas_avulsas : [];
+    if (pecas.length > 0) patch.pecas_avulsas = await enriquecerPecasComEstoque(pecas);
+  }
 
   if (!ehPecas) {
     if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
@@ -2290,10 +2345,8 @@ Deno.serve(async (req) => {
 
     // 🛑 Cliente com cadastro PENDENTE de aprovação como serralheiro: NÃO segue o fluxo de orçamento.
     {
-      const tipoLegadoAtual = String((clienteExistente as any)?.tipo_cliente || "").trim().toLowerCase();
-      if (tipoLegadoAtual.includes("pendente") && tipoLegadoAtual.includes("serralheiro")) {
-        const primeiroNome = (clienteExistente?.CLI_NOME || conversa.nome_cliente || nome || "").trim().split(/\s+/)[0] || "";
-        const msgPend = `${primeiroNome ? primeiroNome + ", " : ""}seu cadastro como *Serralheiro* ainda está *pendente de aprovação* pela nossa equipe. ⏳\n\nAssim que for liberado, eu sigo com você normalmente para gerar o orçamento. Obrigado pela paciência! 🙏`;
+      if (ehPendenteSerralheiro((clienteExistente as any)?.tipo_cliente)) {
+        const msgPend = montarMensagemPendenteSerralheiro(clienteExistente?.CLI_NOME || conversa.nome_cliente || nome || "");
         await enviarTexto(telefone, msgPend);
         await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true });
         return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
@@ -2325,6 +2378,20 @@ Deno.serve(async (req) => {
     }
 
     const estadoLocalInferido = await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
+
+    // Se esta própria mensagem classificou como REVENDA, o legado acabou de virar
+    // "Pendente Serralheiro". Bloqueia imediatamente, antes de perguntar KIT/PEÇAS.
+    if (clienteExistente && estadoLocalInferido?.tipo_cliente === "revenda") {
+      const clienteAtual = await buscarClientePorTelefone(telefone);
+      if (ehPendenteSerralheiro((clienteAtual as any)?.tipo_cliente)) {
+        const msgPend = montarMensagemPendenteSerralheiro((clienteAtual as any)?.CLI_NOME || conversa.nome_cliente || nome || "");
+        await enviarTexto(telefone, msgPend);
+        await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true, bloqueio_pos_inferencia: true });
+        return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     const estadoAposExtracao = (await carregarEstadoConversa(conversa.id)) || estadoLocalInferido;
     // Se o cliente NÃO está cadastrado no banco legado, NÃO dispara o fluxo determinístico
@@ -2645,6 +2712,15 @@ Deno.serve(async (req) => {
               .from("leo_conversations")
               .update({ nome_cliente: args.nome })
               .eq("id", conversa.id);
+            const cliNovo = await buscarClientePorTelefone(telefone);
+            if (ehPendenteSerralheiro((cliNovo as any)?.tipo_cliente)) {
+              const msgPend = montarMensagemPendenteSerralheiro((cliNovo as any)?.CLI_NOME || args.nome || nome || "");
+              await enviarTexto(telefone, msgPend);
+              await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true, cadastro_novo: true });
+              return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
             toolResult = {
               ok: true,
               instrucao: "Cliente cadastrado. Agora pergunte, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'.",
