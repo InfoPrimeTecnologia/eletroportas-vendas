@@ -1895,6 +1895,16 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
     });
   }
 
+  const itensSemPreco = (orcamento?.itens || []).filter((i: any) => Number(i?.qty) > 0 && !(Number(i?.unit_price) > 0));
+  if (itensSemPreco.length > 0 || !(Number(orcamento?.total_geral) > 0)) {
+    console.warn("🚫 Orçamento bloqueado: item sem preço no estoque", JSON.stringify(itensSemPreco));
+    return {
+      ok: false,
+      error: `Não encontrei preço no estoque para: ${itensSemPreco.map((i: any) => i.description).join(", ") || "itens solicitados"}`,
+      faltando: ["preco_estoque"],
+    };
+  }
+
   const filename = `orcamento_${Date.now()}.pdf`;
   const pdfB64 = await gerarPdfDocrya(gerarHtmlOrcamento(orcamento), filename);
   if (!pdfB64) return { ok: false, error: "Falha ao gerar PDF" };
