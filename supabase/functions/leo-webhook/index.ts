@@ -2720,11 +2720,11 @@ Deno.serve(async (req) => {
               .eq("id", conversa.id);
             const { data: cv2 } = await supabase
               .from("leo_conversations")
-              .select("tipo_cliente, cep")
+              .select("tipo_cliente, entrega_perguntado")
               .eq("id", conversa.id)
               .maybeSingle();
-            const proxima = cv2?.tipo_cliente === "porta_instalada" && !cv2?.cep
-              ? "Adicionais gravados. NÃO confirme. Siga DIRETO ao Passo 6: pergunte o CEP do local da instalação."
+            const proxima = cv2?.tipo_cliente === "porta_instalada" && !cv2?.entrega_perguntado
+              ? "Adicionais gravados. NÃO confirme. Siga DIRETO ao Passo 7: pergunte se o cliente quer ENTREGA no local ou prefere BUSCAR/RETIRAR. Quando responder, chame definir_entrega."
               : "Adicionais gravados. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
             toolResult = { ok: true, portinhola, alcapao, instrucao: proxima };
           }
