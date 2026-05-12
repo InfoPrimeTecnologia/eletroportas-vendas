@@ -1801,13 +1801,16 @@ async function enriquecerPecasComEstoque(itens: any[]): Promise<any[]> {
     const item = { ...raw };
     const row: any = await buscarEstoqueParaPeca(item);
     const fallback = Number(row?.preco_venda) > 0 ? null : precoFallbackPeca(item);
+    const precoInformado = Number(item.preco_unitario);
+    const precoEstoque = Number(row?.preco_venda);
+    const precoFallback = Number(fallback?.preco);
     out.push({
       codigo_sku: item.codigo_sku || row?.codigo_sku || fallback?.codigo || "AVULSA",
       produto_nome: row?.produto_nome || fallback?.nome || item.produto_nome,
       descricao: row?.descricao || row?.produto_nome || fallback?.nome || item.produto_nome,
       quantidade: Number(item.quantidade) || 0,
       unidade: item.unidade || row?.unidade_medida || "UN",
-      preco_unitario: Number(item.preco_unitario ?? row?.preco_venda ?? fallback?.preco ?? 0),
+      preco_unitario: precoInformado > 0 ? precoInformado : precoEstoque > 0 ? precoEstoque : precoFallback > 0 ? precoFallback : 0,
     });
   }
   return out;
