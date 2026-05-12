@@ -3136,7 +3136,7 @@ Deno.serve(async (req) => {
 
     try {
       if (pdfEnviadoNesteTurno) {
-        const snapAg = await supabase.from("leo_conversations").select("tipo_cliente, largura, altura, tipo_perfil, cep, adicionais").eq("id", conversa.id).maybeSingle();
+        const snapAg = await supabase.from("leo_conversations").select("tipo_cliente, subtipo_revenda, largura, altura, tipo_perfil, cep, adicionais, pecas_avulsas").eq("id", conversa.id).maybeSingle();
         await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, { pdf_enviado: true, snapshot: snapAg.data || null });
       } else {
         const textoFinal = (respostaFinal || "").trim() ||
