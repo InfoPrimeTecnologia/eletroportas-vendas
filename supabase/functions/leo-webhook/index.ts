@@ -882,6 +882,61 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "definir_subtipo_revenda",
+      description: "Apenas para clientes REVENDA. Grava no banco se o cliente quer um KIT completo de porta de enrolar ('kit') ou apenas PEÇAS AVULSAS ('pecas'). Chame ASSIM QUE o cliente responder. Silenciosa.",
+      parameters: {
+        type: "object",
+        properties: {
+          subtipo: { type: "string", enum: ["kit", "pecas"] },
+        },
+        required: ["subtipo"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "listar_pecas_disponiveis",
+      description: "Consulta o catálogo de peças disponíveis no estoque (códigos SKU, nome, preço de venda). Use quando o cliente revendedor de PEÇAS AVULSAS pedir para ver o que tem disponível, ou quando você precisar identificar uma peça que ele citou. Pode passar um termo de busca opcional.",
+      parameters: {
+        type: "object",
+        properties: {
+          busca: { type: "string", description: "Termo opcional para filtrar por nome/sku (ex: 'motor', 'guia', 'controle')" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "definir_pecas_avulsas",
+      description: "Apenas para REVENDA + subtipo=pecas. Grava a lista final de peças que o cliente quer comprar. Cada item deve ter produto_nome e quantidade; informe codigo_sku quando souber (do catálogo). Após chamar esta tool, chame gerar_orcamento.",
+      parameters: {
+        type: "object",
+        properties: {
+          itens: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                codigo_sku: { type: "string", description: "SKU do estoque (opcional, mas recomendado)" },
+                produto_nome: { type: "string" },
+                quantidade: { type: "number" },
+                unidade: { type: "string", description: "ex: UN, MT, M²" },
+                preco_unitario: { type: "number", description: "Preço unitário (opcional, será buscado do estoque se omitido)" },
+              },
+              required: ["produto_nome", "quantidade"],
+            },
+          },
+        },
+        required: ["itens"],
+      },
+    },
+  },
 ];
 
 async function chamarIA(messages: any[], options: { tools?: any[] | null; temperature?: number } = {}) {
