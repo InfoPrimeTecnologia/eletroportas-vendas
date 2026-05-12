@@ -1449,9 +1449,32 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
     // Se for revenda + peças, NÃO inferir medidas/lâmina/etc
     const ehPecas = estado.subtipo_revenda === "pecas";
 
-    if (ehPecas && (!Array.isArray(estado.pecas_avulsas) || estado.pecas_avulsas.length === 0)) {
+    if (ehPecas) {
       const pecas = inferirPecasAvulsasTexto(txt);
-      if (pecas.length > 0) estado.pecas_avulsas = pecas;
+      const atuais = Array.isArray(estado.pecas_avulsas) ? estado.pecas_avulsas : [];
+      if (pecas.length > 0) {
+        // Se ainda não há peças, ou as atuais são inválidas (qty absurda / preço 0 / sem produto conhecido),
+        // substitui pelas peças recém-extraídas. Caso contrário, mescla (adiciona novas).
+        const PRODUTOS_VALIDOS_RE = /\b(motor|automatizador|controle|central|guia|lamina|lâmina|portinhola|alcapao|alçapão|fechadura|trava|eixo|mola|cabo|kit|porta)\b/i;
+        const atuaisInvalidas = atuais.length === 0 || atuais.some((p: any) => {
+          const q = Number(p?.quantidade);
+          const nome = String(p?.produto_nome || p?.descricao || "").toLowerCase();
+          return !Number.isFinite(q) || q <= 0 || q > 9999 || !PRODUTOS_VALIDOS_RE.test(nome);
+        });
+        if (atuaisInvalidas) {
+          estado.pecas_avulsas = pecas;
+        } else {
+          // mescla — soma quantidades por produto_nome
+          const mapa = new Map<string, any>();
+          for (const it of [...atuais, ...pecas]) {
+            const k = String(it.produto_nome || "").toLowerCase().trim();
+            if (!k) continue;
+            if (mapa.has(k)) mapa.get(k).quantidade = Number(mapa.get(k).quantidade) + Number(it.quantidade);
+            else mapa.set(k, { ...it });
+          }
+          estado.pecas_avulsas = Array.from(mapa.values());
+        }
+      }
     }
 
     if (!ehPecas) {
