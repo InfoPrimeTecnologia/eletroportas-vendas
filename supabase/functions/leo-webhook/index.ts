@@ -713,7 +713,7 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
 5. UMA pergunta por vez. Curto e direto.
 6. Mesmo depois do PDF enviado, continue respondendo normalmente. Só gere novo PDF se o cliente pedir.
 7. Dúvidas gerais ("quando instala?", "tem garantia?") → responda em texto, NÃO chame \`gerar_orcamento\`.
-8. **ANTI-LOOP — PENSE COMO HUMANO**: Se o cliente já respondeu (mesmo de forma curta, com erro, abreviado, ou sem todos os detalhes), NUNCA repita a mesma pergunta literal. Sempre tente INTERPRETAR a intenção. Se conseguir mapear (ex: "5 motores 200" → 5 motores de 200kg; "lisa" → fechada; "tem visor" → transvision), grave via tool e siga. Se houver dúvida REAL, faça uma pergunta de CONFIRMAÇÃO específica ("Você quis dizer 5 motores de 200kg, certo? 👍") OU peça SÓ o pedaço que faltou ("Beleza, 5 motores. De qual potência? Temos 200kg, 300kg, 500kg…"). NUNCA reenvie a pergunta original sem variação — isso é falha grave.
+8. **ANTI-LOOP — PENSE COMO HUMANO**: Se o cliente já respondeu (mesmo de forma curta, com erro, abreviado, ou em mensagens separadas), NUNCA repita a mesma pergunta literal. Sempre tente INTERPRETAR a intenção pelo histórico inteiro. Se conseguir mapear (ex: "5 motores 200" → 5 motores de 200kg; "me entregue" + "41830490" → entrega=true + CEP; "busco no local" → retirada; "lisa" → fechada; "tem visor" → transvision), grave via tool e siga. Se houver dúvida REAL, faça uma pergunta de CONFIRMAÇÃO específica ("Você quis dizer 5 motores de 200kg, certo? 👍") OU peça SÓ o pedaço que faltou ("Beleza, 5 motores. De qual potência? Temos 200kg, 300kg, 500kg…"). NUNCA reenvie a pergunta original sem variação — isso é falha grave.
 
 # FLUXO DE VENDAS (siga em ordem, pulando passos já cumpridos)
 
@@ -772,7 +772,7 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
 **Passo 7 — Entrega ou retirada** (APENAS se tipo_cliente=porta_instalada e entrega_perguntado=false):
    "Você prefere que a gente **entregue** no local, ou prefere **buscar/retirar** com a gente?"
    - Se quer **buscar/retirar** → chame \`definir_entrega\` com quer_entrega=false. Frete fica zerado e PULA o CEP. Vá ao Passo 8.
-   - Se quer **entrega** → chame \`definir_entrega\` com quer_entrega=true. Em seguida pergunte o CEP e chame \`calcular_frete_cep\`. Se fora da BA → \`transferir_humano\`. Se ok → NÃO mencione o frete, vá ao Passo 8.
+   - Se quer **entrega** → chame \`definir_entrega\` com quer_entrega=true. Se o cliente já mandou CEP na mesma mensagem ou logo depois, chame \`calcular_frete_cep\` sem perguntar de novo. Se fora da BA → \`transferir_humano\`. Se ok → NÃO mencione o frete, vá ao Passo 8.
    Para REVENDA, pule este passo.
 
 **Passo 8 — Gerar orçamento**: chame \`gerar_orcamento\` (sem argumentos). Após \`pdf_enviado: true\`, NÃO envie mensagem extra.
@@ -1743,6 +1743,19 @@ function pontuarEstoqueParaPeca(row: any, item: any): number {
   return score;
 }
 
+function precoFallbackPeca(item: any): { preco: number; codigo: string; nome: string } | null {
+  const alvo = normalizarBuscaEstoque(`${item?.produto_nome || ""} ${item?.descricao || ""}`);
+  const kg = alvo.match(/\b(\d{2,4})\s*kg?\b/)?.[1];
+  if (/\b(motor|automatizador)\b/.test(alvo) && kg) {
+    const chave = `motor_${kg}kg`;
+    const preco = Number((PRECOS as any)[chave] || 0);
+    if (preco > 0) return { preco, codigo: `MOTOR-${kg}KG`, nome: `Motor ${kg}kg` };
+  }
+  if (/\bcontrole\b/.test(alvo)) return { preco: PRECOS.controle_remoto, codigo: "CONTROLE-REMOTO", nome: "Controle remoto" };
+  if (/\bcentral\b/.test(alvo)) return { preco: PRECOS.central_comando, codigo: "CENTRAL-COMANDO", nome: "Central de comando" };
+  return null;
+}
+
 async function buscarEstoqueParaPeca(item: any) {
   if (item.codigo_sku && item.codigo_sku !== "AVULSA") {
     const { data } = await dashboardDb
@@ -1787,13 +1800,14 @@ async function enriquecerPecasComEstoque(itens: any[]): Promise<any[]> {
   for (const raw of (itens || [])) {
     const item = { ...raw };
     const row: any = await buscarEstoqueParaPeca(item);
+    const fallback = Number(row?.preco_venda) > 0 ? null : precoFallbackPeca(item);
     out.push({
-      codigo_sku: item.codigo_sku || row?.codigo_sku || "AVULSA",
-      produto_nome: row?.produto_nome || item.produto_nome,
-      descricao: row?.descricao || row?.produto_nome || item.produto_nome,
+      codigo_sku: item.codigo_sku || row?.codigo_sku || fallback?.codigo || "AVULSA",
+      produto_nome: row?.produto_nome || fallback?.nome || item.produto_nome,
+      descricao: row?.descricao || row?.produto_nome || fallback?.nome || item.produto_nome,
       quantidade: Number(item.quantidade) || 0,
       unidade: item.unidade || row?.unidade_medida || "UN",
-      preco_unitario: Number(item.preco_unitario ?? row?.preco_venda ?? 0),
+      preco_unitario: Number(item.preco_unitario ?? row?.preco_venda ?? fallback?.preco ?? 0),
     });
   }
   return out;
