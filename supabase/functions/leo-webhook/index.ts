@@ -2792,6 +2792,23 @@ Deno.serve(async (req) => {
               .update({ tipo_cliente: tcNorm, ultima_mensagem_at: new Date().toISOString() })
               .eq("id", conversa.id);
             try { await atualizarTipoClienteLegado(telefone, tcNorm); } catch (_) {}
+
+            // 🛑 Se virou REVENDA e o cadastro legado ficou "Pendente Serralheiro",
+            // interrompe AQUI antes de seguir ao Passo 2.1 (KIT/PEÇAS).
+            if (tcNorm === "revenda") {
+              const cliLeg = await buscarClientePorTelefone(telefone);
+              const tipoLeg = String((cliLeg as any)?.tipo_cliente || "").trim().toLowerCase();
+              if (tipoLeg.includes("pendente") && tipoLeg.includes("serralheiro")) {
+                const primeiroNome = (cliLeg?.CLI_NOME || conversa.nome_cliente || nome || "").trim().split(/\s+/)[0] || "";
+                const msgPend = `${primeiroNome ? primeiroNome + ", " : ""}seu cadastro como *Serralheiro* ainda está *pendente de aprovação* pela nossa equipe. ⏳\n\nAssim que for liberado, eu sigo com você normalmente para gerar o orçamento. Obrigado pela paciência! 🙏`;
+                await enviarTexto(telefone, msgPend);
+                await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true });
+                return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
+                  headers: { ...corsHeaders, "Content-Type": "application/json" },
+                });
+              }
+            }
+
             toolResult = {
               ok: true,
               tipo_cliente: tcNorm,
