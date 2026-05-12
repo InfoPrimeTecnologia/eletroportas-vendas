@@ -57,6 +57,16 @@ function normalizarTelefone(t: string): string {
   return (t || "").replace(/\D/g, "");
 }
 
+function ehPendenteSerralheiro(tipo: unknown): boolean {
+  const t = String(tipo || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return t.includes("pendente") && t.includes("serralheiro");
+}
+
+function montarMensagemPendenteSerralheiro(nome?: string | null): string {
+  const primeiroNome = (nome || "").trim().split(/\s+/)[0] || "";
+  return `${primeiroNome ? primeiroNome + ", " : ""}seu cadastro como *Serralheiro* ainda está *pendente de aprovação* pela nossa equipe. ⏳\n\nAssim que for liberado, eu sigo com você normalmente para gerar o orçamento. Obrigado pela paciência! 🙏`;
+}
+
 // Busca cliente no backend legado pelo telefone
 async function buscarClientePorTelefone(telefone: string) {
   const tel = normalizarTelefone(telefone);
