@@ -1327,7 +1327,8 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
     const tipo = inferirTipoClienteTexto(txt);
     if (tipo && (!estado.tipo_cliente || estado.tipo_cliente === "indefinido")) estado.tipo_cliente = tipo;
 
-    if (estado.tipo_cliente === "revenda" && !estado.subtipo_revenda) {
+    const tipoDef = estado.tipo_cliente === "revenda" || estado.tipo_cliente === "porta_instalada";
+    if (tipoDef && !estado.subtipo_revenda) {
       const sub = inferirSubtipoRevendaTexto(txt);
       if (sub) estado.subtipo_revenda = sub;
     }
