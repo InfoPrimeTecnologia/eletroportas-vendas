@@ -2180,6 +2180,24 @@ Deno.serve(async (req) => {
     // Lookup do cliente no backend legado
     const clienteExistente = await buscarClientePorTelefone(telefone);
 
+    // Se o cliente legado já tem tipo_cliente definido (Revenda ou Porta Instalada),
+    // pré-popula o estado da conversa para PULAR a pergunta "porta instalada ou revenda".
+    // "Pendente Serralheiro" NÃO conta como definido — ainda aguarda aprovação humana.
+    {
+      const tipoSalvoLegado = String((clienteExistente as any)?.tipo_cliente || "").trim().toLowerCase();
+      const ehRevendaLegado = tipoSalvoLegado === "revenda" || (tipoSalvoLegado.includes("revenda") && !tipoSalvoLegado.includes("pendente"));
+      const ehInstaladaLegado = tipoSalvoLegado.includes("instalada") || tipoSalvoLegado === "porta_instalada";
+      const tipoNormalizado: "revenda" | "porta_instalada" | null = ehRevendaLegado ? "revenda" : ehInstaladaLegado ? "porta_instalada" : null;
+      if (tipoNormalizado && (!conversa.tipo_cliente || conversa.tipo_cliente === "indefinido")) {
+        await supabase
+          .from("leo_conversations")
+          .update({ tipo_cliente: tipoNormalizado, ultima_mensagem_at: new Date().toISOString() })
+          .eq("id", conversa.id);
+        (conversa as any).tipo_cliente = tipoNormalizado;
+        console.log(`🎯 tipo_cliente pré-definido a partir do legado: ${tipoNormalizado}`);
+      }
+    }
+
     // Em conversa nova, envia saudação fixa antes da IA
     if (isNova) {
       const primeiroNome = (clienteExistente?.CLI_NOME || "").trim().split(/\s+/)[0] || "";
