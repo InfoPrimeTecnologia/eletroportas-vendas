@@ -2288,6 +2288,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    // 🛑 Cliente com cadastro PENDENTE de aprovação como serralheiro: NÃO segue o fluxo de orçamento.
+    {
+      const tipoLegadoAtual = String((clienteExistente as any)?.tipo_cliente || "").trim().toLowerCase();
+      if (tipoLegadoAtual.includes("pendente") && tipoLegadoAtual.includes("serralheiro")) {
+        const primeiroNome = (clienteExistente?.CLI_NOME || conversa.nome_cliente || nome || "").trim().split(/\s+/)[0] || "";
+        const msgPend = `${primeiroNome ? primeiroNome + ", " : ""}seu cadastro como *Serralheiro* ainda está *pendente de aprovação* pela nossa equipe. ⏳\n\nAssim que for liberado, eu sigo com você normalmente para gerar o orçamento. Obrigado pela paciência! 🙏`;
+        await enviarTexto(telefone, msgPend);
+        await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true });
+        return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const estadoAntesAceite = await carregarEstadoConversa(conversa.id);
 
 
