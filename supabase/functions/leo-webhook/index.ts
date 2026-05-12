@@ -1435,11 +1435,13 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
         estado.adicionais_perguntado = true;
       }
 
-      const cep = inferirCepTexto(txt);
-      if (cep && estado.tipo_cliente === "porta_instalada" && !estado.cep) estado.cep = cep;
     }
 
-    if (estado.tipo_cliente === "porta_instalada" && !estado.entrega_perguntado) {
+    const cep = inferirCepTexto(txt);
+    if (cep && !estado.cep) estado.cep = cep;
+
+    // Entrega/retirada pode aparecer em mensagem separada do CEP; capture pelo histórico inteiro.
+    if (!estado.entrega_perguntado) {
       const ent = inferirEntregaTexto(txt);
       if (ent) {
         estado.entrega_perguntado = true;
@@ -1509,31 +1511,35 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
       patch.adicionais_perguntado = true;
     }
 
-    const cep = inferirCepTexto(texto);
-    if (cep && estado?.tipo_cliente === "porta_instalada" && !baseEstado?.cep) {
-      const frete: any = await calcularFretePorCep(cep);
-      if (frete.ok) {
-        patch.cep = frete.cep;
-        patch.frete = frete.frete;
-        patch.endereco_instalacao = [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
-          .filter((x: any) => x && String(x).trim())
-          .join(", ") || null;
-      } else if (!frete.fora_da_bahia) {
-        console.warn(`⚠️ CEP ${cep} aceito com fallback para evitar loop: ${frete.error || "consulta indisponível"}`);
-        patch.cep = cep;
-        patch.frete = 350;
-        patch.endereco_instalacao = null;
-      }
+  }
+
+  const cep = textos.map(inferirCepTexto).find(Boolean) as string | null;
+  const querEntregaInferido = estado?.quer_entrega === true || patch.quer_entrega === true || Boolean(cep && !estado?.entrega_perguntado);
+  if (cep && !baseEstado?.cep && querEntregaInferido) {
+    const frete: any = await calcularFretePorCep(cep);
+    if (frete.ok) {
+      patch.cep = frete.cep;
+      patch.frete = frete.frete;
+      patch.endereco_instalacao = [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
+        .filter((x: any) => x && String(x).trim())
+        .join(", ") || null;
+    } else if (!frete.fora_da_bahia) {
+      console.warn(`⚠️ CEP ${cep} aceito com fallback para evitar loop: ${frete.error || "consulta indisponível"}`);
+      patch.cep = cep;
+      patch.frete = 350;
+      patch.endereco_instalacao = null;
     }
   }
 
-  // Entrega/retirada — captura para porta_instalada E revenda (em revenda evita loop caso a IA pergunte)
+  // Entrega/retirada — captura por histórico (ex: "me entregue" + CEP em mensagens separadas)
   if (!baseEstado?.entrega_perguntado) {
-    const ent = inferirEntregaTexto(texto);
-    if (ent) {
+    const ent = estado?.entrega_perguntado
+      ? { quer_entrega: Boolean(estado.quer_entrega) }
+      : inferirEntregaTexto(texto);
+    if (ent || patch.cep) {
       patch.entrega_perguntado = true;
-      patch.quer_entrega = ent.quer_entrega;
-      if (!ent.quer_entrega) patch.frete = 0;
+      patch.quer_entrega = ent ? ent.quer_entrega : true;
+      if (ent && !ent.quer_entrega) patch.frete = 0;
     }
   }
 
