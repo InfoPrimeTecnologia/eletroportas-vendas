@@ -697,7 +697,9 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
 **Passo 1 — Cadastro** (apenas se [CONTEXTO] disser "NÃO CADASTRADO"): colete nome, e-mail e CNPJ/CPF de forma leve. Quando tiver, chame \`cadastrar_cliente\`.
 
 **Passo 2 — Tipo de atendimento** (pular se [ESTADO] já tiver tipo_cliente):
-   "Você quer **PORTA INSTALADA** (Bahia) ou **REVENDA** (qualquer estado)?"
+   "Antes de seguirmos, me diga: qual delas melhor representa você?\n\n"
+   "🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento\n\n"
+   "🔹 Sou serralheiro – vou revender para meus clientes"
    Resposta → chame \`definir_tipo_cliente\` IMEDIATAMENTE.
 
 **Passo 2.1 — Subtipo (KIT ou PEÇAS AVULSAS)** (APENAS se já tem tipo_cliente e ainda sem subtipo_revenda):
@@ -1463,7 +1465,7 @@ function proximaPerguntaDeterministica(estado: any): string | null {
   const tipo = String(estado?.tipo_cliente || "").toLowerCase();
   const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
 
-  if (!tipoValido) return "Você quer *PORTA INSTALADA* (Bahia) ou *REVENDA* (qualquer estado)?";
+  if (!tipoValido) return "Antes de seguirmos, me diga: qual delas melhor representa você?\n\n🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento\n\n🔹 Sou serralheiro – vou revender para meus clientes";
 
   // Subtipo (kit/pecas) vale tanto para revenda quanto para porta_instalada
   if (!estado?.subtipo_revenda) {
@@ -2376,11 +2378,11 @@ Deno.serve(async (req) => {
       const ehInstalada = tipoNorm.includes("instalada") || tipoNorm === "porta_instalada";
       let blocoTipo = "";
       if (ehRevenda) {
-        blocoTipo = ` Esse cliente já é classificado como **REVENDA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de REVENDA (Passo 2.1: KIT ou PEÇAS AVULSAS).`;
+        blocoTipo = ` Esse cliente já é classificado como **REVENDA** no nosso sistema. NÃO pergunte se é cliente final ou serralheiro — siga DIRETO o fluxo de REVENDA (Passo 2.1: KIT ou PEÇAS AVULSAS).`;
       } else if (ehInstalada) {
-        blocoTipo = ` Esse cliente já é classificado como **PORTA INSTALADA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de PORTA INSTALADA (Passo 2.1: KIT completo ou PEÇAS AVULSAS).`;
+        blocoTipo = ` Esse cliente já é classificado como **PORTA INSTALADA** no nosso sistema. NÃO pergunte se é cliente final ou serralheiro — siga DIRETO o fluxo de PORTA INSTALADA (Passo 2.1: KIT completo ou PEÇAS AVULSAS).`;
       } else {
-        blocoTipo = ` Tipo do cliente ainda não definido — siga o fluxo normal e pergunte se é PORTA INSTALADA ou REVENDA.`;
+        blocoTipo = ` Tipo do cliente ainda não definido — siga o fluxo normal e pergunte se é cliente final ou serralheiro.`;
       }
       contextoCliente = `[CONTEXTO] Cliente JÁ CADASTRADO: ${clienteExistente.CLI_NOME || "(sem nome)"} | CNPJ/CPF: ${clienteExistente.CLI_CNPJ} | Email: ${clienteExistente.CLI_EMAIL || "(não informado)"}. NÃO peça cadastro novamente. Pode tratá-lo pelo primeiro nome.${blocoTipo}`;
     } else {
@@ -2571,7 +2573,7 @@ Deno.serve(async (req) => {
                     : proximo === "tipo_perfil"
                       ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
                       : proximo === "tipo_cliente"
-                        ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
+                        ? "Pergunte AGORA, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'. NÃO chame nenhuma tool."
                         : proximo === "subtipo_revenda"
                           ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
                           : proximo === "pecas_avulsas"
@@ -2631,7 +2633,7 @@ Deno.serve(async (req) => {
               .eq("id", conversa.id);
             toolResult = {
               ok: true,
-              instrucao: "Cliente cadastrado. Agora pergunte se ele tem interesse na PORTA INSTALADA ou em REVENDA.",
+              instrucao: "Cliente cadastrado. Agora pergunte, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'.",
             };
           } else {
             toolResult = { ok: false, error: r.error };
