@@ -2380,9 +2380,9 @@ Deno.serve(async (req) => {
       if (ehRevenda) {
         blocoTipo = ` Esse cliente já é classificado como **REVENDA** no nosso sistema. NÃO pergunte se é cliente final ou serralheiro — siga DIRETO o fluxo de REVENDA (Passo 2.1: KIT ou PEÇAS AVULSAS).`;
       } else if (ehInstalada) {
-        blocoTipo = ` Esse cliente já é classificado como **PORTA INSTALADA** no nosso sistema. NÃO pergunte se é PORTA INSTALADA ou REVENDA — siga DIRETO o fluxo de PORTA INSTALADA (Passo 2.1: KIT completo ou PEÇAS AVULSAS).`;
+        blocoTipo = ` Esse cliente já é classificado como **PORTA INSTALADA** no nosso sistema. NÃO pergunte se é cliente final ou serralheiro — siga DIRETO o fluxo de PORTA INSTALADA (Passo 2.1: KIT completo ou PEÇAS AVULSAS).`;
       } else {
-        blocoTipo = ` Tipo do cliente ainda não definido — siga o fluxo normal e pergunte se é PORTA INSTALADA ou REVENDA.`;
+        blocoTipo = ` Tipo do cliente ainda não definido — siga o fluxo normal e pergunte se é cliente final ou serralheiro.`;
       }
       contextoCliente = `[CONTEXTO] Cliente JÁ CADASTRADO: ${clienteExistente.CLI_NOME || "(sem nome)"} | CNPJ/CPF: ${clienteExistente.CLI_CNPJ} | Email: ${clienteExistente.CLI_EMAIL || "(não informado)"}. NÃO peça cadastro novamente. Pode tratá-lo pelo primeiro nome.${blocoTipo}`;
     } else {
