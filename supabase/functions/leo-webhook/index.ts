@@ -2633,7 +2633,7 @@ Deno.serve(async (req) => {
               .eq("id", conversa.id);
             toolResult = {
               ok: true,
-              instrucao: "Cliente cadastrado. Agora pergunte se ele tem interesse na PORTA INSTALADA ou em REVENDA.",
+              instrucao: "Cliente cadastrado. Agora pergunte, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'.",
             };
           } else {
             toolResult = { ok: false, error: r.error };
