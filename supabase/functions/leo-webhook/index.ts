@@ -1465,7 +1465,7 @@ function proximaPerguntaDeterministica(estado: any): string | null {
   const tipo = String(estado?.tipo_cliente || "").toLowerCase();
   const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
 
-  if (!tipoValido) return "Você quer *PORTA INSTALADA* (Bahia) ou *REVENDA* (qualquer estado)?";
+  if (!tipoValido) return "Antes de seguirmos, me diga: qual delas melhor representa você?\n\n🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento\n\n🔹 Sou serralheiro – vou revender para meus clientes";
 
   // Subtipo (kit/pecas) vale tanto para revenda quanto para porta_instalada
   if (!estado?.subtipo_revenda) {
