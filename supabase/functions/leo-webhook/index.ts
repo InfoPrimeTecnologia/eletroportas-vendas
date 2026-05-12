@@ -1333,6 +1333,23 @@ function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
   return null;
 }
 
+function inferirPecasAvulsasTexto(texto: string): any[] {
+  const entrada = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!entrada.trim()) return [];
+  const partes = entrada.split(/(?:,|;|\s+e\s+)/).map((p) => p.trim()).filter(Boolean);
+  const itens: any[] = [];
+  for (const parte of partes) {
+    const m = parte.match(/(?:^|\b)(\d+(?:[,.]\d+)?)\s*(?:x\s*)?(.+?)\s*$/i) || parte.match(/(.+?)\s+(\d+(?:[,.]\d+)?)\s*$/i);
+    if (!m) continue;
+    const quantidade = Number(String(m[1]).replace(",", "."));
+    const nome = String(m[2] || "").replace(/\b(de|da|do|para|com)\b/g, " ").replace(/\s+/g, " ").trim();
+    if (Number.isFinite(quantidade) && quantidade > 0 && nome.length >= 3) {
+      itens.push({ produto_nome: nome, quantidade });
+    }
+  }
+  return itens;
+}
+
 function aplicarInferenciasEmEstado(base: any, textos: string[]) {
   const estado = { ...(base || {}) };
   for (const txt of textos) {
@@ -1347,6 +1364,11 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
 
     // Se for revenda + peças, NÃO inferir medidas/lâmina/etc
     const ehPecas = estado.subtipo_revenda === "pecas";
+
+    if (ehPecas && (!Array.isArray(estado.pecas_avulsas) || estado.pecas_avulsas.length === 0)) {
+      const pecas = inferirPecasAvulsasTexto(txt);
+      if (pecas.length > 0) estado.pecas_avulsas = pecas;
+    }
 
     if (!ehPecas) {
       const medidas = inferirMedidasTexto(txt);
@@ -1401,6 +1423,11 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const patch: Record<string, unknown> = {};
   if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
   if (estado.subtipo_revenda && !baseEstado?.subtipo_revenda) patch.subtipo_revenda = estado.subtipo_revenda;
+
+  if (ehPecas && (!Array.isArray(baseEstado?.pecas_avulsas) || baseEstado.pecas_avulsas.length === 0)) {
+    const pecas = Array.isArray(estado.pecas_avulsas) ? estado.pecas_avulsas : [];
+    if (pecas.length > 0) patch.pecas_avulsas = await enriquecerPecasComEstoque(pecas);
+  }
 
   if (!ehPecas) {
     if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
