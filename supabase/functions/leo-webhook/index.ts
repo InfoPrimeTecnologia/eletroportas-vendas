@@ -1344,6 +1344,7 @@ function inferirPecasAvulsasTexto(texto: string): any[] {
     if (!inicio && !fim) continue;
     const quantidade = Number(String(inicio ? inicio[1] : fim?.[2]).replace(",", "."));
     let nome = String(inicio ? inicio[2] : fim?.[1] || "").replace(/\b(de|da|do|para|com)\b/g, " ").replace(/\s+/g, " ").trim();
+    nome = nome.replace(/^(m|mt|metro|metros)\s+/g, "").trim();
     nome = nome.replace(/\bmotores\b/g, "motor").replace(/\bcontroles\b/g, "controle").replace(/\bcentrais\b/g, "central");
     nome = nome.replace(/\bmotor\s+(\d{2,4})(?!\s*kg)\b/g, "motor $1kg");
     if (Number.isFinite(quantidade) && quantidade > 0 && nome.length >= 3) {
