@@ -419,7 +419,7 @@ td { border-bottom: 1px solid #e6eaf0; padding: 5px; font-size: 8.8px; vertical-
     <div class="card">
       <h2>Especificações</h2>
       ${(o as any).is_pecas_avulsas
-        ? `<strong>Modalidade:</strong> Revenda — peças avulsas<br/><strong>Itens:</strong> ${o.itens.length} peça(s) selecionada(s)`
+        ? `<strong>Modalidade:</strong> ${o.tipo_cliente === "porta_instalada" ? "Porta instalada" : "Revenda"} — peças avulsas<br/><strong>Itens:</strong> ${o.itens.length} peça(s) selecionada(s)`
         : `<strong>Dimensões:</strong> ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m<br/>
       <strong>Área:</strong> ${o.area.toFixed(2).replace(".", ",")}m²<br/>
       <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.incluir_pintura ? o.tipo_pintura.replace("_", " ") : "não inclusa")}`}
