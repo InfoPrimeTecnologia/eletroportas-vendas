@@ -1768,6 +1768,8 @@ function precoFallbackPeca(item: any): { preco: number; codigo: string; nome: st
   }
   if (/\bcontrole\b/.test(alvo)) return { preco: PRECOS.controle_remoto, codigo: "CONTROLE-REMOTO", nome: "Controle remoto" };
   if (/\bcentral\b/.test(alvo)) return { preco: PRECOS.central_comando, codigo: "CENTRAL-COMANDO", nome: "Central de comando" };
+  if (/\bportinhola\b/.test(alvo)) return { preco: PRECOS.portinhola, codigo: "ADIC-001", nome: "Portinhola" };
+  if (/\b(alcapao|alcapa)\b/.test(alvo)) return { preco: PRECOS.alcapao, codigo: "ADIC-002", nome: "Alçapão" };
   return null;
 }
 
