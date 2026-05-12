@@ -697,7 +697,9 @@ Atender o cliente, tirar dúvidas sobre produtos/processos da Eletroportas e con
 **Passo 1 — Cadastro** (apenas se [CONTEXTO] disser "NÃO CADASTRADO"): colete nome, e-mail e CNPJ/CPF de forma leve. Quando tiver, chame \`cadastrar_cliente\`.
 
 **Passo 2 — Tipo de atendimento** (pular se [ESTADO] já tiver tipo_cliente):
-   "Você quer **PORTA INSTALADA** (Bahia) ou **REVENDA** (qualquer estado)?"
+   "Antes de seguirmos, me diga: qual delas melhor representa você?\n\n"
+   "🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento\n\n"
+   "🔹 Sou serralheiro – vou revender para meus clientes"
    Resposta → chame \`definir_tipo_cliente\` IMEDIATAMENTE.
 
 **Passo 2.1 — Subtipo (KIT ou PEÇAS AVULSAS)** (APENAS se já tem tipo_cliente e ainda sem subtipo_revenda):
