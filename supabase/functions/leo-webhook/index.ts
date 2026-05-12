@@ -1456,7 +1456,7 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
       if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
 
       const adicionais = inferirAdicionaisTexto(txt, Boolean(estado.tipo_perfil && !estado.adicionais_perguntado));
-      if (adicionais && estado.tipo_perfil && !estado.adicionais_perguntado) {
+      if (adicionais && estado.tipo_perfil && (!estado.adicionais_perguntado || sub === "kit")) {
         estado.adicionais = adicionais;
         estado.adicionais_perguntado = true;
       }
@@ -1553,7 +1553,7 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
       }
     }
 
-    if (estado.adicionais_perguntado && !baseEstado?.adicionais_perguntado) {
+    if (estado.adicionais_perguntado && (mudouSubtipo || !baseEstado?.adicionais_perguntado)) {
       patch.adicionais = estado.adicionais || { portinhola: false, alcapao: false };
       patch.adicionais_perguntado = true;
     }
