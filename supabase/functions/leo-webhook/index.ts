@@ -2180,7 +2180,10 @@ Deno.serve(async (req) => {
 
     // Em conversa nova, envia saudação fixa antes da IA
     if (isNova) {
-      const saudacao = `Olá, sou o Leo da Eletroportas. ${saudacaoHorario()}!`;
+      const primeiroNome = (clienteExistente?.CLI_NOME || "").trim().split(/\s+/)[0] || "";
+      const saudacao = primeiroNome
+        ? `Olá ${primeiroNome}, sou o Leo da Eletroportas. ${saudacaoHorario()}!`
+        : `Olá, sou o Leo da Eletroportas. ${saudacaoHorario()}!`;
       await enviarTexto(telefone, saudacao);
       await salvarMensagem(conversa.id, "assistant", saudacao);
       // ➕ DASHBOARD: cria lead em "Contato Inicial" assim que a conversa começa
