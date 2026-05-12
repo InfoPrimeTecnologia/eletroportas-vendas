@@ -1292,29 +1292,47 @@ function inferirCepTexto(texto: string): string | null {
   return match ? match[0].replace(/\D/g, "") : null;
 }
 
+function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
+  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!t.trim()) return null;
+  if (/\b(pec[aá]s?\s*avuls(a|as)|avuls(a|as|o)|somente\s*pec|so\s*pec|apenas\s*pec|peca|pecas|pe[cç]a)\b/.test(t)) return "pecas";
+  if (/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "kit";
+  return null;
+}
+
 function aplicarInferenciasEmEstado(base: any, textos: string[]) {
   const estado = { ...(base || {}) };
   for (const txt of textos) {
     const tipo = inferirTipoClienteTexto(txt);
     if (tipo && (!estado.tipo_cliente || estado.tipo_cliente === "indefinido")) estado.tipo_cliente = tipo;
 
-    const medidas = inferirMedidasTexto(txt);
-    if (medidas && (estado.largura == null || estado.altura == null)) {
-      estado.largura = medidas.largura;
-      estado.altura = medidas.altura;
+    if (estado.tipo_cliente === "revenda" && !estado.subtipo_revenda) {
+      const sub = inferirSubtipoRevendaTexto(txt);
+      if (sub) estado.subtipo_revenda = sub;
     }
 
-    const lamina = inferirLaminaTexto(txt);
-    if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
+    // Se for revenda + peças, NÃO inferir medidas/lâmina/etc
+    const ehPecas = estado.tipo_cliente === "revenda" && estado.subtipo_revenda === "pecas";
 
-    const adicionais = inferirAdicionaisTexto(txt);
-    if (adicionais && estado.tipo_perfil && !estado.adicionais_perguntado) {
-      estado.adicionais = adicionais;
-      estado.adicionais_perguntado = true;
+    if (!ehPecas) {
+      const medidas = inferirMedidasTexto(txt);
+      if (medidas && (estado.largura == null || estado.altura == null)) {
+        estado.largura = medidas.largura;
+        estado.altura = medidas.altura;
+      }
+
+      const lamina = inferirLaminaTexto(txt);
+      if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
+
+      const adicionais = inferirAdicionaisTexto(txt);
+      if (adicionais && estado.tipo_perfil && !estado.adicionais_perguntado) {
+        estado.adicionais = adicionais;
+        estado.adicionais_perguntado = true;
+      }
+
+      const cep = inferirCepTexto(txt);
+      if (cep && estado.tipo_cliente === "porta_instalada" && !estado.cep) estado.cep = cep;
     }
-
-    const cep = inferirCepTexto(txt);
-    if (cep && estado.tipo_cliente === "porta_instalada" && !estado.cep) estado.cep = cep;
   }
   return estado;
 }
