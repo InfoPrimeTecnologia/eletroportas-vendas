@@ -252,6 +252,7 @@ const PRECOS = {
   motor_400kg: 935.53,
   motor_500kg: 1020.90,
   motor_800kg: 1560.00,
+  motor_1000kg: 2811.69,
   motor_1500kg: 5375.35,
   controle_remoto: 89.90,
   central_comando: 180.50,
