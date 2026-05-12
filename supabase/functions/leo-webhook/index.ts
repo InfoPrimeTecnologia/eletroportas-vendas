@@ -1521,6 +1521,7 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
         patch.frete = 350;
         patch.endereco_instalacao = null;
       }
+    }
   }
 
   // Entrega/retirada — captura para porta_instalada E revenda (em revenda evita loop caso a IA pergunte)
