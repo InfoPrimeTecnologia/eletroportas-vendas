@@ -1521,18 +1521,15 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
         patch.frete = 350;
         patch.endereco_instalacao = null;
       }
-    }
+  }
 
-    // Entrega/retirada (apenas porta_instalada)
-    if (estado?.tipo_cliente === "porta_instalada" && !baseEstado?.entrega_perguntado) {
-      const ent = inferirEntregaTexto(texto);
-      if (ent) {
-        patch.entrega_perguntado = true;
-        patch.quer_entrega = ent.quer_entrega;
-        if (!ent.quer_entrega) {
-          patch.frete = 0;
-        }
-      }
+  // Entrega/retirada — captura para porta_instalada E revenda (em revenda evita loop caso a IA pergunte)
+  if (!baseEstado?.entrega_perguntado) {
+    const ent = inferirEntregaTexto(texto);
+    if (ent) {
+      patch.entrega_perguntado = true;
+      patch.quer_entrega = ent.quer_entrega;
+      if (!ent.quer_entrega) patch.frete = 0;
     }
   }
 
