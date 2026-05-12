@@ -2395,20 +2395,20 @@ Deno.serve(async (req) => {
         .maybeSingle();
       const v = (x: any) => (x === null || x === undefined || x === "" || x === "indefinido") ? "PENDENTE" : String(x);
       const tc = v(c?.tipo_cliente);
-      const ehRevenda = c?.tipo_cliente === "revenda";
-      const ehPecas = ehRevenda && c?.subtipo_revenda === "pecas";
-      const precisaFrete = c?.tipo_cliente === "porta_instalada";
+      const tipoValido = c?.tipo_cliente === "revenda" || c?.tipo_cliente === "porta_instalada";
+      const ehPecas = c?.subtipo_revenda === "pecas";
+      const ehPorta = c?.tipo_cliente === "porta_instalada";
 
       const linhas: string[] = [`tipo_cliente=${tc}`];
 
-      if (ehRevenda) {
+      if (tipoValido) {
         linhas.push(`subtipo_revenda=${v(c?.subtipo_revenda)}`);
       }
 
       if (ehPecas) {
         const pecas = Array.isArray((c as any)?.pecas_avulsas) ? (c as any).pecas_avulsas : [];
         linhas.push(`pecas_avulsas=${pecas.length === 0 ? "PENDENTE" : `${pecas.length} item(ns)`}`);
-      } else {
+      } else if (c?.subtipo_revenda === "kit") {
         const pinturaStr = c?.pintura_perguntado
           ? (c?.quer_pintura ? `cor=${c?.tipo_pintura || "PENDENTE_COR"}` : "dispensou")
           : "PENDENTE";
@@ -2422,7 +2422,13 @@ Deno.serve(async (req) => {
           `pintura_perguntado=${pinturaStr}`,
           `adicionais_perguntado=${adicionaisStr}`,
         );
-        if (precisaFrete) linhas.push(`cep=${v(c?.cep)}`);
+      }
+
+      if (ehPorta) {
+        const entregaStr = c?.entrega_perguntado
+          ? (c?.quer_entrega ? `quer_entrega=true (CEP=${v(c?.cep)})` : "quer_entrega=false (cliente vai BUSCAR — sem frete)")
+          : "PENDENTE";
+        linhas.push(`entrega=${entregaStr}`);
       }
 
       const pendentes = linhas.filter((l) => l.endsWith("=PENDENTE")).map((l) => l.split("=")[0]);
