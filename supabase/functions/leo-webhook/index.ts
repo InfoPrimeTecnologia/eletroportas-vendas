@@ -1707,29 +1707,77 @@ async function contarMensagensUserApos(conversation_id: string, sinceIso: string
   return count || 0;
 }
 
-/** Resolve preço/SKU/unidade no estoque para uma lista de peças (busca por sku ou nome). */
+function normalizarBuscaEstoque(valor: unknown): string {
+  return String(valor || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\bmotores\b/g, "motor")
+    .replace(/\bautomatizadores\b/g, "automatizador")
+    .replace(/\bcontroles\b/g, "controle")
+    .replace(/\bcentrais\b/g, "central")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function pontuarEstoqueParaPeca(row: any, item: any): number {
+  const alvo = normalizarBuscaEstoque(`${item?.produto_nome || ""} ${item?.descricao || ""}`);
+  const texto = normalizarBuscaEstoque(`${row?.produto_nome || ""} ${row?.descricao || ""}`);
+  let score = 0;
+  const kgAlvo = alvo.match(/\b(\d{2,4})\s*kg?\b/)?.[1];
+  if (alvo && texto.includes(alvo)) score += 50;
+  if (kgAlvo && new RegExp(`\\b${kgAlvo}\\s*kg?\\b`).test(texto)) score += 40;
+  if (/\bmotor\b/.test(alvo) && /\b(motor|automatizador)\b/.test(texto)) score += 25;
+  if (/\bcontrole\b/.test(alvo) && /\bcontrole\b/.test(texto)) score += 20;
+  if (/\bcentral\b/.test(alvo) && /\bcentral\b/.test(texto)) score += 20;
+  if (Number(row?.preco_venda) > 0) score += 5;
+  return score;
+}
+
+async function buscarEstoqueParaPeca(item: any) {
+  if (item.codigo_sku && item.codigo_sku !== "AVULSA") {
+    const { data } = await dashboardDb
+      .from("estoque")
+      .select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida")
+      .eq("codigo_sku", item.codigo_sku)
+      .maybeSingle();
+    if (data) return data;
+  }
+
+  const nome = normalizarBuscaEstoque(item.produto_nome || item.descricao || "");
+  if (!nome) return null;
+  const kg = nome.match(/\b(\d{2,4})\s*kg?\b/)?.[1];
+  const termos = Array.from(new Set([
+    nome,
+    kg && nome.includes("motor") ? `motor ${kg}` : null,
+    kg && nome.includes("motor") ? `motor ${kg}kg` : null,
+    kg && nome.includes("motor") ? `automatizador ${kg}` : null,
+    kg && nome.includes("motor") ? `automatizador ${kg}kg` : null,
+    kg ? `${kg}kg` : null,
+  ].filter(Boolean) as string[]));
+
+  const candidatos: any[] = [];
+  for (const termo of termos) {
+    const { data } = await dashboardDb
+      .from("estoque")
+      .select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida")
+      .or(`produto_nome.ilike.%${termo}%,descricao.ilike.%${termo}%`)
+      .limit(10);
+    if (data?.length) candidatos.push(...data);
+  }
+
+  const unicos = Array.from(new Map(candidatos.map((c) => [c.codigo_sku || `${c.produto_nome}-${c.descricao}`, c])).values());
+  return unicos
+    .map((row) => ({ row, score: pontuarEstoqueParaPeca(row, item) }))
+    .sort((a, b) => b.score - a.score)[0]?.row || null;
+}
+
+/** Resolve preço/SKU/unidade no estoque para uma lista de peças (busca por sku, nome e descrição). */
 async function enriquecerPecasComEstoque(itens: any[]): Promise<any[]> {
   const out: any[] = [];
   for (const raw of (itens || [])) {
     const item = { ...raw };
-    let row: any = null;
-    if (item.codigo_sku) {
-      const { data } = await dashboardDb
-        .from("estoque")
-        .select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida")
-        .eq("codigo_sku", item.codigo_sku)
-        .maybeSingle();
-      row = data || null;
-    }
-    if (!row && item.produto_nome) {
-      const { data } = await dashboardDb
-        .from("estoque")
-        .select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida")
-        .ilike("produto_nome", `%${item.produto_nome}%`)
-        .limit(1)
-        .maybeSingle();
-      row = data || null;
-    }
+    const row: any = await buscarEstoqueParaPeca(item);
     out.push({
       codigo_sku: item.codigo_sku || row?.codigo_sku || "AVULSA",
       produto_nome: row?.produto_nome || item.produto_nome,
