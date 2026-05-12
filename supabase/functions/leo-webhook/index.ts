@@ -2509,52 +2509,55 @@ Deno.serve(async (req) => {
 
           const tcRawV = String(estado?.tipo_cliente || "").toLowerCase().trim();
           const tcValid = tcRawV === "porta_instalada" || tcRawV === "revenda";
-          const ehPecasAvulsas = tcRawV === "revenda" && estado?.subtipo_revenda === "pecas";
+          const ehPecasAvulsas = estado?.subtipo_revenda === "pecas";
 
           const faltando: string[] = [];
           if (!tcValid) faltando.push("tipo_cliente");
+          if (tcValid && !estado?.subtipo_revenda) faltando.push("subtipo_revenda");
 
           if (ehPecasAvulsas) {
             const pecas = Array.isArray((estado as any)?.pecas_avulsas) ? (estado as any).pecas_avulsas : [];
             if (pecas.length === 0) faltando.push("pecas_avulsas");
-          } else {
+          } else if (estado?.subtipo_revenda === "kit") {
             const larguraNum = Number(estado?.largura);
             const alturaNum = Number(estado?.altura);
             const perfilRaw = String(estado?.tipo_perfil || "").toLowerCase();
             const perfilValid = ["fechado", "transvision", "oblongo"].includes(perfilRaw);
-            const freteNum = estado?.frete != null ? Number(estado.frete) : NaN;
 
-            if (tcRawV === "revenda" && !estado?.subtipo_revenda) faltando.push("subtipo_revenda");
             if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
             if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
             if (!perfilValid) faltando.push("tipo_perfil");
             if (!estado?.pintura_perguntado) faltando.push("pintura");
             if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
             if (!estado?.adicionais_perguntado) faltando.push("adicionais");
-            if (tcValid && tcRawV === "porta_instalada" && (!Number.isFinite(freteNum) || freteNum <= 0)) {
-              faltando.push("frete");
-            }
+          }
+
+          if (tcValid && tcRawV === "porta_instalada") {
+            if (!estado?.entrega_perguntado) faltando.push("entrega");
+            else if (estado?.quer_entrega && !estado?.cep) faltando.push("cep");
           }
 
           if (faltando.length > 0) {
             gerarOrcamentoFalhas++;
             console.warn(`🚫 gerar_orcamento BLOQUEADO (tentativa ${gerarOrcamentoFalhas}) — [ESTADO] faltando:`, faltando.join(", "));
             const proximo = faltando[0];
-            const proximaPergunta = proximo === "frete"
-              ? "Pergunte AGORA: 'Por último, qual o **CEP do local da instalação**? Assim calculo o frete certinho.' NÃO chame nenhuma tool nesta resposta."
-              : proximo === "adicionais"
-                ? "Pergunte AGORA, de forma natural, se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando ele responder, chame definir_adicionais. NÃO chame gerar_orcamento agora."
-                : (proximo === "largura" || proximo === "altura")
-                  ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
-                  : proximo === "tipo_perfil"
-                    ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
-                    : proximo === "tipo_cliente"
-                      ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
-                      : proximo === "subtipo_revenda"
-                        ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
-                        : proximo === "pecas_avulsas"
-                          ? "Pergunte AGORA quais peças e quantidades o cliente precisa. Quando ele confirmar, chame definir_pecas_avulsas com a lista. NÃO chame gerar_orcamento agora."
-                          : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
+            const proximaPergunta = proximo === "entrega"
+              ? "Pergunte AGORA: 'Você prefere que a gente **entregue** no local, ou prefere **buscar/retirar** com a gente?' Quando responder, chame definir_entrega. NÃO chame nenhuma outra tool."
+              : proximo === "cep"
+                ? "Pergunte AGORA: 'Qual o **CEP do local da entrega**?' Quando responder, chame calcular_frete_cep. NÃO chame nenhuma outra tool."
+                : proximo === "adicionais"
+                  ? "Pergunte AGORA, de forma natural, se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando ele responder, chame definir_adicionais. NÃO chame gerar_orcamento agora."
+                  : (proximo === "largura" || proximo === "altura")
+                    ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
+                    : proximo === "tipo_perfil"
+                      ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
+                      : proximo === "tipo_cliente"
+                        ? "Pergunte AGORA se o cliente quer PORTA INSTALADA ou REVENDA. NÃO chame nenhuma tool."
+                        : proximo === "subtipo_revenda"
+                          ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
+                          : proximo === "pecas_avulsas"
+                            ? "Pergunte AGORA quais peças e quantidades o cliente precisa. Quando ele confirmar, chame definir_pecas_avulsas com a lista. NÃO chame gerar_orcamento agora."
+                            : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
               erro: "DADOS_INSUFICIENTES",
