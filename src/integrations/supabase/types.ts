@@ -205,12 +205,14 @@ export type Database = {
           cep: string | null
           created_at: string
           endereco_instalacao: string | null
+          entrega_perguntado: boolean
           frete: number | null
           id: string
           largura: number | null
           nome_cliente: string | null
           pecas_avulsas: Json
           pintura_perguntado: boolean
+          quer_entrega: boolean | null
           quer_pintura: boolean | null
           status: string
           subtipo_revenda: string | null
@@ -228,12 +230,14 @@ export type Database = {
           cep?: string | null
           created_at?: string
           endereco_instalacao?: string | null
+          entrega_perguntado?: boolean
           frete?: number | null
           id?: string
           largura?: number | null
           nome_cliente?: string | null
           pecas_avulsas?: Json
           pintura_perguntado?: boolean
+          quer_entrega?: boolean | null
           quer_pintura?: boolean | null
           status?: string
           subtipo_revenda?: string | null
@@ -251,12 +255,14 @@ export type Database = {
           cep?: string | null
           created_at?: string
           endereco_instalacao?: string | null
+          entrega_perguntado?: boolean
           frete?: number | null
           id?: string
           largura?: number | null
           nome_cliente?: string | null
           pecas_avulsas?: Json
           pintura_perguntado?: boolean
+          quer_entrega?: boolean | null
           quer_pintura?: boolean | null
           status?: string
           subtipo_revenda?: string | null
