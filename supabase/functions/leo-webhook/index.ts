@@ -1364,6 +1364,9 @@ function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
   const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (!t.trim()) return null;
   if (/\b(pec[aá]s?\s*avuls(a|as)|avuls(a|as|o)|somente\s*pec|so\s*pec|apenas\s*pec|peca|pecas|pe[cç]a)\b/.test(t)) return "pecas";
+  // Se o cliente já informou item + quantidade (ex: "queria orçar 5 motores de 200"),
+  // isso é intenção clara de PEÇAS AVULSAS. Não repetir a pergunta KIT/PEÇAS.
+  if (inferirPecasAvulsasTexto(texto).length > 0 && !/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "pecas";
   if (/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "kit";
   return null;
 }
