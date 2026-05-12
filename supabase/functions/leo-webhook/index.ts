@@ -1341,7 +1341,7 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const estadoRes = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1362,45 +1362,50 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   const textos = [texto, ...((histRes.data || []) as any[]).map((m) => String(m?.content || ""))].filter(Boolean);
   const estado = aplicarInferenciasEmEstado(baseEstado, textos);
 
+  const ehPecas = estado.tipo_cliente === "revenda" && estado.subtipo_revenda === "pecas";
+
   const patch: Record<string, unknown> = {};
   if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
-  if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
-  if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
-  if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
+  if (estado.subtipo_revenda && !baseEstado?.subtipo_revenda) patch.subtipo_revenda = estado.subtipo_revenda;
 
-  // Pintura: só infere após o perfil estar definido (significa que a pergunta de pintura foi/é a próxima)
-  if (estado.tipo_perfil && !baseEstado?.pintura_perguntado) {
-    const pint = inferirPinturaTexto(texto);
-    if (pint) {
-      patch.pintura_perguntado = true;
-      patch.quer_pintura = pint.quer_pintura;
-      patch.tipo_pintura = pint.quer_pintura ? (pint.tipo_pintura || null) : null;
-      // Se quer pintura mas não escolheu cor, deixa pintura_perguntado=false para o agente perguntar a cor
-      if (pint.quer_pintura && !pint.tipo_pintura) {
-        patch.pintura_perguntado = false;
+  if (!ehPecas) {
+    if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
+    if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
+    if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
+
+    // Pintura: só infere após o perfil estar definido
+    if (estado.tipo_perfil && !baseEstado?.pintura_perguntado) {
+      const pint = inferirPinturaTexto(texto);
+      if (pint) {
+        patch.pintura_perguntado = true;
+        patch.quer_pintura = pint.quer_pintura;
+        patch.tipo_pintura = pint.quer_pintura ? (pint.tipo_pintura || null) : null;
+        if (pint.quer_pintura && !pint.tipo_pintura) {
+          patch.pintura_perguntado = false;
+        }
       }
     }
-  }
 
-  if (estado.adicionais_perguntado && !baseEstado?.adicionais_perguntado) {
-    patch.adicionais = estado.adicionais || { portinhola: false, alcapao: false };
-    patch.adicionais_perguntado = true;
-  }
+    if (estado.adicionais_perguntado && !baseEstado?.adicionais_perguntado) {
+      patch.adicionais = estado.adicionais || { portinhola: false, alcapao: false };
+      patch.adicionais_perguntado = true;
+    }
 
-  const cep = inferirCepTexto(texto);
-  if (cep && estado?.tipo_cliente === "porta_instalada" && !baseEstado?.cep) {
-    const frete: any = await calcularFretePorCep(cep);
-    if (frete.ok) {
-      patch.cep = frete.cep;
-      patch.frete = frete.frete;
-      patch.endereco_instalacao = [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
-        .filter((x: any) => x && String(x).trim())
-        .join(", ") || null;
-    } else if (!frete.fora_da_bahia) {
-      console.warn(`⚠️ CEP ${cep} aceito com fallback para evitar loop: ${frete.error || "consulta indisponível"}`);
-      patch.cep = cep;
-      patch.frete = 350;
-      patch.endereco_instalacao = null;
+    const cep = inferirCepTexto(texto);
+    if (cep && estado?.tipo_cliente === "porta_instalada" && !baseEstado?.cep) {
+      const frete: any = await calcularFretePorCep(cep);
+      if (frete.ok) {
+        patch.cep = frete.cep;
+        patch.frete = frete.frete;
+        patch.endereco_instalacao = [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
+          .filter((x: any) => x && String(x).trim())
+          .join(", ") || null;
+      } else if (!frete.fora_da_bahia) {
+        console.warn(`⚠️ CEP ${cep} aceito com fallback para evitar loop: ${frete.error || "consulta indisponível"}`);
+        patch.cep = cep;
+        patch.frete = 350;
+        patch.endereco_instalacao = null;
+      }
     }
   }
 
@@ -1421,7 +1426,7 @@ async function carregarEstadoConversa(conversaId: string) {
   const { data, error } = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
+      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura")
       .eq("id", conversaId)
       .maybeSingle()
   );
@@ -1435,10 +1440,26 @@ async function carregarEstadoConversa(conversaId: string) {
 function proximaPerguntaDeterministica(estado: any): string | null {
   const tipo = String(estado?.tipo_cliente || "").toLowerCase();
   const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
-  const largura = Number(estado?.largura);
-  const altura = Number(estado?.altura);
 
   if (!tipoValido) return "Você quer *PORTA INSTALADA* (Bahia) ou *REVENDA* (qualquer estado)?";
+
+  // Branch de revenda: perguntar subtipo
+  if (tipo === "revenda" && !estado?.subtipo_revenda) {
+    return "Você precisa de um *KIT* completo de porta de enrolar, ou apenas *PEÇAS AVULSAS*?";
+  }
+
+  // Revenda + peças avulsas: precisa apenas da lista de peças
+  if (tipo === "revenda" && estado?.subtipo_revenda === "pecas") {
+    const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
+    if (pecas.length === 0) {
+      return "Perfeito. Quais *peças* você precisa e em qual *quantidade*? Pode me mandar a lista (ex: 2 motores 500kg, 10m de guia lateral, 1 controle remoto).";
+    }
+    return null;
+  }
+
+  // Fluxo padrão (kit ou porta_instalada)
+  const largura = Number(estado?.largura);
+  const altura = Number(estado?.altura);
   if (!Number.isFinite(largura) || largura <= 0 || !Number.isFinite(altura) || altura <= 0) {
     return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
   }
@@ -1463,13 +1484,20 @@ function proximaPerguntaDeterministica(estado: any): string | null {
 function estadoProntoParaOrcamento(estado: any): boolean {
   const tipo = String(estado?.tipo_cliente || "").toLowerCase();
   const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
+  if (!tipoValido) return false;
+
+  // Revenda + peças: pronto quando há ao menos 1 peça
+  if (tipo === "revenda" && estado?.subtipo_revenda === "pecas") {
+    const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
+    return pecas.length > 0;
+  }
+
   const largura = Number(estado?.largura);
   const altura = Number(estado?.altura);
   const perfil = String(estado?.tipo_perfil || "").toLowerCase();
   const perfilValido = ["fechado", "transvision", "oblongo"].includes(perfil);
   const pinturaOk = Boolean(estado?.pintura_perguntado) && (!estado?.quer_pintura || Boolean(estado?.tipo_pintura));
   return Boolean(
-    tipoValido &&
     Number.isFinite(largura) && largura > 0 && largura <= 20 &&
     Number.isFinite(altura) && altura > 0 && altura <= 20 &&
     perfilValido &&
