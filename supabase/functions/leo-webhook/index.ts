@@ -1411,9 +1411,30 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
     if (tipo && (!estado.tipo_cliente || estado.tipo_cliente === "indefinido")) estado.tipo_cliente = tipo;
 
     const tipoDef = estado.tipo_cliente === "revenda" || estado.tipo_cliente === "porta_instalada";
-    if (tipoDef && !estado.subtipo_revenda) {
+    if (tipoDef) {
       const sub = inferirSubtipoRevendaTexto(txt);
-      if (sub) estado.subtipo_revenda = sub;
+      if (sub && sub !== estado.subtipo_revenda) {
+        estado.subtipo_revenda = sub;
+        if (sub === "kit") {
+          // Nova cotação de KIT no meio de uma conversa de peças: limpa dados incompatíveis
+          // para forçar um PDF novo e não reutilizar o orçamento antigo.
+          estado.pecas_avulsas = [];
+          estado.pintura_perguntado = false;
+          estado.quer_pintura = null;
+          estado.tipo_pintura = null;
+          estado.adicionais = { portinhola: false, alcapao: false };
+          estado.adicionais_perguntado = false;
+        } else if (sub === "pecas") {
+          estado.largura = null;
+          estado.altura = null;
+          estado.tipo_perfil = null;
+          estado.pintura_perguntado = false;
+          estado.quer_pintura = null;
+          estado.tipo_pintura = null;
+          estado.adicionais = { portinhola: false, alcapao: false };
+          estado.adicionais_perguntado = false;
+        }
+      }
     }
 
     // Se for revenda + peças, NÃO inferir medidas/lâmina/etc
@@ -1434,7 +1455,7 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
       const lamina = inferirLaminaTexto(txt);
       if (lamina && !estado.tipo_perfil) estado.tipo_perfil = lamina;
 
-      const adicionais = inferirAdicionaisTexto(txt);
+      const adicionais = inferirAdicionaisTexto(txt, Boolean(estado.tipo_perfil && !estado.adicionais_perguntado));
       if (adicionais && estado.tipo_perfil && !estado.adicionais_perguntado) {
         estado.adicionais = adicionais;
         estado.adicionais_perguntado = true;
