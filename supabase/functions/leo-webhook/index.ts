@@ -1507,7 +1507,28 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
 
   const patch: Record<string, unknown> = {};
   if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
-  if (estado.subtipo_revenda && !baseEstado?.subtipo_revenda) patch.subtipo_revenda = estado.subtipo_revenda;
+  const subtipoAtual = baseEstado?.subtipo_revenda || null;
+  const mudouSubtipo = Boolean(estado.subtipo_revenda && estado.subtipo_revenda !== subtipoAtual);
+  if (estado.subtipo_revenda && (!subtipoAtual || mudouSubtipo)) {
+    patch.subtipo_revenda = estado.subtipo_revenda;
+    if (estado.subtipo_revenda === "kit") {
+      patch.pecas_avulsas = [];
+      patch.pintura_perguntado = false;
+      patch.quer_pintura = null;
+      patch.tipo_pintura = null;
+      patch.adicionais = { portinhola: false, alcapao: false };
+      patch.adicionais_perguntado = false;
+    } else if (estado.subtipo_revenda === "pecas") {
+      patch.largura = null;
+      patch.altura = null;
+      patch.tipo_perfil = null;
+      patch.pintura_perguntado = false;
+      patch.quer_pintura = null;
+      patch.tipo_pintura = null;
+      patch.adicionais = { portinhola: false, alcapao: false };
+      patch.adicionais_perguntado = false;
+    }
+  }
 
   if (ehPecas && (!Array.isArray(baseEstado?.pecas_avulsas) || baseEstado.pecas_avulsas.length === 0)) {
     const pecas = Array.isArray(estado.pecas_avulsas) ? estado.pecas_avulsas : [];
@@ -1515,9 +1536,9 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   }
 
   if (!ehPecas) {
-    if (estado.largura != null && baseEstado?.largura == null) patch.largura = estado.largura;
-    if (estado.altura != null && baseEstado?.altura == null) patch.altura = estado.altura;
-    if (estado.tipo_perfil && !baseEstado?.tipo_perfil) patch.tipo_perfil = estado.tipo_perfil;
+    if (estado.largura != null && (mudouSubtipo || baseEstado?.largura == null || Number(baseEstado?.largura) !== Number(estado.largura))) patch.largura = estado.largura;
+    if (estado.altura != null && (mudouSubtipo || baseEstado?.altura == null || Number(baseEstado?.altura) !== Number(estado.altura))) patch.altura = estado.altura;
+    if (estado.tipo_perfil && (mudouSubtipo || !baseEstado?.tipo_perfil || String(baseEstado?.tipo_perfil).toLowerCase() !== String(estado.tipo_perfil).toLowerCase())) patch.tipo_perfil = estado.tipo_perfil;
 
     // Pintura: só infere após o perfil estar definido
     if (estado.tipo_perfil && !baseEstado?.pintura_perguntado) {
