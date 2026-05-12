@@ -2694,6 +2694,15 @@ Deno.serve(async (req) => {
               .from("leo_conversations")
               .update({ nome_cliente: args.nome })
               .eq("id", conversa.id);
+            const cliNovo = await buscarClientePorTelefone(telefone);
+            if (ehPendenteSerralheiro((cliNovo as any)?.tipo_cliente)) {
+              const msgPend = montarMensagemPendenteSerralheiro((cliNovo as any)?.CLI_NOME || args.nome || nome || "");
+              await enviarTexto(telefone, msgPend);
+              await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true, cadastro_novo: true });
+              return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
             toolResult = {
               ok: true,
               instrucao: "Cliente cadastrado. Agora pergunte, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'.",
