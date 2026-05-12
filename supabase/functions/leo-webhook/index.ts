@@ -2690,7 +2690,59 @@ Deno.serve(async (req) => {
             toolResult = {
               ok: true,
               tipo_cliente: tcNorm,
-              instrucao: "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta (ex: 4x3).",
+              instrucao: tcNorm === "revenda"
+                ? "Tipo REVENDA gravado. NÃO confirme. Siga DIRETO ao Passo 2.1: pergunte se ele precisa de KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS."
+                : "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 3 perguntando largura e altura da porta (ex: 4x3).",
+            };
+          }
+        } else if (fnName === "definir_subtipo_revenda") {
+          const sub = String(args.subtipo || "").toLowerCase();
+          const subNorm: "kit" | "pecas" | null = sub === "kit" ? "kit" : sub === "pecas" ? "pecas" : null;
+          if (!subNorm) {
+            toolResult = { ok: false, error: "subtipo inválido. Use 'kit' ou 'pecas'." };
+          } else {
+            await supabase
+              .from("leo_conversations")
+              .update({ subtipo_revenda: subNorm, ultima_mensagem_at: new Date().toISOString() })
+              .eq("id", conversa.id);
+            toolResult = {
+              ok: true,
+              subtipo: subNorm,
+              instrucao: subNorm === "pecas"
+                ? "Subtipo PEÇAS AVULSAS gravado. NÃO confirme. Siga DIRETO ao Passo 2.2: pergunte quais peças e quantidades o cliente precisa. Use listar_pecas_disponiveis se precisar consultar o catálogo."
+                : "Subtipo KIT gravado. NÃO confirme. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.",
+            };
+          }
+        } else if (fnName === "listar_pecas_disponiveis") {
+          const busca = String(args.busca || "").trim();
+          let q = dashboardDb.from("estoque").select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida, quantidade").limit(50);
+          if (busca) q = q.ilike("produto_nome", `%${busca}%`);
+          const { data, error } = await q;
+          if (error) {
+            toolResult = { ok: false, error: error.message };
+          } else {
+            toolResult = {
+              ok: true,
+              total: data?.length || 0,
+              itens: data || [],
+              instrucao: "Catálogo retornado. Use estes códigos/preços para confirmar com o cliente. NÃO invente itens fora desta lista.",
+            };
+          }
+        } else if (fnName === "definir_pecas_avulsas") {
+          const itensRaw = Array.isArray(args.itens) ? args.itens : [];
+          if (itensRaw.length === 0) {
+            toolResult = { ok: false, error: "Lista de peças vazia. Pergunte ao cliente quais peças e quantidades." };
+          } else {
+            const enriquecidas = await enriquecerPecasComEstoque(itensRaw);
+            await supabase
+              .from("leo_conversations")
+              .update({ pecas_avulsas: enriquecidas, ultima_mensagem_at: new Date().toISOString() })
+              .eq("id", conversa.id);
+            toolResult = {
+              ok: true,
+              total: enriquecidas.length,
+              itens: enriquecidas,
+              instrucao: "Peças gravadas no [ESTADO]. NÃO liste valores ao cliente. Chame gerar_orcamento agora (sem argumentos).",
             };
           }
         } else if (fnName === "transferir_humano") {
