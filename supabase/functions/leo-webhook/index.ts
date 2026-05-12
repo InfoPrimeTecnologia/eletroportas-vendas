@@ -2846,12 +2846,15 @@ Deno.serve(async (req) => {
               .from("leo_conversations")
               .update({ pecas_avulsas: enriquecidas, ultima_mensagem_at: new Date().toISOString() })
               .eq("id", conversa.id);
-            toolResult = {
-              ok: true,
-              total: enriquecidas.length,
-              itens: enriquecidas,
-              instrucao: "Peças gravadas no [ESTADO]. NÃO liste valores ao cliente. Chame gerar_orcamento agora (sem argumentos).",
-            };
+            const { data: cv3 } = await supabase
+              .from("leo_conversations")
+              .select("tipo_cliente, entrega_perguntado")
+              .eq("id", conversa.id)
+              .maybeSingle();
+            const proxima = cv3?.tipo_cliente === "porta_instalada" && !cv3?.entrega_perguntado
+              ? "Peças gravadas. NÃO confirme nem liste valores. Pergunte AGORA se o cliente quer ENTREGA no local ou prefere BUSCAR/RETIRAR. Quando responder, chame definir_entrega."
+              : "Peças gravadas. NÃO liste valores ao cliente. Chame gerar_orcamento agora (sem argumentos).";
+            toolResult = { ok: true, total: enriquecidas.length, itens: enriquecidas, instrucao: proxima };
           }
         } else if (fnName === "transferir_humano") {
           if (ticketId) await transferirParaHumano(ticketId);
