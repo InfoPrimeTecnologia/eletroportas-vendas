@@ -1342,7 +1342,9 @@ function inferirPecasAvulsasTexto(texto: string): any[] {
     const m = parte.match(/(?:^|\b)(\d+(?:[,.]\d+)?)\s*(?:x\s*)?(.+?)\s*$/i) || parte.match(/(.+?)\s+(\d+(?:[,.]\d+)?)\s*$/i);
     if (!m) continue;
     const quantidade = Number(String(m[1]).replace(",", "."));
-    const nome = String(m[2] || "").replace(/\b(de|da|do|para|com)\b/g, " ").replace(/\s+/g, " ").trim();
+    let nome = String(m[2] || "").replace(/\b(de|da|do|para|com)\b/g, " ").replace(/\s+/g, " ").trim();
+    nome = nome.replace(/\bmotores\b/g, "motor").replace(/\bcontroles\b/g, "controle").replace(/\bcentrais\b/g, "central");
+    nome = nome.replace(/\bmotor\s+(\d{2,4})(?!\s*kg)\b/g, "motor $1kg");
     if (Number.isFinite(quantidade) && quantidade > 0 && nome.length >= 3) {
       itens.push({ produto_nome: nome, quantidade });
     }
