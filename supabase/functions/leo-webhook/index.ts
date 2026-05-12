@@ -1638,8 +1638,8 @@ async function enriquecerPecasComEstoque(itens: any[]): Promise<any[]> {
   return out;
 }
 
-/** Monta um "orçamento" no mesmo formato de calcularOrcamento, mas só com peças avulsas (revenda). */
-function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string) {
+/** Monta um "orçamento" no mesmo formato de calcularOrcamento, mas só com peças avulsas. */
+function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string, opts: { tipo_cliente?: "revenda" | "porta_instalada"; frete?: number; cliente_endereco?: string } = {}) {
   const itens = (itensRaw || []).map((i) => {
     const qty = Number(i.quantidade) || 0;
     const preco = Number(i.preco_unitario) || 0;
@@ -1653,11 +1653,12 @@ function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string) {
     };
   });
   const subtotal = itens.reduce((s, i) => s + i.subtotal, 0);
+  const frete = Number(opts.frete) > 0 ? +Number(opts.frete).toFixed(2) : 0;
   return {
     largura: 0,
     altura: 0,
     area: 0,
-    tipo_cliente: "revenda" as const,
+    tipo_cliente: (opts.tipo_cliente || "revenda") as any,
     tipo_perfil: "—" as any,
     tipo_motor: "—" as any,
     tipo_pintura: "—" as any,
@@ -1665,10 +1666,10 @@ function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string) {
     itens,
     subtotal_produtos: +subtotal.toFixed(2),
     mao_de_obra: 0,
-    frete: 0,
-    total_geral: +subtotal.toFixed(2),
+    frete,
+    total_geral: +(subtotal + frete).toFixed(2),
     cliente_nome,
-    cliente_endereco: undefined,
+    cliente_endereco: opts.cliente_endereco,
     is_pecas_avulsas: true,
   } as any;
 }
@@ -1688,30 +1689,41 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   const estado: any = r.data;
 
   const tipoCliente = String(estado?.tipo_cliente || "").toLowerCase();
+  const ehPorta = tipoCliente === "porta_instalada";
+  const freteEstado = estado?.frete != null ? Number(estado.frete) : 0;
+  // Frete só conta se for porta instalada E cliente quer entrega
+  const freteFinal = (ehPorta && estado?.quer_entrega === true && Number.isFinite(freteEstado) && freteEstado > 0) ? freteEstado : 0;
 
   let orcamento: any;
 
-  // Branch revenda + peças avulsas
-  if (tipoCliente === "revenda" && estado?.subtipo_revenda === "pecas") {
+  // Branch peças avulsas (revenda OU porta instalada)
+  if (estado?.subtipo_revenda === "pecas") {
     const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
     if (pecas.length === 0) return { ok: false, faltando: ["pecas_avulsas"] };
+    if (ehPorta && !estado?.entrega_perguntado) return { ok: false, faltando: ["entrega"] };
+    if (ehPorta && estado?.quer_entrega === true && !estado?.cep) return { ok: false, faltando: ["cep"] };
     const enriquecidas = await enriquecerPecasComEstoque(pecas);
-    orcamento = montarOrcamentoPecas(enriquecidas, nome);
+    orcamento = montarOrcamentoPecas(enriquecidas, nome, {
+      tipo_cliente: ehPorta ? "porta_instalada" : "revenda",
+      frete: freteFinal,
+      cliente_endereco: estado?.endereco_instalacao || undefined,
+    });
   } else {
     const largura = Number(estado?.largura);
     const altura = Number(estado?.altura);
     const tipoPerfil = String(estado?.tipo_perfil || "").toLowerCase();
-    const frete = estado?.frete != null ? Number(estado.frete) : 0;
 
     const faltando: string[] = [];
     if (tipoCliente !== "porta_instalada" && tipoCliente !== "revenda") faltando.push("tipo_cliente");
+    if (!estado?.subtipo_revenda) faltando.push("subtipo_revenda");
     if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
     if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
     if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
     if (!estado?.pintura_perguntado) faltando.push("pintura");
     if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
     if (!estado?.adicionais_perguntado) faltando.push("adicionais");
-    if (tipoCliente === "porta_instalada" && (!Number.isFinite(frete) || frete <= 0)) faltando.push("frete");
+    if (ehPorta && !estado?.entrega_perguntado) faltando.push("entrega");
+    if (ehPorta && estado?.quer_entrega === true && !estado?.cep) faltando.push("cep");
     if (faltando.length) return { ok: false, faltando };
 
     orcamento = calcularOrcamento({
