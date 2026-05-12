@@ -36,6 +36,7 @@ const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Funil de Vendas", url: "/funil", icon: Filter },
   { title: "Clientes", url: "/clientes", icon: Users },
+  { title: "Validação Serralheiro", url: "/validacao-serralheiro", icon: ShieldCheck },
   { title: "Estoque", url: "/estoque", icon: Package },
 ];
 
