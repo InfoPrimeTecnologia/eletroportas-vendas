@@ -134,7 +134,8 @@ async function cadastrarCliente(input: {
     CLI_CPF: isCPF ? documento : null,
   };
   if (input.tipo_cliente) {
-    payload.tipo_cliente = input.tipo_cliente === "porta_instalada" ? "Porta Instalada" : "Revenda";
+    // Revenda entra como "Pendente Serralheiro" até aprovação humana na dashboard
+    payload.tipo_cliente = input.tipo_cliente === "porta_instalada" ? "Porta Instalada" : "Pendente Serralheiro";
   }
 
   // Verifica se já existe pelo CNPJ (PK) — evita duplicate key
@@ -171,7 +172,8 @@ async function cadastrarCliente(input: {
 async function atualizarTipoClienteLegado(telefone: string, tipo: "porta_instalada" | "revenda") {
   const tel = normalizarTelefone(telefone);
   if (!tel) return;
-  const valor = tipo === "porta_instalada" ? "Porta Instalada" : "Revenda";
+  // Revenda entra como "Pendente Serralheiro" até aprovação humana na dashboard
+  const valor = tipo === "porta_instalada" ? "Porta Instalada" : "Pendente Serralheiro";
   const variacoes = Array.from(new Set([
     tel,
     tel.startsWith("55") ? tel.slice(2) : tel,
