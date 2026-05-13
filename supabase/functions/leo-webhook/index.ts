@@ -2180,8 +2180,9 @@ async function registrarOrcamentoEAvancarFunil(params: {
   orcamento: ReturnType<typeof calcularOrcamento>;
   pdfBase64: string;
   filename: string;
+  observacoes_tecnicas?: string;
 }) {
-  const { telefone, nome, orcamento, pdfBase64, filename } = params;
+  const { telefone, nome, orcamento, pdfBase64, filename, observacoes_tecnicas } = params;
   try {
     const itensJson = orcamento.itens.map((i: any) => ({
       codigo_sku: i.code,
@@ -2192,7 +2193,7 @@ async function registrarOrcamentoEAvancarFunil(params: {
       unidade: i.unit,
       subtotal: i.subtotal,
     }));
-    const observacoes = [
+    const linhasBase = [
       `Origem: Agente Leo (WhatsApp)`,
       `Telefone: ${telefone}`,
       `Tipo: ${orcamento.tipo_cliente}`,
@@ -2201,6 +2202,10 @@ async function registrarOrcamentoEAvancarFunil(params: {
       orcamento.frete ? `Frete: R$ ${orcamento.frete.toFixed(2)}` : null,
       orcamento.mao_de_obra ? `Mão de obra: R$ ${orcamento.mao_de_obra.toFixed(2)}` : null,
     ].filter(Boolean).join(" | ");
+    const resumoTecnico = (observacoes_tecnicas || "").trim();
+    const observacoes = resumoTecnico
+      ? `${linhasBase}\n\n=== RESUMO TÉCNICO PARA O VENDEDOR ===\n${resumoTecnico}`
+      : linhasBase;
 
     const { data: orc, error: orcErr } = await dashboardDb
       .from("orcamentos")
@@ -2225,6 +2230,9 @@ async function registrarOrcamentoEAvancarFunil(params: {
     const lead = await buscarLeadAberto(telefone);
     const anexo = `data:application/pdf;base64,${pdfBase64}`;
     const nomeFinal = (nome || "").trim() || `Contato ${telefone}`;
+    const obsLead = resumoTecnico
+      ? `Orçamento ${orc?.numero || ""} gerado pelo agente Leo.\n\n=== RESUMO TÉCNICO ===\n${resumoTecnico}`
+      : `Orçamento ${orc?.numero || ""} gerado pelo agente Leo.`;
     if (lead?.id) {
       await dashboardDb
         .from("funil_leads")
@@ -2234,7 +2242,7 @@ async function registrarOrcamentoEAvancarFunil(params: {
           valor: orcamento.total_geral,
           itens: itensJson,
           anexo_pdf: anexo,
-          observacoes: `Orçamento ${orc?.numero || ""} gerado pelo agente Leo.`,
+          observacoes: obsLead,
         })
         .eq("id", lead.id);
       console.log("✅ Lead movido para orcamento_enviado:", lead.id, "nome:", nomeFinal);
@@ -2248,7 +2256,7 @@ async function registrarOrcamentoEAvancarFunil(params: {
         origem: "leo_agent",
         itens: itensJson,
         anexo_pdf: anexo,
-        observacoes: `Orçamento ${orc?.numero || ""} gerado pelo agente Leo.`,
+        observacoes: obsLead,
       });
     }
     return { orcamento_id: orc?.id, numero: orc?.numero };
