@@ -2983,6 +2983,7 @@ Deno.serve(async (req) => {
                 orcamento: resultadoPdf.orcamento,
                 pdfBase64: resultadoPdf.pdfBase64!,
                 filename: resultadoPdf.filename || `orcamento_${Date.now()}.pdf`,
+                observacoes_tecnicas: typeof args?.observacoes_tecnicas === "string" ? args.observacoes_tecnicas : undefined,
               });
               toolResult = {
                 ok: true,
