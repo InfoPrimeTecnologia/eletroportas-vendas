@@ -991,7 +991,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "transferir_humano",
-      description: "Transfere a conversa para um atendente humano. Use quando: cliente porta instalada fora da BA, cliente quer falar com humano, ou situação fora do seu escopo.",
+      description: "NÃO USAR EM HIPÓTESE ALGUMA EM FLUXO NORMAL. Você resolve do 0 ao 100 sozinho. Reservado SOMENTE para o caso extremo de o próprio cliente pedir explicitamente para falar com um humano/vendedor de verdade.",
       parameters: {
         type: "object",
         properties: { motivo: { type: "string" } },
