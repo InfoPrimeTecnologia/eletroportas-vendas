@@ -748,7 +748,7 @@ CHECKLIST MENTAL antes de cada resposta sua:
 Conduzir uma **pré-venda técnica** completa para chegar ao orçamento em PDF. PORTA INSTALADA na Bahia ou REVENDA em qualquer estado.
 
 # REGRAS CRÍTICAS (NUNCA VIOLE)
-1. Saudação inicial JÁ FOI ENVIADA pelo sistema. NÃO se apresente de novo.
+1. Em primeira mensagem de uma sessão (você verá um aviso [PRIMEIRA MENSAGEM DESTA SESSÃO]), cumprimente E responda ao cliente em UMA mensagem só. Em mensagens seguintes, NÃO se apresente de novo.
 2. LEIA o histórico antes de responder. NUNCA repita pergunta já feita nem frase literal.
 3. NUNCA invente preços ou prazos exatos. Valores saem APENAS no PDF.
 4. SIGA O FLUXO como GUIA, com liberdade conversacional. Saiba em qual etapa está; responda dúvidas paralelas e VOLTE pro fluxo de forma natural.
@@ -2661,14 +2661,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Em conversa nova, envia saudação fixa antes da IA
+    // Em conversa nova, NÃO envia mais saudação fixa antes da IA — isso gerava 2 mensagens
+    // robóticas em sequência (saudação + pergunta) e ignorava o que o cliente acabou de dizer.
+    // A IA agora cumprimenta E responde ao cliente em UMA mensagem coesa.
     if (isNova) {
-      const primeiroNome = (clienteExistente?.CLI_NOME || "").trim().split(/\s+/)[0] || "";
-      const saudacao = primeiroNome
-        ? `Olá ${primeiroNome}, sou o Leo da Eletroportas. ${saudacaoHorario()}!`
-        : `Olá, sou o Leo da Eletroportas. ${saudacaoHorario()}!`;
-      await enviarTexto(telefone, saudacao);
-      await salvarMensagem(conversa.id, "assistant", saudacao);
       // ➕ DASHBOARD: cria lead em "Contato Inicial" assim que a conversa começa
       await registrarLeadContatoInicial(telefone, conversa.nome_cliente || nome || "");
     }
@@ -2888,6 +2884,13 @@ Deno.serve(async (req) => {
       ...historico,
       { role: "system", content: await montarEstado() },
     ];
+    if (isNova) {
+      const primeiroNome = (clienteExistente?.CLI_NOME || "").trim().split(/\s+/)[0] || "";
+      messages.push({
+        role: "system",
+        content: `[PRIMEIRA MENSAGEM DESTA SESSÃO] Esta é a primeira mensagem de uma nova sessão${primeiroNome ? ` com ${primeiroNome}` : ""}. Em UMA ÚNICA mensagem coesa: (1) cumprimente naturalmente ("Oi${primeiroNome ? ` ${primeiroNome}` : ""}! ${saudacaoHorario()} 😊" ou similar — varie), (2) RESPONDA/RECONHEÇA o que o cliente acabou de dizer (mesmo que seja "oi", "maravilha então", uma pergunta, qualquer coisa — NUNCA ignore), e (3) só DEPOIS, se fizer sentido, conduza pro próximo passo. NÃO mande 2 mensagens separadas (saudação + pergunta). NÃO use "Olá, sou o Leo da Eletroportas" formal — fale como humano no WhatsApp.`,
+      });
+    }
     if (await pdfJaEnviadoConversa(conversa.id)) {
       messages.push({
         role: "system",
