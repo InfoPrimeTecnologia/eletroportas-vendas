@@ -2661,14 +2661,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Em conversa nova, envia saudação fixa antes da IA
+    // Em conversa nova, NÃO envia mais saudação fixa antes da IA — isso gerava 2 mensagens
+    // robóticas em sequência (saudação + pergunta) e ignorava o que o cliente acabou de dizer.
+    // A IA agora cumprimenta E responde ao cliente em UMA mensagem coesa.
     if (isNova) {
-      const primeiroNome = (clienteExistente?.CLI_NOME || "").trim().split(/\s+/)[0] || "";
-      const saudacao = primeiroNome
-        ? `Olá ${primeiroNome}, sou o Leo da Eletroportas. ${saudacaoHorario()}!`
-        : `Olá, sou o Leo da Eletroportas. ${saudacaoHorario()}!`;
-      await enviarTexto(telefone, saudacao);
-      await salvarMensagem(conversa.id, "assistant", saudacao);
       // ➕ DASHBOARD: cria lead em "Contato Inicial" assim que a conversa começa
       await registrarLeadContatoInicial(telefone, conversa.nome_cliente || nome || "");
     }
