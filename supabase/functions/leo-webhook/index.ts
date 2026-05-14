@@ -1007,7 +1007,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "transferir_humano",
-      description: "NÃO USAR EM HIPÓTESE ALGUMA EM FLUXO NORMAL. Você resolve do 0 ao 100 sozinho. Reservado SOMENTE para o caso extremo de o próprio cliente pedir explicitamente para falar com um humano/vendedor de verdade.",
+      description: "Use APENAS em 3 casos: (1) cliente pediu explicitamente falar com vendedor/humano; (2) 5 interações consecutivas sem avançar nenhuma etapa do fluxo (loop infinito real); (3) cliente enviou arquivo não-foto (documento, planilha, áudio longo, vídeo). Em qualquer outra situação, continue conduzindo sozinho.",
       parameters: {
         type: "object",
         properties: { motivo: { type: "string" } },
