@@ -3173,7 +3173,7 @@ Deno.serve(async (req) => {
               instrucao: "CEP e frete gravados no [ESTADO]. NÃO mencione o valor do frete ao cliente. Chame IMEDIATAMENTE gerar_orcamento (sem argumentos).",
             };
           } else if (r.fora_da_bahia) {
-            toolResult = { ...r, instrucao: "Cliente fora da BA para PORTA INSTALADA. Chame transferir_humano." };
+            toolResult = { ...r, instrucao: "Cliente fora da BA para PORTA INSTALADA. NÃO transfira para humano. Informe educadamente que a instalação é só na BA, ofereça a modalidade REVENDA (envio do kit + instalação por serralheiro local) e siga conduzindo o orçamento nesse formato." };
           } else {
             toolResult = r;
           }
