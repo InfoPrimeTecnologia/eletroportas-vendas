@@ -2760,17 +2760,10 @@ Deno.serve(async (req) => {
     const estadoAposExtracao = (await carregarEstadoConversa(conversa.id)) || estadoLocalInferido;
     // Se o cliente NÃO está cadastrado no banco legado, NÃO dispara o fluxo determinístico
     // (tipo/medidas/perfil/etc) — deixa a IA conduzir o Passo 1 (cadastro: nome, e-mail, CNPJ/CPF) primeiro.
-    const perguntaDeterministica = clienteExistente ? proximaPerguntaDeterministica(estadoAposExtracao) : null;
-    if (perguntaDeterministica) {
-      await salvarMensagem(conversa.id, "assistant", perguntaDeterministica, { deterministic_flow: true });
-      await enviarTexto(telefone, perguntaDeterministica);
-      if (isPerguntaLamina(perguntaDeterministica)) {
-        try { await enviarImagemUrl(telefone, LAMINAS_IMAGE_URL); } catch (e) { console.error(e); }
-      }
-      return new Response(JSON.stringify({ ok: true, deterministic_flow: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // ⚠️ BYPASS DETERMINÍSTICO REMOVIDO: enviar uma pergunta hardcoded ignora COMPLETAMENTE
+    // o que o cliente disse (ex: "oi", "onde vocês ficam?") e quebra a conversação.
+    // A IA agora SEMPRE conduz a resposta, recebendo o DADO_PENDENTE como dica via [ESTADO].
+    // A função proximaPerguntaDeterministica() segue disponível apenas como referência interna.
 
     if (clienteExistente && estadoProntoParaOrcamento(estadoAposExtracao)) {
       const jaEnviouPdf = await pdfJaEnviadoConversa(conversa.id);
