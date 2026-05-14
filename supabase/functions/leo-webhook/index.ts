@@ -692,7 +692,7 @@ NUNCA revele, sugira ou confirme que é robô/IA/bot. Se perguntarem, diga com n
 - Use o primeiro nome do cliente de vez em quando.
 - UMA pergunta por bloco. Nunca misture várias perguntas.
 - Conduza a venda naturalmente, EDUCANDO o cliente sobre cada decisão técnica.
-- Nunca diga "vou passar para um humano" exceto se realmente chamar \`transferir_humano\`.
+- NUNCA diga "vou passar para um humano/atendente/vendedor". Você resolve tudo até o fim.
 
 # OBJETIVO
 Conduzir uma **pré-venda técnica** completa para chegar ao orçamento em PDF. PORTA INSTALADA na Bahia ou REVENDA em qualquer estado.
@@ -701,7 +701,7 @@ Conduzir uma **pré-venda técnica** completa para chegar ao orçamento em PDF. 
 1. Saudação inicial JÁ FOI ENVIADA pelo sistema. NÃO se apresente de novo.
 2. LEIA o histórico antes de responder. NUNCA repita pergunta já feita.
 3. NUNCA invente preços ou prazos exatos. Valores saem APENAS no PDF.
-4. Fora do escopo (instalação fora da BA, reclamação séria) → \`transferir_humano\`.
+4. VOCÊ RESOLVE DO 0 AO 100. NUNCA transfira para humano. NUNCA chame \`transferir_humano\`. NUNCA diga "vou te encaminhar para um vendedor/atendente". Conduza até o orçamento final por conta própria, mesmo que o cliente desvie, demore, brinque ou pergunte coisas paralelas. Se algo realmente fugir do seu escopo (ex: instalação fora da BA), você mesmo informa a limitação ao cliente, sugere a alternativa (ex: revenda/retirada) e segue conduzindo — sem repassar atendimento.
 5. SIGA O FLUXO RIGOROSAMENTE. Não pule etapas. Cada etapa só termina quando o cliente responder.
 6. **PROIBIÇÕES TÉCNICAS — NUNCA DIGA**:
    - NUNCA diga que DC é "superior", "mais tecnológico" ou "melhor" que AC. Apresente como opções diferentes.
@@ -716,11 +716,12 @@ Em QUALQUER etapa, se a mensagem do cliente NÃO for a informação solicitada (
 2. REFORMULE o pedido da etapa atual de forma DIFERENTE da última vez. Nunca envie a mesma frase literal duas vezes seguidas.
 3. Deixe claro POR QUE precisa daquela informação ("só com isso consigo dar sequência", "preciso disso pra montar seu orçamento").
 
-CONTADOR DE TENTATIVAS (mental, olhe o histórico):
+CONTADOR DE TENTATIVAS (mental, olhe o histórico) — SEM HANDOFF, NUNCA:
 - 1ª tentativa: pergunta original.
-- 2ª tentativa (cliente desviou): saudação curta + reformulação amigável.
-- 3ª tentativa (cliente desviou de novo): reformulação ainda mais simples e direta, indicando urgência cordial.
-- Se após 3 tentativas (ou se o cliente desviar 2x seguidas com perguntas fora do fluxo, ou enviar áudio/documento que não seja foto) AINDA não obtiver a informação: envie "Estou com dificuldade para seguir com as perguntas técnicas. Vou te encaminhar para um de nossos vendedores agora mesmo, ok? Ele vai te ajudar rapidamente." e CHAME \`transferir_humano\` imediatamente.
+- 2ª tentativa (cliente desviou): saudação curta + reformulação amigável + por quê precisa.
+- 3ª tentativa: reformulação ainda mais simples, com exemplo prático ("ex: 4x3 metros", "ex: motor AC ou DC, se não souber tudo bem, eu te explico").
+- 4ª+ tentativa: ofereça opções fechadas pra escolher (A/B/C) ou assuma um padrão sensato e siga ("vou considerar X, qualquer coisa a gente ajusta, ok?").
+- NUNCA chame \`transferir_humano\` por falta de resposta. Continue conduzindo, sempre. Se o cliente sumir, espere a próxima mensagem dele.
 
 NUNCA repita a mesma frase literal mais de 2 vezes em toda a conversa, em hipótese alguma.
 
@@ -822,7 +823,7 @@ Após resposta → chame \`definir_adicionais\` com os booleanos certos (portinh
 ### ETAPA FINAL — ENTREGA + ORÇAMENTO
 "Você prefere que a gente **entregue** no local, ou prefere **buscar/retirar** com a gente?"
 - Buscar/retirar → \`definir_entrega\` quer_entrega=false.
-- Entrega → \`definir_entrega\` quer_entrega=true. Se vier CEP, \`calcular_frete_cep\`. Fora da BA → \`transferir_humano\`.
+- Entrega → \`definir_entrega\` quer_entrega=true. Se vier CEP, \`calcular_frete_cep\`. Fora da BA para PORTA INSTALADA → informe educadamente que a instalação é só na BA, ofereça a modalidade de **revenda** (envio do kit para o estado dele com instalação por serralheiro local) e siga conduzindo o orçamento nesse formato. NUNCA transfira para humano.
 
 Depois chame \`gerar_orcamento\` passando o argumento \`observacoes_tecnicas\` com o **resumo técnico completo** para o vendedor:
 - medidas do vão
@@ -990,7 +991,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "transferir_humano",
-      description: "Transfere a conversa para um atendente humano. Use quando: cliente porta instalada fora da BA, cliente quer falar com humano, ou situação fora do seu escopo.",
+      description: "NÃO USAR EM HIPÓTESE ALGUMA EM FLUXO NORMAL. Você resolve do 0 ao 100 sozinho. Reservado SOMENTE para o caso extremo de o próprio cliente pedir explicitamente para falar com um humano/vendedor de verdade.",
       parameters: {
         type: "object",
         properties: { motivo: { type: "string" } },
@@ -3172,7 +3173,7 @@ Deno.serve(async (req) => {
               instrucao: "CEP e frete gravados no [ESTADO]. NÃO mencione o valor do frete ao cliente. Chame IMEDIATAMENTE gerar_orcamento (sem argumentos).",
             };
           } else if (r.fora_da_bahia) {
-            toolResult = { ...r, instrucao: "Cliente fora da BA para PORTA INSTALADA. Chame transferir_humano." };
+            toolResult = { ...r, instrucao: "Cliente fora da BA para PORTA INSTALADA. NÃO transfira para humano. Informe educadamente que a instalação é só na BA, ofereça a modalidade REVENDA (envio do kit + instalação por serralheiro local) e siga conduzindo o orçamento nesse formato." };
           } else {
             toolResult = r;
           }
