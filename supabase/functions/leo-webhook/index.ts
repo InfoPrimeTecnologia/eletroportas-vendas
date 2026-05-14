@@ -2881,7 +2881,10 @@ Deno.serve(async (req) => {
 
       const pendentes = linhas.filter((l) => l.endsWith("=PENDENTE")).map((l) => l.split("=")[0]);
       const proximo = pendentes[0] || "TODOS_OK_CHAMAR_GERAR_ORCAMENTO";
-      return `[ESTADO ATUAL DA CONVERSA — fonte de verdade]\n${linhas.join("\n")}\nPRÓXIMO_PASSO: ${proximo === "TODOS_OK_CHAMAR_GERAR_ORCAMENTO" ? "TODOS os dados prontos — chame gerar_orcamento agora (sem argumentos)." : `pergunte ao cliente sobre "${proximo}".`}`;
+      const proximoTxt = proximo === "TODOS_OK_CHAMAR_GERAR_ORCAMENTO"
+        ? "TODOS os dados prontos — quando fizer sentido na conversa, chame gerar_orcamento (sem argumentos)."
+        : `próximo dado pendente para coletar (quando a conversa permitir): "${proximo}".`;
+      return `[ESTADO ATUAL DA CONVERSA — fonte de verdade, USO INTERNO]\n${linhas.join("\n")}\nDADO_PENDENTE: ${proximoTxt}\n\n⚠️ LEMBRETE OBRIGATÓRIO: Antes de pedir o próximo dado, RESPONDA primeiro o que o cliente disse na última mensagem. Se ele fez uma pergunta (ex: "onde vocês ficam?", "vocês trabalham com madeira?", "qual o site?"), RESPONDA a pergunta com a informação real (use o bloco DADOS DA EMPRESA do prompt) e SÓ DEPOIS retome o pedido do dado pendente. NUNCA repita uma pergunta do fluxo ignorando o que o cliente acabou de dizer.`;
     };
 
     console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"}`);
