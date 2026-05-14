@@ -2884,6 +2884,13 @@ Deno.serve(async (req) => {
       ...historico,
       { role: "system", content: await montarEstado() },
     ];
+    if (isNova) {
+      const primeiroNome = (clienteExistente?.CLI_NOME || "").trim().split(/\s+/)[0] || "";
+      messages.push({
+        role: "system",
+        content: `[PRIMEIRA MENSAGEM DESTA SESSÃO] Esta é a primeira mensagem de uma nova sessão${primeiroNome ? ` com ${primeiroNome}` : ""}. Em UMA ÚNICA mensagem coesa: (1) cumprimente naturalmente ("Oi${primeiroNome ? ` ${primeiroNome}` : ""}! ${saudacaoHorario()} 😊" ou similar — varie), (2) RESPONDA/RECONHEÇA o que o cliente acabou de dizer (mesmo que seja "oi", "maravilha então", uma pergunta, qualquer coisa — NUNCA ignore), e (3) só DEPOIS, se fizer sentido, conduza pro próximo passo. NÃO mande 2 mensagens separadas (saudação + pergunta). NÃO use "Olá, sou o Leo da Eletroportas" formal — fale como humano no WhatsApp.`,
+      });
+    }
     if (await pdfJaEnviadoConversa(conversa.id)) {
       messages.push({
         role: "system",
