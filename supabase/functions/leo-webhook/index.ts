@@ -1971,6 +1971,18 @@ function pontuarEstoqueParaPeca(row: any, item: any): number {
   if (/\bfechad/.test(alvo) && /\bfechad/.test(texto)) score += 15;
   if (/\btransvision\b/.test(alvo) && /\btransvision\b/.test(texto)) score += 15;
   if (/\boblong/.test(alvo) && /\boblong/.test(texto)) score += 15;
+  // Discriminação por DIMENSÃO (mm) — crucial pra distinguir variantes (ex.: guia 50mm vs 60mm)
+  const mmAlvo = Array.from(alvo.matchAll(/\b(\d{2,4})\s*mm\b/g)).map((m) => m[1]);
+  const mmTexto = Array.from(texto.matchAll(/\b(\d{2,4})\s*mm\b/g)).map((m) => m[1]);
+  // Também aceita número solto perto da palavra-chave (ex.: "guia de 60") quando no alvo não veio "mm"
+  if (mmAlvo.length === 0) {
+    const numSolto = alvo.match(/\b(?:guia|perfil|lamina|tubo|eixo)[^\d]*?(\d{2,4})\b/)?.[1];
+    if (numSolto) mmAlvo.push(numSolto);
+  }
+  if (mmAlvo.length && mmTexto.length) {
+    const bate = mmAlvo.some((n) => mmTexto.includes(n));
+    if (bate) score += 35; else score -= 25; // penaliza variante de dimensão diferente
+  }
   // Token overlap genérico (palavras com 4+ chars)
   const tokensAlvo = Array.from(new Set(alvo.split(/\s+/).filter((t) => t.length >= 4)));
   const tokensTexto = new Set(texto.split(/\s+/));
@@ -2911,9 +2923,23 @@ Deno.serve(async (req) => {
 
     console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"}`);
 
+    // Catálogo do estoque (fonte de verdade pra responder "vocês têm X?")
+    const { data: estoqueRows } = await dashboardDb
+      .from("estoque")
+      .select("produto_nome, codigo_sku, preco_venda, unidade_medida, quantidade")
+      .gt("quantidade", 0)
+      .order("produto_nome");
+    const catalogoTxt = (estoqueRows || [])
+      .map((r: any) => `- ${r.produto_nome} | R$ ${Number(r.preco_venda).toFixed(2)}/${r.unidade_medida || "UN"} | SKU ${r.codigo_sku}`)
+      .join("\n");
+    const catalogoMsg = catalogoTxt
+      ? `[CATÁLOGO DE ESTOQUE — fonte de verdade]\nResponda perguntas do tipo "vocês têm X?" / "qual o preço de Y?" SEMPRE consultando esta lista. Se o item solicitado pelo cliente NÃO estiver aqui (mesmo que parecido), diga claramente que não temos no estoque atual e ofereça a alternativa mais próxima da lista. NUNCA invente um produto que não esteja listado abaixo.\n\n${catalogoTxt}`
+      : "[CATÁLOGO DE ESTOQUE] Vazio no momento — informe que precisará verificar disponibilidade.";
+
     // Loop do agente: LLM + tools, com histórico completo e limite de segurança
     let messages: any[] = [
       { role: "system", content: contextoCliente },
+      { role: "system", content: catalogoMsg },
       ...historico,
       { role: "system", content: await montarEstado() },
     ];
