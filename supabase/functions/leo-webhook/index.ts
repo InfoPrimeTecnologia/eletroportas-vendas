@@ -35,9 +35,10 @@ const legacyDb = createClient(LEGACY_SUPABASE_URL, LEGACY_SUPABASE_KEY, {
   auth: { persistSession: false },
 });
 
-// A dashboard atual lê/grava no backend legado; qualquer dado comercial
-// gerado pelo Leo precisa ir para este cliente para aparecer nas telas.
-const dashboardDb = legacyDb;
+// A dashboard atual (Lovable Cloud) é a fonte de verdade para estoque,
+// orçamentos, pedidos e funil. O Leo precisa ler/gravar AQUI para que
+// os dados apareçam nas telas que o usuário gerencia.
+const dashboardDb = supabase;
 
 // Saudação por horário (timezone Brasil)
 function saudacaoHorario(): string {
