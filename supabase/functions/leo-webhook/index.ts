@@ -1971,6 +1971,18 @@ function pontuarEstoqueParaPeca(row: any, item: any): number {
   if (/\bfechad/.test(alvo) && /\bfechad/.test(texto)) score += 15;
   if (/\btransvision\b/.test(alvo) && /\btransvision\b/.test(texto)) score += 15;
   if (/\boblong/.test(alvo) && /\boblong/.test(texto)) score += 15;
+  // Discriminação por DIMENSÃO (mm) — crucial pra distinguir variantes (ex.: guia 50mm vs 60mm)
+  const mmAlvo = Array.from(alvo.matchAll(/\b(\d{2,4})\s*mm\b/g)).map((m) => m[1]);
+  const mmTexto = Array.from(texto.matchAll(/\b(\d{2,4})\s*mm\b/g)).map((m) => m[1]);
+  // Também aceita número solto perto da palavra-chave (ex.: "guia de 60") quando no alvo não veio "mm"
+  if (mmAlvo.length === 0) {
+    const numSolto = alvo.match(/\b(?:guia|perfil|lamina|tubo|eixo)[^\d]*?(\d{2,4})\b/)?.[1];
+    if (numSolto) mmAlvo.push(numSolto);
+  }
+  if (mmAlvo.length && mmTexto.length) {
+    const bate = mmAlvo.some((n) => mmTexto.includes(n));
+    if (bate) score += 35; else score -= 25; // penaliza variante de dimensão diferente
+  }
   // Token overlap genérico (palavras com 4+ chars)
   const tokensAlvo = Array.from(new Set(alvo.split(/\s+/).filter((t) => t.length >= 4)));
   const tokensTexto = new Set(texto.split(/\s+/));
