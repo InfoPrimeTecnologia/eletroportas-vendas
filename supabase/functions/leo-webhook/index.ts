@@ -1961,6 +1961,21 @@ function pontuarEstoqueParaPeca(row: any, item: any): number {
   if (/\bmotor\b/.test(alvo) && /\b(motor|automatizador)\b/.test(texto)) score += 25;
   if (/\bcontrole\b/.test(alvo) && /\bcontrole\b/.test(texto)) score += 20;
   if (/\bcentral\b/.test(alvo) && /\bcentral\b/.test(texto)) score += 20;
+  if (/\bguia\b/.test(alvo) && /\bguia\b/.test(texto)) score += 30;
+  if (/\b(lamina|perfil)\b/.test(alvo) && /\b(lamina|perfil)\b/.test(texto)) score += 25;
+  if (/\b(eixo|tubo)\b/.test(alvo) && /\b(eixo|tubo)\b/.test(texto)) score += 20;
+  if (/\bsoleira\b/.test(alvo) && /\bsoleira\b/.test(texto)) score += 20;
+  if (/\bportinhola\b/.test(alvo) && /\bportinhola\b/.test(texto)) score += 30;
+  if (/\b(alcapao|alcapa)\b/.test(alvo) && /\b(alcapao|alcapa)\b/.test(texto)) score += 30;
+  // Discriminação de variantes de lâmina (fechado/transvision/oblongo) quando informado
+  if (/\bfechad/.test(alvo) && /\bfechad/.test(texto)) score += 15;
+  if (/\btransvision\b/.test(alvo) && /\btransvision\b/.test(texto)) score += 15;
+  if (/\boblong/.test(alvo) && /\boblong/.test(texto)) score += 15;
+  // Token overlap genérico (palavras com 4+ chars)
+  const tokensAlvo = Array.from(new Set(alvo.split(/\s+/).filter((t) => t.length >= 4)));
+  const tokensTexto = new Set(texto.split(/\s+/));
+  const overlap = tokensAlvo.filter((t) => tokensTexto.has(t)).length;
+  score += overlap * 6;
   if (Number(row?.preco_venda) > 0) score += 5;
   return score;
 }
@@ -1993,6 +2008,10 @@ async function buscarEstoqueParaPeca(item: any) {
   const nome = normalizarBuscaEstoque(item.produto_nome || item.descricao || "");
   if (!nome) return null;
   const kg = nome.match(/\b(\d{2,4})\s*kg?\b/)?.[1];
+  // Tokens significativos da peça pedida (motor, guia, lamina, eixo, soleira, etc.)
+  const tokensSignificativos = nome
+    .split(/\s+/)
+    .filter((t) => t.length >= 4 && !/^\d/.test(t));
   const termos = Array.from(new Set([
     nome,
     kg && nome.includes("motor") ? `motor ${kg}` : null,
@@ -2000,6 +2019,7 @@ async function buscarEstoqueParaPeca(item: any) {
     kg && nome.includes("motor") ? `automatizador ${kg}` : null,
     kg && nome.includes("motor") ? `automatizador ${kg}kg` : null,
     kg ? `${kg}kg` : null,
+    ...tokensSignificativos,
   ].filter(Boolean) as string[]));
 
   const candidatos: any[] = [];
@@ -2013,9 +2033,13 @@ async function buscarEstoqueParaPeca(item: any) {
   }
 
   const unicos = Array.from(new Map(candidatos.map((c) => [c.codigo_sku || `${c.produto_nome}-${c.descricao}`, c])).values());
-  return unicos
+  const ranqueado = unicos
     .map((row) => ({ row, score: pontuarEstoqueParaPeca(row, item) }))
-    .sort((a, b) => b.score - a.score)[0]?.row || null;
+    .sort((a, b) => b.score - a.score);
+  // Exige score mínimo para evitar match aleatório
+  const melhor = ranqueado[0];
+  if (!melhor || melhor.score < 15) return null;
+  return melhor.row;
 }
 
 /** Resolve preço/SKU/unidade no estoque para uma lista de peças (busca por sku, nome e descrição). */
@@ -2784,7 +2808,14 @@ Deno.serve(async (req) => {
             });
           }
         } else {
-          const aviso = "Consegui levantar os dados, mas tive uma falha ao gerar o PDF. Vou deixar um atendente finalizar o envio por aqui.";
+          const faltando = Array.isArray(resultadoPdf.faltando) ? resultadoPdf.faltando : [];
+          let aviso: string;
+          if (faltando.includes("preco_estoque") && resultadoPdf.error) {
+            // Item sem preço no estoque — peça para o cliente confirmar/ajustar
+            aviso = `${resultadoPdf.error}. Pode confirmar o nome exato da peça (ou me dizer a referência/medida) que eu busco aqui pra você? 🙏`;
+          } else {
+            aviso = "Consegui levantar os dados, mas tive uma falha técnica ao gerar o PDF agora. Vou pedir pra um atendente finalizar o envio por aqui em instantes. 🙏";
+          }
           await salvarMensagem(conversa.id, "assistant", aviso, { deterministic_flow: true, pdf_error: resultadoPdf.error || resultadoPdf.faltando || null });
           await enviarTexto(telefone, aviso);
         }
