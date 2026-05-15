@@ -1961,6 +1961,21 @@ function pontuarEstoqueParaPeca(row: any, item: any): number {
   if (/\bmotor\b/.test(alvo) && /\b(motor|automatizador)\b/.test(texto)) score += 25;
   if (/\bcontrole\b/.test(alvo) && /\bcontrole\b/.test(texto)) score += 20;
   if (/\bcentral\b/.test(alvo) && /\bcentral\b/.test(texto)) score += 20;
+  if (/\bguia\b/.test(alvo) && /\bguia\b/.test(texto)) score += 30;
+  if (/\b(lamina|perfil)\b/.test(alvo) && /\b(lamina|perfil)\b/.test(texto)) score += 25;
+  if (/\b(eixo|tubo)\b/.test(alvo) && /\b(eixo|tubo)\b/.test(texto)) score += 20;
+  if (/\bsoleira\b/.test(alvo) && /\bsoleira\b/.test(texto)) score += 20;
+  if (/\bportinhola\b/.test(alvo) && /\bportinhola\b/.test(texto)) score += 30;
+  if (/\b(alcapao|alcapa)\b/.test(alvo) && /\b(alcapao|alcapa)\b/.test(texto)) score += 30;
+  // Discriminação de variantes de lâmina (fechado/transvision/oblongo) quando informado
+  if (/\bfechad/.test(alvo) && /\bfechad/.test(texto)) score += 15;
+  if (/\btransvision\b/.test(alvo) && /\btransvision\b/.test(texto)) score += 15;
+  if (/\boblong/.test(alvo) && /\boblong/.test(texto)) score += 15;
+  // Token overlap genérico (palavras com 4+ chars)
+  const tokensAlvo = Array.from(new Set(alvo.split(/\s+/).filter((t) => t.length >= 4)));
+  const tokensTexto = new Set(texto.split(/\s+/));
+  const overlap = tokensAlvo.filter((t) => tokensTexto.has(t)).length;
+  score += overlap * 6;
   if (Number(row?.preco_venda) > 0) score += 5;
   return score;
 }
