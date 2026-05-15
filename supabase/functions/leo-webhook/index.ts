@@ -2917,6 +2917,9 @@ Deno.serve(async (req) => {
       ...historico,
       { role: "system", content: await montarEstado() },
     ];
+    if (avisoFalhaPdf) {
+      messages.push({ role: "system", content: avisoFalhaPdf });
+    }
     if (isNova) {
       const primeiroNome = (clienteExistente?.CLI_NOME || "").trim().split(/\s+/)[0] || "";
       messages.push({
