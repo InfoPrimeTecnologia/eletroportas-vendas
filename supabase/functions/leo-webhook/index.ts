@@ -2785,6 +2785,9 @@ Deno.serve(async (req) => {
     // A IA agora SEMPRE conduz a resposta, recebendo o DADO_PENDENTE como dica via [ESTADO].
     // A função proximaPerguntaDeterministica() segue disponível apenas como referência interna.
 
+    // Contexto extra a injetar no LLM caso o PDF determinístico tenha falhado
+    let avisoFalhaPdf: string | null = null;
+
     if (clienteExistente && estadoProntoParaOrcamento(estadoAposExtracao)) {
       const jaEnviouPdf = await pdfJaEnviadoConversa(conversa.id);
       // CONTEXTO (não palavras-chave): se as medidas/perfil/cep mudaram desde o último PDF, é OUTRO orçamento.
@@ -2797,7 +2800,6 @@ Deno.serve(async (req) => {
         if (resultadoPdf.pdf_enviado) {
           const snapDet = await supabase.from("leo_conversations").select("tipo_cliente, subtipo_revenda, largura, altura, tipo_perfil, cep, adicionais, pecas_avulsas").eq("id", conversa.id).maybeSingle();
           await salvarMensagem(conversa.id, "assistant", resultadoPdf.caption, { pdf_enviado: true, deterministic_flow: true, snapshot: snapDet.data || null });
-          // ➕ DASHBOARD: salva orçamento + anexo PDF e move lead para "orcamento_enviado"
           if (resultadoPdf.pdfBase64 && resultadoPdf.orcamento) {
             await registrarOrcamentoEAvancarFunil({
               telefone,
@@ -2807,21 +2809,21 @@ Deno.serve(async (req) => {
               filename: resultadoPdf.filename || `orcamento_${Date.now()}.pdf`,
             });
           }
+          return new Response(JSON.stringify({ ok: true, deterministic_pdf: true, pdf_enviado: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         } else {
+          // ❌ NÃO devolve mensagem hardcoded e NÃO faz return.
+          // Em vez disso injeta o erro como contexto pro LLM responder de forma natural,
+          // levando em conta o que o cliente acabou de dizer (pergunta, saudação, ajuste de peça, etc.)
           const faltando = Array.isArray(resultadoPdf.faltando) ? resultadoPdf.faltando : [];
-          let aviso: string;
           if (faltando.includes("preco_estoque") && resultadoPdf.error) {
-            // Item sem preço no estoque — peça para o cliente confirmar/ajustar
-            aviso = `${resultadoPdf.error}. Pode confirmar o nome exato da peça (ou me dizer a referência/medida) que eu busco aqui pra você? 🙏`;
+            avisoFalhaPdf = `[FALHA INTERNA AO GERAR PDF — não repita literalmente este texto] ${resultadoPdf.error}. Antes de qualquer coisa, RESPONDA o que o cliente acabou de dizer na última mensagem (saudação, pergunta, etc.). Em seguida, de forma natural e em UMA mensagem só, peça que ele confirme o nome exato/referência/medida da peça que ficou sem preço para você buscar de novo. NÃO chame gerar_orcamento agora.`;
           } else {
-            aviso = "Consegui levantar os dados, mas tive uma falha técnica ao gerar o PDF agora. Vou pedir pra um atendente finalizar o envio por aqui em instantes. 🙏";
+            avisoFalhaPdf = `[FALHA INTERNA AO GERAR PDF — não repita literalmente este texto] ${resultadoPdf.error || "erro técnico"}. Antes de qualquer coisa, RESPONDA o que o cliente acabou de dizer. Depois, peça desculpas brevemente e diga que vai verificar e retornar. NÃO chame gerar_orcamento agora.`;
           }
-          await salvarMensagem(conversa.id, "assistant", aviso, { deterministic_flow: true, pdf_error: resultadoPdf.error || resultadoPdf.faltando || null });
-          await enviarTexto(telefone, aviso);
+          console.log("⚠️ PDF determinístico falhou — delegando para o LLM responder. Motivo:", resultadoPdf.error);
         }
-        return new Response(JSON.stringify({ ok: true, deterministic_pdf: true, pdf_enviado: Boolean(resultadoPdf.pdf_enviado) }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
       }
     }
 
@@ -2915,6 +2917,9 @@ Deno.serve(async (req) => {
       ...historico,
       { role: "system", content: await montarEstado() },
     ];
+    if (avisoFalhaPdf) {
+      messages.push({ role: "system", content: avisoFalhaPdf });
+    }
     if (isNova) {
       const primeiroNome = (clienteExistente?.CLI_NOME || "").trim().split(/\s+/)[0] || "";
       messages.push({
