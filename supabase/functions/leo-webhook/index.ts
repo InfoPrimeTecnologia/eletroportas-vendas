@@ -2923,9 +2923,23 @@ Deno.serve(async (req) => {
 
     console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"}`);
 
+    // Catálogo do estoque (fonte de verdade pra responder "vocês têm X?")
+    const { data: estoqueRows } = await dashboardDb
+      .from("estoque")
+      .select("produto_nome, codigo_sku, preco_venda, unidade_medida, quantidade")
+      .gt("quantidade", 0)
+      .order("produto_nome");
+    const catalogoTxt = (estoqueRows || [])
+      .map((r: any) => `- ${r.produto_nome} | R$ ${Number(r.preco_venda).toFixed(2)}/${r.unidade_medida || "UN"} | SKU ${r.codigo_sku}`)
+      .join("\n");
+    const catalogoMsg = catalogoTxt
+      ? `[CATÁLOGO DE ESTOQUE — fonte de verdade]\nResponda perguntas do tipo "vocês têm X?" / "qual o preço de Y?" SEMPRE consultando esta lista. Se o item solicitado pelo cliente NÃO estiver aqui (mesmo que parecido), diga claramente que não temos no estoque atual e ofereça a alternativa mais próxima da lista. NUNCA invente um produto que não esteja listado abaixo.\n\n${catalogoTxt}`
+      : "[CATÁLOGO DE ESTOQUE] Vazio no momento — informe que precisará verificar disponibilidade.";
+
     // Loop do agente: LLM + tools, com histórico completo e limite de segurança
     let messages: any[] = [
       { role: "system", content: contextoCliente },
+      { role: "system", content: catalogoMsg },
       ...historico,
       { role: "system", content: await montarEstado() },
     ];
