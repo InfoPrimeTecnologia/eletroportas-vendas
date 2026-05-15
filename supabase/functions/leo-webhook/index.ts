@@ -2808,7 +2808,14 @@ Deno.serve(async (req) => {
             });
           }
         } else {
-          const aviso = "Consegui levantar os dados, mas tive uma falha ao gerar o PDF. Vou deixar um atendente finalizar o envio por aqui.";
+          const faltando = Array.isArray(resultadoPdf.faltando) ? resultadoPdf.faltando : [];
+          let aviso: string;
+          if (faltando.includes("preco_estoque") && resultadoPdf.error) {
+            // Item sem preço no estoque — peça para o cliente confirmar/ajustar
+            aviso = `${resultadoPdf.error}. Pode confirmar o nome exato da peça (ou me dizer a referência/medida) que eu busco aqui pra você? 🙏`;
+          } else {
+            aviso = "Consegui levantar os dados, mas tive uma falha técnica ao gerar o PDF agora. Vou pedir pra um atendente finalizar o envio por aqui em instantes. 🙏";
+          }
           await salvarMensagem(conversa.id, "assistant", aviso, { deterministic_flow: true, pdf_error: resultadoPdf.error || resultadoPdf.faltando || null });
           await enviarTexto(telefone, aviso);
         }
