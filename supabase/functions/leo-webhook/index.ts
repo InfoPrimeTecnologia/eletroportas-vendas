@@ -2008,6 +2008,10 @@ async function buscarEstoqueParaPeca(item: any) {
   const nome = normalizarBuscaEstoque(item.produto_nome || item.descricao || "");
   if (!nome) return null;
   const kg = nome.match(/\b(\d{2,4})\s*kg?\b/)?.[1];
+  // Tokens significativos da peça pedida (motor, guia, lamina, eixo, soleira, etc.)
+  const tokensSignificativos = nome
+    .split(/\s+/)
+    .filter((t) => t.length >= 4 && !/^\d/.test(t));
   const termos = Array.from(new Set([
     nome,
     kg && nome.includes("motor") ? `motor ${kg}` : null,
@@ -2015,6 +2019,7 @@ async function buscarEstoqueParaPeca(item: any) {
     kg && nome.includes("motor") ? `automatizador ${kg}` : null,
     kg && nome.includes("motor") ? `automatizador ${kg}kg` : null,
     kg ? `${kg}kg` : null,
+    ...tokensSignificativos,
   ].filter(Boolean) as string[]));
 
   const candidatos: any[] = [];
@@ -2028,9 +2033,13 @@ async function buscarEstoqueParaPeca(item: any) {
   }
 
   const unicos = Array.from(new Map(candidatos.map((c) => [c.codigo_sku || `${c.produto_nome}-${c.descricao}`, c])).values());
-  return unicos
+  const ranqueado = unicos
     .map((row) => ({ row, score: pontuarEstoqueParaPeca(row, item) }))
-    .sort((a, b) => b.score - a.score)[0]?.row || null;
+    .sort((a, b) => b.score - a.score);
+  // Exige score mínimo para evitar match aleatório
+  const melhor = ranqueado[0];
+  if (!melhor || melhor.score < 15) return null;
+  return melhor.row;
 }
 
 /** Resolve preço/SKU/unidade no estoque para uma lista de peças (busca por sku, nome e descrição). */
