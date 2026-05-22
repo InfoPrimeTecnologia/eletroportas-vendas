@@ -2516,6 +2516,606 @@ async function carregarHistorico(conversation_id: string) {
   return (data || []).reverse().map((m) => ({ role: m.role, content: m.content }));
 }
 
+// ============================================================
+// LEO 2.0 — CONFIGURADOR (carrinho-first + interpretador LLM)
+// ============================================================
+// Princípio: o LLM SÓ interpreta a mensagem em JSON de intenções.
+// O código aplica no carrinho, calcula explosão de itens, busca
+// preço no estoque do dashboard, recalcula totais e decide qual
+// é a próxima pergunta. A resposta sai como UMA mensagem com
+// resumo parcial + pergunta única.
+
+type CfgItemTipo = "kit_porta" | "motor" | "guia" | "lamina" | "controle" | "central" | "trava_lamina" | "acessorio";
+interface CfgLinha { sku: string; descricao: string; und: string; qtd: number; valor_unit: number; total: number; sob_consulta?: boolean }
+interface CfgItem {
+  id: string;
+  tipo: CfgItemTipo;
+  config: Record<string, any>;
+  explosao: CfgLinha[];
+  subtotal: number;
+}
+interface CfgPedido {
+  itens: CfgItem[];
+  total: number;
+  status: "em_andamento" | "aguardando_confirmacao" | "finalizado";
+  sob_consulta?: boolean;
+}
+
+const PEDIDO_VAZIO: CfgPedido = { itens: [], total: 0, status: "em_andamento" };
+
+function novoId() { return crypto.randomUUID().slice(0, 8); }
+
+function carregarPedido(raw: any): CfgPedido {
+  if (!raw || typeof raw !== "object") return JSON.parse(JSON.stringify(PEDIDO_VAZIO));
+  const itens = Array.isArray(raw.itens) ? raw.itens : [];
+  return {
+    itens: itens.map((it: any) => ({
+      id: String(it.id || novoId()),
+      tipo: (it.tipo || "acessorio") as CfgItemTipo,
+      config: it.config && typeof it.config === "object" ? it.config : {},
+      explosao: Array.isArray(it.explosao) ? it.explosao : [],
+      subtotal: Number(it.subtotal) || 0,
+    })),
+    total: Number(raw.total) || 0,
+    status: (raw.status || "em_andamento") as CfgPedido["status"],
+    sob_consulta: Boolean(raw.sob_consulta),
+  };
+}
+
+// --- Interpretador (LLM JSON-only) ---
+async function cfgInterpretar(mensagem: string, pedido: CfgPedido): Promise<any[]> {
+  const sys = `Você é um interpretador de pedidos para uma fábrica de portas de enrolar.
+Receba a MENSAGEM do cliente serralheiro + o PEDIDO_ATUAL e devolva SOMENTE JSON:
+{ "intencoes": [...] }
+
+Intenções possíveis:
+- {"acao":"add_item","tipo":"kit_porta|motor|guia|lamina|controle|central|trava_lamina|acessorio","config":{...},"qtd":1}
+- {"acao":"update_item","ref":"<id ou 'ultimo' ou tipo>","patch":{...}}
+- {"acao":"remove_item","ref":"<id ou 'ultimo' ou tipo ou descricao>"}
+- {"acao":"set_qtd","ref":"...","qtd":N}
+- {"acao":"gerar_orcamento"}
+- {"acao":"resumo"}
+- {"acao":"zerar"}
+- {"acao":"escolher_menu","opcao":1|2|3|4}  // 1 kit / 2 peças / 3 motores / 4 acessórios
+- {"acao":"duvida","texto":"<o que ele perguntou>"}
+
+Para kit_porta a config pode conter qualquer subconjunto de:
+{"largura":metros, "altura":metros, "instalacao":"entre_paredes|sobreposta",
+ "motor":{"ac_dc":"AC|DC","potencia":200|300|400|500|800|1000|1500},
+ "lamina":{"modelo":"meia_cana|fechado|transvision|oblongo","perfil":"baixo|alto","cor":"branca|preta|..."},
+ "guia_mm":50|60|70|80|90|100, "portinhola":"VILD|VILE|CENTRO"|false,
+ "alcapao":true|false, "pintura":"eletrostatica"|false, "central":true|false, "controles":N}
+
+Para motor avulso: {"ac_dc":"AC|DC","potencia":N,"qtd":N}.
+Para guia: {"mm":N,"comprimento_m":N,"qtd_pares":N} (ou qtd_unidades).
+Para controle: {"qtd":N}.
+
+REGRAS:
+- Extraia TUDO que estiver na mensagem (medida "3x4", "AC", "meia cana", "branca", "portinhola VILD", "guia 70", "+2 controles").
+- "3x4 entre paredes AC meia cana branca portinhola VILD" → 1 add_item kit_porta com TODA a config.
+- "+ 2 controles e trocar guia para 70" → [add_item controle qtd 2, update_item kit_porta patch guia_mm 70].
+- "remover central" / "tirar pintura" → update_item kit_porta com central:false / pintura:false.
+- "gerar orçamento" / "fechar pedido" / "pode fechar" → gerar_orcamento.
+- Mensagens vagas tipo "oi" → []. NUNCA invente dados.
+- Devolva APENAS JSON válido, sem explicação.
+
+PEDIDO_ATUAL: ${JSON.stringify(pedido)}`;
+
+  try {
+    const resp = await fetch(AI_GATEWAY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${LOVABLE_API_KEY}` },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [{ role: "system", content: sys }, { role: "user", content: mensagem }],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+      }),
+    });
+    if (!resp.ok) {
+      console.error("cfgInterpretar falhou:", resp.status, await resp.text());
+      return [];
+    }
+    const j = await resp.json();
+    const content = j?.choices?.[0]?.message?.content || "{}";
+    const parsed = JSON.parse(content);
+    return Array.isArray(parsed?.intencoes) ? parsed.intencoes : [];
+  } catch (e) {
+    console.error("cfgInterpretar erro:", (e as Error)?.message);
+    return [];
+  }
+}
+
+// --- Aplicador (puro) ---
+function mergeDeep(a: any, b: any): any {
+  if (Array.isArray(b)) return b;
+  if (b && typeof b === "object") {
+    const out: any = { ...(a || {}) };
+    for (const k of Object.keys(b)) out[k] = mergeDeep(a?.[k], b[k]);
+    return out;
+  }
+  return b === undefined ? a : b;
+}
+
+function acharItem(pedido: CfgPedido, ref: string): CfgItem | undefined {
+  if (!ref) return pedido.itens[pedido.itens.length - 1];
+  const r = String(ref).toLowerCase();
+  if (r === "ultimo" || r === "último") return pedido.itens[pedido.itens.length - 1];
+  let found = pedido.itens.find((i) => i.id === ref);
+  if (found) return found;
+  found = pedido.itens.find((i) => i.tipo === r);
+  if (found) return found;
+  return pedido.itens.find((i) =>
+    (i.explosao || []).some((e) => (e.descricao || "").toLowerCase().includes(r))
+  );
+}
+
+function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; quer_gerar: boolean; quer_resumo: boolean; duvidas: string[] } {
+  let p: CfgPedido = JSON.parse(JSON.stringify(pedido));
+  let quer_gerar = false;
+  let quer_resumo = false;
+  const duvidas: string[] = [];
+
+  for (const ix of intencoes) {
+    const acao = String(ix?.acao || "");
+    if (acao === "add_item") {
+      const tipo = (ix.tipo || "acessorio") as CfgItemTipo;
+      // Se for kit_porta e já existe um → faz merge ao invés de criar outro
+      if (tipo === "kit_porta") {
+        const existente = p.itens.find((i) => i.tipo === "kit_porta");
+        if (existente) {
+          existente.config = mergeDeep(existente.config, ix.config || {});
+          continue;
+        }
+      }
+      p.itens.push({
+        id: novoId(),
+        tipo,
+        config: { ...(ix.config || {}), qtd: Number(ix.qtd) || Number(ix.config?.qtd) || 1 },
+        explosao: [],
+        subtotal: 0,
+      });
+    } else if (acao === "update_item") {
+      const it = acharItem(p, ix.ref);
+      if (it) it.config = mergeDeep(it.config, ix.patch || {});
+    } else if (acao === "remove_item") {
+      const it = acharItem(p, ix.ref);
+      if (it) p.itens = p.itens.filter((x) => x.id !== it.id);
+    } else if (acao === "set_qtd") {
+      const it = acharItem(p, ix.ref);
+      if (it) it.config.qtd = Number(ix.qtd) || 1;
+    } else if (acao === "zerar") {
+      p = JSON.parse(JSON.stringify(PEDIDO_VAZIO));
+    } else if (acao === "gerar_orcamento") {
+      quer_gerar = true;
+    } else if (acao === "resumo") {
+      quer_resumo = true;
+    } else if (acao === "duvida") {
+      duvidas.push(String(ix.texto || ""));
+    } else if (acao === "escolher_menu") {
+      const op = Number(ix.opcao);
+      // Pré-popula um item placeholder do tipo correspondente para indicar foco
+      const tipoMap: Record<number, CfgItemTipo> = { 1: "kit_porta", 2: "acessorio", 3: "motor", 4: "acessorio" };
+      const t = tipoMap[op];
+      if (t && !p.itens.find((i) => i.tipo === t)) {
+        p.itens.push({ id: novoId(), tipo: t, config: {}, explosao: [], subtotal: 0 });
+      }
+    }
+  }
+  return { pedido: p, quer_gerar, quer_resumo, duvidas };
+}
+
+// --- Explosão + preço ---
+async function precoEstoque(termo: string, item: any = {}): Promise<{ sku: string; nome: string; preco: number; und: string } | null> {
+  const r = await buscarEstoqueParaPeca({ produto_nome: termo, descricao: termo, ...item });
+  if (r) return { sku: r.codigo_sku, nome: r.produto_nome, preco: Number(r.preco_venda) || 0, und: r.unidade_medida || "UN" };
+  return null;
+}
+
+function eixoPorAltura(alturaTotal: number): number {
+  // Faixa simplificada — até cliente enviar a tabela oficial
+  if (alturaTotal <= 3.5) return 4.5;
+  if (alturaTotal <= 4.5) return 5;
+  return 6;
+}
+
+async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
+  const linhas: CfgLinha[] = [];
+  const largura = Number(cfg?.largura) || 0;
+  const altura = Number(cfg?.altura) || 0;
+  if (!largura || !altura) return linhas;
+  const perfil: "baixo" | "alto" = (cfg?.lamina?.perfil === "alto" ? "alto" : "baixo");
+  const eixo = Number(cfg?.eixo_polegadas) || eixoPorAltura(altura);
+  const rolo = calcRolo(eixo);
+  const alturaTotal = altura + rolo;
+  const qtdLaminas = calcLaminas(alturaTotal, perfil);
+
+  // Lâmina
+  const modeloLam = String(cfg?.lamina?.modelo || "meia_cana").replace("_", " ");
+  const cor = cfg?.lamina?.cor ? ` ${cfg.lamina.cor}` : "";
+  const buscaLam = `lamina ${modeloLam} ${perfil}${cor}`;
+  const pLam = await precoEstoque(buscaLam);
+  linhas.push({
+    sku: pLam?.sku || "LAMINA",
+    descricao: pLam?.nome || `Lâmina ${modeloLam} perfil ${perfil}${cor}`,
+    und: pLam?.und || "UN",
+    qtd: qtdLaminas * largura,
+    valor_unit: pLam?.preco || 0,
+    total: (pLam?.preco || 0) * qtdLaminas * largura,
+    sob_consulta: !pLam,
+  });
+
+  // Guia lateral (par)
+  const mm = Number(cfg?.guia_mm) || 50;
+  const buscaGuia = `guia lateral ${mm}mm`;
+  const pGuia = await precoEstoque(buscaGuia);
+  const mlGuia = calcGuiasMetrosLineares(1, true, altura); // 1 par × altura
+  linhas.push({
+    sku: pGuia?.sku || "GUIA",
+    descricao: pGuia?.nome || `Guia lateral ${mm}mm (par)`,
+    und: pGuia?.und || "M",
+    qtd: mlGuia,
+    valor_unit: pGuia?.preco || 0,
+    total: (pGuia?.preco || 0) * mlGuia,
+    sob_consulta: !pGuia,
+  });
+
+  // Eixo
+  const pEixo = await precoEstoque(`eixo ${eixo}`);
+  linhas.push({
+    sku: pEixo?.sku || "EIXO",
+    descricao: pEixo?.nome || `Eixo ${eixo}"`,
+    und: pEixo?.und || "M",
+    qtd: largura,
+    valor_unit: pEixo?.preco || 0,
+    total: (pEixo?.preco || 0) * largura,
+    sob_consulta: !pEixo,
+  });
+
+  // Soleira
+  const pSol = await precoEstoque("soleira");
+  linhas.push({
+    sku: pSol?.sku || "SOLEIRA",
+    descricao: pSol?.nome || "Soleira em T",
+    und: pSol?.und || "M",
+    qtd: largura,
+    valor_unit: pSol?.preco || 0,
+    total: (pSol?.preco || 0) * largura,
+    sob_consulta: !pSol,
+  });
+
+  // Motor
+  if (cfg?.motor?.potencia) {
+    const pot = Number(cfg.motor.potencia);
+    const acdc = cfg.motor.ac_dc || "AC";
+    const pMot = await precoEstoque(`motor ${pot}kg ${acdc}`);
+    linhas.push({
+      sku: pMot?.sku || `MOTOR-${pot}KG`,
+      descricao: pMot?.nome || `Motor ${acdc} ${pot}kg`,
+      und: "UN",
+      qtd: 1,
+      valor_unit: pMot?.preco || 0,
+      total: pMot?.preco || 0,
+      sob_consulta: !pMot,
+    });
+
+    // Central (default true)
+    if (cfg?.central !== false) {
+      const pCen = await precoEstoque("central de comando");
+      linhas.push({
+        sku: pCen?.sku || "CENTRAL",
+        descricao: pCen?.nome || "Central de comando",
+        und: "UN", qtd: 1,
+        valor_unit: pCen?.preco || 0,
+        total: pCen?.preco || 0,
+        sob_consulta: !pCen,
+      });
+    }
+
+    // Controles
+    const qtdCtrl = Number(cfg?.controles) || 1;
+    if (qtdCtrl > 0) {
+      const pCtrl = await precoEstoque("controle remoto");
+      linhas.push({
+        sku: pCtrl?.sku || "CONTROLE",
+        descricao: pCtrl?.nome || "Controle remoto",
+        und: "UN", qtd: qtdCtrl,
+        valor_unit: pCtrl?.preco || 0,
+        total: (pCtrl?.preco || 0) * qtdCtrl,
+        sob_consulta: !pCtrl,
+      });
+    }
+  }
+
+  // Portinhola
+  if (cfg?.portinhola) {
+    const modelo = typeof cfg.portinhola === "string" ? cfg.portinhola : "CENTRO";
+    const pPort = await precoEstoque(`portinhola ${modelo}`);
+    linhas.push({
+      sku: pPort?.sku || "PORTINHOLA",
+      descricao: pPort?.nome || `Portinhola ${modelo}`,
+      und: "UN", qtd: 1,
+      valor_unit: pPort?.preco || 0,
+      total: pPort?.preco || 0,
+      sob_consulta: !pPort,
+    });
+  }
+  // Alçapão
+  if (cfg?.alcapao && !cfg?.portinhola) {
+    const pAlc = await precoEstoque("alcapao");
+    linhas.push({
+      sku: pAlc?.sku || "ALCAPAO",
+      descricao: pAlc?.nome || "Alçapão emergencial",
+      und: "UN", qtd: 1,
+      valor_unit: pAlc?.preco || 0,
+      total: pAlc?.preco || 0,
+      sob_consulta: !pAlc,
+    });
+  }
+
+  // Pintura eletrostática
+  if (cfg?.pintura) {
+    const corP = cfg?.lamina?.cor || "branca";
+    const pPint = await precoEstoque(`pintura eletrostatica ${corP}`);
+    const area = +(largura * alturaTotal).toFixed(2);
+    linhas.push({
+      sku: pPint?.sku || "PINTURA",
+      descricao: pPint?.nome || `Pintura eletrostática ${corP}`,
+      und: pPint?.und || "M2",
+      qtd: area,
+      valor_unit: pPint?.preco || 0,
+      total: (pPint?.preco || 0) * area,
+      sob_consulta: !pPint,
+    });
+  }
+
+  return linhas;
+}
+
+async function explodirItem(item: CfgItem): Promise<CfgLinha[]> {
+  const cfg = item.config || {};
+  if (item.tipo === "kit_porta") return explodirKitPorta(cfg);
+  if (item.tipo === "motor") {
+    const pot = Number(cfg.potencia);
+    if (!pot) return [];
+    const p = await precoEstoque(`motor ${pot}kg ${cfg.ac_dc || "AC"}`);
+    const qtd = Number(cfg.qtd) || 1;
+    return [{ sku: p?.sku || `MOTOR-${pot}KG`, descricao: p?.nome || `Motor ${cfg.ac_dc || "AC"} ${pot}kg`, und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+  }
+  if (item.tipo === "guia") {
+    const mm = Number(cfg.mm);
+    if (!mm) return [];
+    const compr = Number(cfg.comprimento_m) || 0;
+    const pares = Number(cfg.qtd_pares) || 0;
+    const unidades = Number(cfg.qtd_unidades) || 0;
+    const totalMl = calcGuiasMetrosLineares(pares || unidades, !!pares, compr);
+    if (!totalMl) return [];
+    const p = await precoEstoque(`guia lateral ${mm}mm`);
+    return [{ sku: p?.sku || "GUIA", descricao: p?.nome || `Guia lateral ${mm}mm${pares ? " (par)" : ""}`, und: p?.und || "M", qtd: totalMl, valor_unit: p?.preco || 0, total: (p?.preco || 0) * totalMl, sob_consulta: !p }];
+  }
+  if (item.tipo === "controle") {
+    const qtd = Number(cfg.qtd) || 1;
+    const p = await precoEstoque("controle remoto");
+    return [{ sku: p?.sku || "CONTROLE", descricao: p?.nome || "Controle remoto", und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+  }
+  if (item.tipo === "central") {
+    const p = await precoEstoque("central de comando");
+    return [{ sku: p?.sku || "CENTRAL", descricao: p?.nome || "Central de comando", und: "UN", qtd: 1, valor_unit: p?.preco || 0, total: p?.preco || 0, sob_consulta: !p }];
+  }
+  if (item.tipo === "trava_lamina") {
+    const qtd = Number(cfg.qtd) || 1;
+    const p = await precoEstoque("trava lamina");
+    return [{ sku: p?.sku || "TRAVA", descricao: p?.nome || "Trava-lâmina", und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+  }
+  return [];
+}
+
+async function cfgRecalcular(pedido: CfgPedido): Promise<CfgPedido> {
+  let total = 0;
+  let sob = false;
+  for (const it of pedido.itens) {
+    it.explosao = await explodirItem(it);
+    it.subtotal = +(it.explosao.reduce((s, l) => s + l.total, 0)).toFixed(2);
+    total += it.subtotal;
+    if (it.explosao.some((l) => l.sob_consulta)) sob = true;
+  }
+  pedido.total = +total.toFixed(2);
+  pedido.sob_consulta = sob;
+  return pedido;
+}
+
+// --- Próxima pergunta (código puro) ---
+function cfgProximaPergunta(pedido: CfgPedido): string | null {
+  for (const it of pedido.itens) {
+    if (it.tipo === "kit_porta") {
+      const c = it.config || {};
+      if (!c.largura || !c.altura) return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
+      if (!c.instalacao) return "A instalação é *entre paredes* ou *sobreposta*?";
+      if (!c?.motor?.ac_dc) return "O motor é *AC* ou *DC*?";
+      if (!c?.motor?.potencia) return "Qual a *potência do motor* (200/300/400/500/800/1000/1500 kg)?";
+      if (!c?.lamina?.modelo) return "Qual o *modelo da lâmina* (meia cana / transvision / fechado / oblongo)?";
+      if (!c?.lamina?.cor) return "Qual a *cor da lâmina/pintura*?";
+      if (!c?.guia_mm) return "Qual a *guia lateral* (50/60/70/80/90/100 mm)?";
+    } else if (it.tipo === "motor") {
+      if (!it.config?.potencia) return "Motor de quantos *kg*? (200/300/400/500/800/1000/1500)";
+      if (!it.config?.ac_dc) return "*AC* ou *DC*?";
+    } else if (it.tipo === "guia") {
+      if (!it.config?.mm) return "Guia de quantos *mm* (50/60/70/80/90/100)?";
+      if (!it.config?.comprimento_m) return "Qual o *comprimento em metros* da guia?";
+      if (!it.config?.qtd_pares && !it.config?.qtd_unidades) return "Quantos *pares* (ou unidades) de guia?";
+    }
+  }
+  return null;
+}
+
+// --- Resumo em texto ---
+function cfgResumo(pedido: CfgPedido): string {
+  if (!pedido.itens.length) return "_(carrinho vazio)_";
+  const linhas: string[] = ["*Resumo parcial do pedido:*"];
+  let n = 1;
+  for (const it of pedido.itens) {
+    const c = it.config || {};
+    if (it.tipo === "kit_porta") {
+      const rolo = calcRolo(Number(c.eixo_polegadas) || eixoPorAltura(Number(c.altura) || 0));
+      linhas.push(`${n++}. Porta de enrolar${c?.motor?.ac_dc ? " automática" : ""}`);
+      if (c.largura && c.altura) linhas.push(`   Medida: ${c.largura} x (${c.altura} + ${rolo.toFixed(2)})`);
+      if (c.instalacao) linhas.push(`   Instalação: ${String(c.instalacao).replace("_", " ")}`);
+      if (c?.motor?.ac_dc) linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + "kg" : ""}`);
+      if (c?.lamina?.modelo) linhas.push(`   Lâmina: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
+      if (c?.lamina?.cor) linhas.push(`   Cor: ${c.lamina.cor}`);
+      if (c.guia_mm) linhas.push(`   Guia: ${c.guia_mm}mm`);
+      if (c.portinhola) linhas.push(`   Portinhola: ${typeof c.portinhola === "string" ? c.portinhola : "sim"}`);
+      if (c.alcapao) linhas.push(`   Alçapão: sim`);
+      if (c.pintura) linhas.push(`   Pintura eletrostática`);
+      if (c.central !== false && c?.motor?.potencia) linhas.push(`   Central de controle inclusa`);
+      if ((Number(c.controles) || 0) > 0) linhas.push(`   Controles: ${c.controles}`);
+    } else if (it.tipo === "motor") {
+      linhas.push(`${n++}. Motor ${c.ac_dc || "?"} ${c.potencia || "?"}kg x ${c.qtd || 1}`);
+    } else if (it.tipo === "guia") {
+      linhas.push(`${n++}. Guia ${c.mm || "?"}mm — ${c.qtd_pares ? c.qtd_pares + " par(es)" : (c.qtd_unidades || "?") + " un"} de ${c.comprimento_m || "?"}m`);
+    } else if (it.tipo === "controle") {
+      linhas.push(`${n++}. Controle remoto x ${c.qtd || 1}`);
+    } else if (it.tipo === "central") {
+      linhas.push(`${n++}. Central de comando`);
+    } else {
+      linhas.push(`${n++}. ${it.tipo}`);
+    }
+  }
+  if (pedido.total > 0) linhas.push(`\n*Total parcial:* R$ ${pedido.total.toFixed(2).replace(".", ",")}${pedido.sob_consulta ? " _(alguns itens sob consulta)_" : ""}`);
+  return linhas.join("\n");
+}
+
+// --- Gerador de PDF (itens explodidos) ---
+function cfgGerarHtml(pedido: CfgPedido, cliente: { nome?: string; telefone?: string }) {
+  const linhasHtml = pedido.itens.flatMap((it, idx) =>
+    it.explosao.map((l, j) => `
+      <tr>
+        <td>${idx + 1}.${j + 1}</td>
+        <td>${escapeHtml(l.sku)}</td>
+        <td>${escapeHtml(l.descricao)}</td>
+        <td style="text-align:center">${escapeHtml(l.und)}</td>
+        <td style="text-align:right">${Number(l.qtd).toFixed(2)}</td>
+        <td style="text-align:right">${l.sob_consulta ? "—" : "R$ " + Number(l.valor_unit).toFixed(2)}</td>
+        <td style="text-align:right">${l.sob_consulta ? "<i>sob consulta</i>" : "R$ " + Number(l.total).toFixed(2)}</td>
+      </tr>`)
+  ).join("");
+  const dataStr = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Bahia" });
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    body{font-family:Arial,sans-serif;font-size:11pt;color:#222;margin:30px}
+    h1{color:#0f3a6e;margin:0 0 4px}
+    .header{border-bottom:3px solid #f6a500;padding-bottom:8px;margin-bottom:16px}
+    .meta{color:#555;font-size:9pt}
+    table{width:100%;border-collapse:collapse;margin-top:12px;font-size:10pt}
+    th{background:#0f3a6e;color:#fff;padding:6px;text-align:left}
+    td{border-bottom:1px solid #eee;padding:6px}
+    .total{margin-top:14px;font-size:13pt;text-align:right}
+    .total strong{color:#0f3a6e}
+    .footer{margin-top:24px;font-size:9pt;color:#666;border-top:1px solid #ddd;padding-top:8px}
+  </style></head><body>
+    <div class="header">
+      <h1>Eletroportas — Orçamento</h1>
+      <div class="meta">Cliente: ${escapeHtml(cliente.nome || "—")} | Tel: ${escapeHtml(cliente.telefone || "—")} | Data: ${dataStr}</div>
+    </div>
+    <table>
+      <thead><tr><th>Item</th><th>Código</th><th>Descrição da mercadoria</th><th>Und.</th><th>Qtd</th><th>Vlr unit.</th><th>Total</th></tr></thead>
+      <tbody>${linhasHtml || `<tr><td colspan="7" style="text-align:center;color:#999">Pedido vazio</td></tr>`}</tbody>
+    </table>
+    <div class="total">Total: <strong>R$ ${pedido.total.toFixed(2).replace(".", ",")}</strong></div>
+    <div class="footer">
+      Validade: 7 dias · Pagamento: a combinar · Entrega: a combinar.
+      ${pedido.sob_consulta ? "<br><b>Itens marcados como \"sob consulta\" serão confirmados pela equipe.</b>" : ""}
+    </div>
+  </body></html>`;
+}
+
+// --- Gerador de resposta humanizada ---
+async function cfgGerarResposta(args: { mensagemCliente: string; pedido: CfgPedido; proxima: string | null; duvidas: string[]; primeiraMsg: boolean }): Promise<string> {
+  const { mensagemCliente, pedido, proxima, duvidas, primeiraMsg } = args;
+  const resumo = pedido.itens.length ? cfgResumo(pedido) : "";
+  // Resposta deterministica curta — sem 2ª chamada LLM pra evitar latência
+  const partes: string[] = [];
+  if (primeiraMsg && !pedido.itens.length) {
+    partes.push(`Olá! 👋 Você está falando com a Equipe Eletroportas.\n\nVocê pode escolher:\n*1.* Kit porta de enrolar\n*2.* Peças avulsas\n*3.* Motores\n*4.* Acessórios\n\nOu já mandar o pedido direto, ex: _\"3x4 entre paredes AC meia cana branca portinhola VILD\"_.`);
+    return partes.join("\n\n");
+  }
+  if (duvidas.length) {
+    partes.push("Sobre sua pergunta — vou verificar e te respondo já já. Enquanto isso:");
+  }
+  if (resumo) partes.push(resumo);
+  if (proxima) partes.push(`👉 ${proxima}`);
+  else if (pedido.itens.length) partes.push(`👉 Deseja *acrescentar mais algum item* ou posso *gerar o orçamento*?`);
+  return partes.join("\n\n") || "Pode me dizer o que precisa? Ex: _\"3x4 entre paredes AC meia cana branca portinhola VILD\"_";
+}
+
+// --- Orquestrador ---
+async function rodarConfigurador(args: {
+  conversa: any;
+  telefone: string;
+  mensagem: string;
+  nomeCliente: string;
+  isNova: boolean;
+}): Promise<{ pdfEnviado: boolean; texto?: string }> {
+  const { conversa, telefone, mensagem, nomeCliente, isNova } = args;
+
+  // Carrega pedido atual
+  const { data: row } = await supabase
+    .from("leo_conversations")
+    .select("pedido")
+    .eq("id", conversa.id)
+    .maybeSingle();
+  let pedido = carregarPedido((row as any)?.pedido);
+
+  // 1) Interpreta
+  const intencoes = await cfgInterpretar(mensagem, pedido);
+  console.log("🧠 cfg intencoes:", JSON.stringify(intencoes));
+
+  // 2) Aplica
+  const r = cfgAplicar(pedido, intencoes);
+  pedido = await cfgRecalcular(r.pedido);
+
+  // 3) Persiste
+  await supabase
+    .from("leo_conversations")
+    .update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() })
+    .eq("id", conversa.id);
+
+  // 4) Geração de orçamento?
+  if (r.quer_gerar && pedido.itens.length) {
+    const html = cfgGerarHtml(pedido, { nome: nomeCliente, telefone });
+    const filename = `orcamento_${Date.now()}.pdf`;
+    const pdfBase64 = await gerarPdfPdfShift(html, filename);
+    if (pdfBase64) {
+      const caption = `Segue seu orçamento em PDF 📄${pedido.sob_consulta ? "\n_Alguns itens entraram como \"sob consulta\" e serão confirmados pela equipe._" : ""}`;
+      await enviarPdfBase64(telefone, pdfBase64, filename, caption);
+      await salvarMensagem(conversa.id, "assistant", caption, { pdf_enviado: true, configurador: true });
+      // funnel
+      try {
+        await registrarOrcamentoEAvancarFunil({
+          telefone, nome: nomeCliente,
+          orcamento: {
+            total_geral: pedido.total,
+            itens: pedido.itens.flatMap((it) => it.explosao.map((l) => ({
+              code: l.sku, description: l.descricao, qty: l.qtd, unit: l.und, unit_price: l.valor_unit, subtotal: l.total,
+            }))),
+            cliente_nome: nomeCliente,
+          } as any,
+          pdfBase64, filename,
+        });
+      } catch (e) { console.error("funil cfg erro:", (e as Error).message); }
+      return { pdfEnviado: true };
+    }
+  }
+
+  // 5) Resposta textual
+  const proxima = cfgProximaPergunta(pedido);
+  const texto = await cfgGerarResposta({
+    mensagemCliente: mensagem, pedido, proxima, duvidas: r.duvidas, primeiraMsg: isNova,
+  });
+  await salvarMensagem(conversa.id, "assistant", texto, { configurador: true });
+  await enviarTexto(telefone, texto);
+  return { pdfEnviado: false, texto };
+}
+
 // ===========================
 // Handler principal
 // ===========================
@@ -2722,6 +3322,28 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+    }
+
+    // ============================================================
+    // 🚀 ROTEAMENTO: SERRALHEIRO (revenda) → CONFIGURADOR Leo 2.0
+    // Consumidor final / porta_instalada continua no fluxo legado
+    // ============================================================
+    const tipoClienteAtual = String(conversaAtual.data?.tipo_cliente || conversa.tipo_cliente || "").toLowerCase();
+    if (tipoClienteAtual === "revenda") {
+      try {
+        await rodarConfigurador({
+          conversa: conversaAtual.data || conversa,
+          telefone,
+          mensagem: messageBody,
+          nomeCliente: conversa.nome_cliente || nome || clienteExistente?.CLI_NOME || "",
+          isNova,
+        });
+        return new Response(JSON.stringify({ ok: true, configurador: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (e: any) {
+        console.error("❌ Configurador falhou — caindo para fluxo legado:", e?.message);
       }
     }
 

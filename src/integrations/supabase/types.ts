@@ -213,6 +213,7 @@ export type Database = {
           largura: number | null
           nome_cliente: string | null
           pecas_avulsas: Json
+          pedido: Json
           pintura_perguntado: boolean
           pre_cadastro: boolean
           quer_entrega: boolean | null
@@ -241,6 +242,7 @@ export type Database = {
           largura?: number | null
           nome_cliente?: string | null
           pecas_avulsas?: Json
+          pedido?: Json
           pintura_perguntado?: boolean
           pre_cadastro?: boolean
           quer_entrega?: boolean | null
@@ -269,6 +271,7 @@ export type Database = {
           largura?: number | null
           nome_cliente?: string | null
           pecas_avulsas?: Json
+          pedido?: Json
           pintura_perguntado?: boolean
           pre_cadastro?: boolean
           quer_entrega?: boolean | null

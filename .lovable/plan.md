@@ -1,112 +1,171 @@
-# Reestruturação do Leo conforme spec do cliente
+# Leo 2.0 — Configurador técnico de orçamento
 
-Vou reorganizar o `supabase/functions/leo-webhook/index.ts` para seguir os 8 módulos enviados pelo cliente, preservando integrações já existentes (estoque real do dashboard, PrimeSync, PDF, funil, validação serralheiro).
+Hoje o `leo-webhook` funciona como chatbot sequencial pesado (3.449 linhas, máquina de estados por `etapa_fluxo`). Vou substituir a engine por uma arquitetura **carrinho-first + LLM interpretador + comandos**, mantendo todas as integrações que já funcionam (estoque do dashboard, PDF, funil, PrimeSync, validação serralheiro).
 
-## Arquitetura
+## Princípio central
 
-Em vez de deixar tudo solto no system prompt, vou criar uma **máquina de estados de conversa** baseada em `leo_conversations.etapa_fluxo` (nova coluna) + carrinho persistido em `leo_conversations.carrinho` (jsonb). O LLM continua interpretando texto livre, mas o fluxo de etapas é determinístico.
+O LLM **não conduz** a conversa. Ele apenas **interpreta** cada mensagem do cliente e devolve um JSON estruturado de intenções/alterações. O código aplica as mudanças no carrinho, calcula preço, e responde com resumo parcial + pergunta apenas do que falta.
 
-### Nova coluna em `leo_conversations`
-- `etapa_fluxo` text — `entrada | menu_tecnico | motores | guias | laminas | kit_porta | finalizar | aguarda_formato`
-- `carrinho` jsonb default `'[]'` — itens acumulados antes de virar orçamento
-- `pre_cadastro` boolean default false — serralheiro sem cadastro aprovado
+## Novo modelo de dados (carrinho na sessão)
 
-## Módulos implementados
+Adicionar coluna `pedido jsonb` em `leo_conversations` (mantém `carrinho` legado por compatibilidade durante migração). Estrutura:
 
-### M1 — Entrada e validação do serralheiro
-- Primeira mensagem → menu "1. Consumidor final / 2. Serralheiro".
-- Se 2 → pedir telefone com DDD → buscar em `Clientes` (CLI_FONE normalizado).
-- Cadastrado → libera menu técnico, marca `tipo_cliente=revenda`.
-- Não cadastrado → pede Nome/Empresa + Cidade + Telefone, cria pré-cadastro em `Clientes` com `tipo_cliente='pre_cadastro'`, **não bloqueia**, segue para menu técnico marcando `pre_cadastro=true`. Tabela padrão será usada e orçamento sai com "sujeito à aprovação" no rodapé.
-- Consumidor final segue fluxo atual (kit porta com instalação).
-
-### M2 — Menu técnico
-Após validação envia:
+```json
+{
+  "tipo_atendimento": "serralheiro | consumidor",
+  "itens": [
+    {
+      "id": "uuid",
+      "tipo": "kit_porta | motor | guia | lamina | controle | central | acessorio",
+      "config": {
+        "largura": 3.0, "altura": 4.0, "instalacao": "entre_paredes|sobreposta",
+        "motor": {"ac_dc": "AC", "potencia": 300},
+        "lamina": {"modelo": "meia_cana", "perfil": "baixo", "cor": "branca"},
+        "guia_mm": 50, "portinhola": "VILD", "alcapao": false,
+        "pintura": "eletrostatica", "central": true, "controles": 1
+      },
+      "explosao": [
+        {"sku":"...", "descricao":"Lâmina meia cana baixa branca", "und":"un", "qtd": 54, "valor_unit": 18.5, "total": 999}
+      ],
+      "subtotal": 0
+    }
+  ],
+  "total": 0,
+  "status": "em_andamento | aguardando_confirmacao | finalizado"
+}
 ```
-1. Kit porta de enrolar
-2. Peças avulsas
-3. Motores
-4. Acessórios
-```
-Interpretação por texto livre via LLM com classificador de intenção (`quero motor` → motores, `guia` → peças, etc). Carrinho persistente; ao terminar cada item volta ao menu.
 
-### M3 — Motores
-- Tipos: avulso / motor+testeiras / kit automatizador.
-- AC: 200/300/400/500/800/1000/1500 kg; DC: 200/300/400/500/800 kg.
-- LLM extrai `{quantidade, tipo, ac_dc, potencia}`. Se faltar AC/DC ou potência ou tipo → pergunta específica. Busca preço em `estoque` por SKU/nome match (já temos `pontuarEstoqueParaPeca`). Adiciona ao carrinho e mostra resumo.
-
-### M4.1 — Guias (peças avulsas, prioridade)
-- Modelos: 50/60/70/80/90/100 mm. Venda por metro linear.
-- LLM extrai `{quantidade, par?, mm, comprimento_m}`.
-- Cálculo: `total_ml = quantidade * (par ? 2 : 1) * comprimento_m`.
-- Busca `GUIA LATERAL {mm}MM` no estoque. Adiciona ao carrinho com qty em metros.
-- (Lâminas/eixo/soleira/PVC/borracha ficam stub com comentário "M4.2+ pendente" para próxima iteração — cliente listou ordem mas só detalhou guias.)
-
-### M5 — Kit porta de enrolar
-- Pede medida `Largura x (Altura + Rolo)`. Se não vier rolo: eixo 4.5"/5" → 0,60; maior → 0,75.
-- Pergunta config livre (automática/manual, pintura, cor, portinhola, alçapão, lâmina, motor).
-- Modelos lâmina: meia cana lisa/perfurada, transvision, lisa reta. Perfis baixo/alto.
-- Cálculo lâminas: altura_total ÷ (0,075 baixo | 0,085 alto), ceil.
-- Portinhola: VILD/VILE/Centro, medida padrão (não perguntar).
-- Alçapão: emergencial, **mutuamente exclusivo com portinhola** (validação).
-- Motor: reaproveita M3.
-- Pintura eletrostática + cor.
-- Gera resumo técnico e adiciona ao carrinho.
-
-### M6 — Orçamento automático
-- Antes de finalizar **sempre** pergunta: "👉 Deseja acrescentar mais algum item ao pedido?"
-- Se sim → volta ao menu técnico mantendo carrinho.
-- Se não → consolida itens, busca preços, calcula subtotais e total, mostra resumo em texto e pergunta formato:
-  ```
-  1. PDF  2. Imagem  3. Ambos
-  ```
-
-### M7 — PDF e Imagem
-- PDF já existe via PDFShift. Vou manter, adicionando:
-  - Cabeçalho com logo+nome+telefone
-  - Resumo técnico (medidas, config) quando houver kit porta
-  - Rodapé: validade (7 dias), forma de pagamento, entrega, "Orçamento sujeito à aprovação" se `pre_cadastro=true`
-- Imagem: gerar PNG via screenshot do mesmo HTML (PDFShift suporta `format=jpg`). Adicionar opção "imagem" e "ambos".
-
-### M8 — Regras industriais (helpers puros)
-Funções utilitárias isoladas em um bloco `// === REGRAS INDUSTRIAIS ===`:
-- `calcRolo(eixoPolegadas)`
-- `calcLaminas(alturaTotal, perfil)`
-- `calcGuiasMetrosLineares(qtd, par, comprimento)`
-- `validarMotor({tipo, ac_dc, potencia})`
-- `validarPortinholaAlcapao(config)`
-
-Essas funções são chamadas pelo orquestrador, não pelo LLM, garantindo cálculo correto.
-
-## Mudanças técnicas resumidas
+## Arquitetura de processamento (a cada mensagem)
 
 ```text
-supabase/functions/leo-webhook/index.ts
-├── + REGRAS INDUSTRIAIS (M8)        helpers puros de cálculo
-├── + máquina de estados              etapa_fluxo + carrinho
-├── ~ system prompt                   reescrito com fluxo dos módulos
-├── + handler menu inicial (M1)       consumidor/serralheiro + validação telefone
-├── + handler pré-cadastro            cria Cliente sem bloquear
-├── + handler menu técnico (M2)       roteamento por intenção
-├── + handler motores (M3)            extração estruturada + preço
-├── + handler guias (M4.1)            cálculo ml + preço
-├── + handler kit porta (M5)          medidas + config + cálculos M8
-├── + handler finalização (M6)        "mais algum item?" + formato
-└── ~ gerador PDF                     cabeçalho/rodapé novos + imagem JPG
-
-migration:
-ALTER TABLE leo_conversations
-  ADD COLUMN etapa_fluxo text DEFAULT 'entrada',
-  ADD COLUMN carrinho jsonb NOT NULL DEFAULT '[]'::jsonb,
-  ADD COLUMN pre_cadastro boolean NOT NULL DEFAULT false;
+mensagem do cliente
+   │
+   ▼
+┌─────────────────────────────────────────────┐
+│ 1. INTERPRETADOR (LLM, JSON-only)           │
+│    input: mensagem + pedido atual           │
+│    output: { intencoes: [...] }             │
+│      - add_item {tipo, config_parcial}      │
+│      - update_item {id|ultimo, patch}       │
+│      - remove_item {id|descricao}           │
+│      - set_quantidade {item, qtd}           │
+│      - trocar {campo, valor}                │
+│      - gerar_orcamento                      │
+│      - escolher_menu {1|2|3|4}              │
+│      - duvida_livre {texto}                 │
+└─────────────────────────────────────────────┘
+   │
+   ▼
+┌─────────────────────────────────────────────┐
+│ 2. APLICADOR (código puro, determinístico)  │
+│    - aplica intenções no carrinho           │
+│    - chama regras industriais (M8 atuais):  │
+│      calcRolo, calcLaminas, calcGuiasML,    │
+│      validarMotor, validarPortinholaAlcapao │
+│    - explode kit em itens (lâmina, guia,    │
+│      eixo, soleira, motor, central, etc.)   │
+│    - busca preço no estoque do dashboard    │
+│    - recalcula subtotais e total            │
+└─────────────────────────────────────────────┘
+   │
+   ▼
+┌─────────────────────────────────────────────┐
+│ 3. PRÓXIMA PERGUNTA (código)                │
+│    olha config de cada item e detecta       │
+│    o PRIMEIRO campo obrigatório faltando.   │
+│    Se nada falta → "Deseja acrescentar      │
+│    mais algum item ou gerar orçamento?"     │
+└─────────────────────────────────────────────┘
+   │
+   ▼
+┌─────────────────────────────────────────────┐
+│ 4. RESPOSTA (LLM curto, humanizado)         │
+│    recebe: resumo parcial estruturado +     │
+│    próxima pergunta. Gera texto natural     │
+│    com o resumo numerado e a pergunta.      │
+└─────────────────────────────────────────────┘
 ```
 
+## Itens explodidos no orçamento
+
+Quando o cliente confirma um **kit porta**, o aplicador gera automaticamente as linhas:
+
+| Item | Origem |
+|---|---|
+| Lâmina (modelo + perfil + cor) | `calcLaminas(altura+rolo, perfil)` × largura |
+| Guia lateral (par, mm) | `calcGuiasML(2, largura, altura)` |
+| Eixo (polegadas) | regra peso → escolhe 4.5"/5"/6" |
+| Soleira | largura |
+| Motor (AC/DC, potência) | `validarMotor` |
+| Central de controle | 1 (default, removível) |
+| Controles | qty configurável |
+| Portinhola VILD/VILE/Centro | se solicitado |
+| Alçapão | mutuamente exclusivo com portinhola |
+| Pintura eletrostática | se solicitada, por m² |
+| Trava-lâmina | acessório opcional |
+
+Cada linha tem `sku, descricao, und, qtd, valor_unit, total` lida do `estoque` (Lovable Cloud). Itens sem preço entram com `"sob consulta"` e marcam o orçamento como **pendente de aprovação**.
+
+## Comandos suportados (parser via LLM com schema)
+
+- `adicionar X` / `+ X`
+- `remover X` / `tirar X` / `retirar X`
+- `trocar X por Y` / `mudar X para Y`
+- `colocar pintura preta` / `cor branca`
+- `quantidade N` / `N controles`
+- `gerar orçamento` / `fechar pedido` / `finalizar`
+- `resumo` / `ver pedido`
+- `zerar` / `recomeçar`
+
+## Fluxo do exemplo do cliente
+
+Cliente: `"3x4 entre paredes AC meia cana branca portinhola VILD"`
+
+1. Interpretador → `[{add_item, tipo:kit_porta, config:{largura:3, altura:4, instalacao:entre_paredes, motor:{ac_dc:AC}, lamina:{modelo:meia_cana, cor:branca}, portinhola:VILD}}]`
+2. Aplicador → cria item, falta: `motor.potencia`, `lamina.perfil`, `guia_mm`
+3. Próxima pergunta → "Para fechar a potência do motor, a porta é até quantos kg ou quer que eu sugira pela medida?"
+4. Resposta com resumo parcial numerado.
+
+Cliente: `"+ 2 controles e trocar guia para 70"` → aplica `add_item(controle, 2)` + `update_item(kit, guia_mm=70)` → recalcula.
+
+Cliente: `"gerar orçamento"` → consolida, gera PDF/Imagem.
+
+## Mudanças no arquivo
+
+```text
+supabase/functions/leo-webhook/index.ts (reescrita parcial)
+├── manter: integrações (PrimeSync, PDFShift, estoque do dashboard,
+│   busca cliente, funil, validação serralheiro, helpers de telefone)
+├── manter: regras industriais M8 (calcRolo, calcLaminas, etc.)
+├── REMOVER: máquina de estados por etapa_fluxo (motores/guias/kit_porta separados)
+├── NOVO: interpretarMensagem(mensagem, pedido) → intenções JSON
+├── NOVO: aplicarIntencoes(pedido, intencoes) → pedido atualizado
+├── NOVO: explodirKitPorta(config) → linhas de orçamento
+├── NOVO: detectarProximaPergunta(pedido) → string|null
+├── NOVO: gerarResposta(pedido, proximaPergunta) → texto humanizado
+└── SIMPLIFICAR: orquestrador principal vira ~80 linhas
+```
+
+Migração:
+```sql
+ALTER TABLE leo_conversations
+  ADD COLUMN pedido jsonb NOT NULL DEFAULT '{"itens":[],"total":0,"status":"em_andamento"}'::jsonb;
+```
+
+## Compatibilidade
+
+- Conversas em andamento com `carrinho` legado: migração faz `pedido = jsonb_build_object('itens', carrinho, ...)` quando carrinho não vazio.
+- Menu guiado (1/2/3/4) continua funcionando — vira um `escolher_menu` que pré-popula `tipo` do próximo item esperado.
+- PDF/imagem do M7 atual permanecem; só muda a fonte de itens (agora vem da explosão estruturada).
+
 ## O que **não** entra nesta entrega
-- Lâminas/eixo/soleira/PVC/borracha avulsos (M4.2 em diante) — cliente só detalhou guias; deixo stubs prontos para o próximo módulo que ele mandar.
-- Tabela de parceiro vs padrão com desconto — cliente ainda não enviou os percentuais; uso preço único de `estoque` e marco "sujeito à aprovação" no pré-cadastro.
-- Reaproveitar/editar orçamento existente (M7 último bullet) — fica para próxima iteração.
+
+- Tabela de descontos parceiro vs padrão (cliente ainda não enviou percentuais)
+- Reaproveitar/editar orçamento já gerado em conversas antigas
+- Cálculo automático de peso/eixo por modelo de lâmina específico (fica regra simplificada por faixa de altura até cliente enviar a tabela)
 
 ## Confirmações antes de implementar
-1. Posso adicionar as 3 colunas em `leo_conversations` (migração)?
-2. Imagem do orçamento via PDFShift como JPG do mesmo template está OK, ou prefere layout dedicado para WhatsApp (quadrado, destaque do total)?
-3. Para pré-cadastro de serralheiro, posso gravar direto em `Clientes` com `tipo_cliente='pre_cadastro'` e disparar notificação ao admin (já existe `validar-serralheiro`)?
+
+1. Posso adicionar a coluna `pedido jsonb` e migrar `carrinho` existente?
+2. Para itens sem preço no estoque, prefere (a) bloquear e perguntar, ou (b) gerar com "sob consulta" + aviso? *(plano assume b)*
+3. O fluxo de **consumidor final** (com instalação/CEP/frete) que existe hoje deve continuar igual ou também vira configurador livre? *(plano mantém serralheiro como foco; consumidor final segue fluxo atual até segunda ordem)*
