@@ -3160,7 +3160,7 @@ function cfgGerarHtml(pedido: CfgPedido, cliente: { nome?: string; telefone?: st
 
 // --- Gerador de resposta humanizada ---
 async function cfgGerarResposta(args: { mensagemCliente: string; pedido: CfgPedido; proxima: string | null; duvidas: string[]; primeiraMsg: boolean }): Promise<string> {
-  const { pedido, proxima, duvidas, primeiraMsg } = args;
+  const { mensagemCliente, pedido, proxima, duvidas, primeiraMsg } = args;
   const completo = !proxima && pedido.itens.length > 0;
   const resumo = pedido.itens.length ? cfgResumo(pedido, { mostrarTotal: completo }) : "";
   const partes: string[] = [];
@@ -3172,7 +3172,9 @@ async function cfgGerarResposta(args: { mensagemCliente: string; pedido: CfgPedi
     );
     return partes.join("\n\n");
   }
-  if (duvidas.length) partes.push("Sobre sua pergunta — vou verificar e te respondo já já. Enquanto isso:");
+  if (duvidas.length || cfgParecePerguntaOuConversaLivre(mensagemCliente)) {
+    return await cfgResponderComLLM({ mensagemCliente, pedido, proxima });
+  }
   if (resumo) partes.push(resumo);
   if (proxima) partes.push(`👉 ${proxima}`);
   else if (pedido.itens.length) partes.push(`👉 Deseja *acrescentar mais algum item* ou posso *gerar o orçamento*?`);
