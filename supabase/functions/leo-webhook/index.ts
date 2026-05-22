@@ -2636,6 +2636,8 @@ async function cfgInterpretar(mensagem: string, pedido: CfgPedido): Promise<any[
 Receba a MENSAGEM do cliente serralheiro + o PEDIDO_ATUAL e devolva SOMENTE JSON:
 { "intencoes": [...] }
 
+${CFG_REGRAS_TECNICAS}
+
 Intenções possíveis:
 - {"acao":"add_item","tipo":"kit_porta|motor|guia|lamina|controle|central|trava_lamina|acessorio","config":{...},"qtd":1}
 - {"acao":"update_item","ref":"<id ou 'ultimo' ou tipo>","patch":{...}}
@@ -2664,10 +2666,11 @@ REGRAS:
 - "+ 2 controles e trocar guia para 70" → [add_item controle qtd 2, update_item kit_porta patch guia_mm 70].
 - "remover central" / "tirar pintura" → update_item kit_porta com central:false / pintura:false.
 - "gerar orçamento" / "fechar pedido" / "pode fechar" → gerar_orcamento.
+- Perguntas/dúvidas técnicas, comerciais ou de uso que não mudam o pedido → duvida.
 - Mensagens vagas tipo "oi" → []. NUNCA invente dados.
 - Devolva APENAS JSON válido, sem explicação.
 
-PEDIDO_ATUAL: ${JSON.stringify(pedido)}`;
+PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
 
   try {
     const resp = await fetch(AI_GATEWAY_URL, {
@@ -2678,6 +2681,7 @@ PEDIDO_ATUAL: ${JSON.stringify(pedido)}`;
         messages: [{ role: "system", content: sys }, { role: "user", content: mensagem }],
         response_format: { type: "json_object" },
         temperature: 0.1,
+        max_tokens: 2048,
       }),
     });
     if (!resp.ok) {
@@ -2690,7 +2694,7 @@ PEDIDO_ATUAL: ${JSON.stringify(pedido)}`;
     return Array.isArray(parsed?.intencoes) ? parsed.intencoes : [];
   } catch (e) {
     console.error("cfgInterpretar erro:", (e as Error)?.message);
-    return [];
+    return cfgFallbackInterpretar(mensagem);
   }
 }
 
