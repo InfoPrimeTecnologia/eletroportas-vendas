@@ -2910,11 +2910,16 @@ async function explodirItem(item: CfgItem): Promise<CfgLinha[]> {
   return [];
 }
 
-async function cfgRecalcular(pedido: CfgPedido): Promise<CfgPedido> {
+async function cfgRecalcular(pedido: CfgPedido, opts: { explodir?: boolean } = {}): Promise<CfgPedido> {
   let total = 0;
   let sob = false;
   for (const it of pedido.itens) {
-    it.explosao = await explodirItem(it);
+    if (opts.explodir) {
+      it.explosao = await explodirItem(it);
+    } else {
+      // Mantém a explosão anterior se houver, mas não recalcula a cada turno
+      it.explosao = it.explosao || [];
+    }
     it.subtotal = +(it.explosao.reduce((s, l) => s + l.total, 0)).toFixed(2);
     total += it.subtotal;
     if (it.explosao.some((l) => l.sob_consulta)) sob = true;
