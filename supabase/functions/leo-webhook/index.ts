@@ -3079,9 +3079,12 @@ async function rodarConfigurador(args: {
   const intencoes = await cfgInterpretar(mensagem, pedido);
   console.log("🧠 cfg intencoes:", JSON.stringify(intencoes));
 
-  // 2) Aplica
+  // 2) Aplica (sem explodir BOM ainda — apenas atualiza config)
   const r = cfgAplicar(pedido, intencoes);
-  pedido = await cfgRecalcular(r.pedido);
+  // Só explode/consulta estoque quando: cliente pediu orçamento OU pedido está completo
+  const proximaCheck = cfgProximaPergunta(r.pedido);
+  const deveExplodir = r.quer_gerar || (!proximaCheck && r.pedido.itens.length > 0);
+  pedido = await cfgRecalcular(r.pedido, { explodir: deveExplodir });
 
   // 3) Persiste
   await supabase
