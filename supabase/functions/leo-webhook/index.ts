@@ -3325,6 +3325,28 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============================================================
+    // 🚀 ROTEAMENTO: SERRALHEIRO (revenda) → CONFIGURADOR Leo 2.0
+    // Consumidor final / porta_instalada continua no fluxo legado
+    // ============================================================
+    const tipoClienteAtual = String(conversaAtual.data?.tipo_cliente || conversa.tipo_cliente || "").toLowerCase();
+    if (tipoClienteAtual === "revenda") {
+      try {
+        await rodarConfigurador({
+          conversa: conversaAtual.data || conversa,
+          telefone,
+          mensagem: messageBody,
+          nomeCliente: conversa.nome_cliente || nome || clienteExistente?.CLI_NOME || "",
+          isNova,
+        });
+        return new Response(JSON.stringify({ ok: true, configurador: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (e: any) {
+        console.error("❌ Configurador falhou — caindo para fluxo legado:", e?.message);
+      }
+    }
+
     const estadoAntesAceite = await carregarEstadoConversa(conversa.id);
 
 
