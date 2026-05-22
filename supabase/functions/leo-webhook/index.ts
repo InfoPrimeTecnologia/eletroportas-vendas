@@ -3069,6 +3069,52 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
   return linhas.join("\n");
 }
 
+function cfgParecePerguntaOuConversaLivre(mensagem: string): boolean {
+  const t = String(mensagem || "").toLowerCase();
+  return /\?|\b(qual|quais|como|onde|quando|porque|por que|pra que|para que|voc[eê]s|trabalha|serve|pode|tem|faz|boa tarde|bom dia|boa noite|ok|obrigado|valeu)\b/.test(t);
+}
+
+async function cfgResponderComLLM(args: { mensagemCliente: string; pedido: CfgPedido; proxima: string | null }): Promise<string> {
+  const resumo = args.pedido.itens.length ? cfgResumo(args.pedido, { mostrarTotal: !args.proxima }) : "Sem item técnico fechado ainda.";
+  const system = `Você é o Leo, consultor técnico humano da Eletroportas no WhatsApp.
+Responda em português brasileiro, curto e natural (1 a 4 frases), sem dizer que é IA/robô.
+OBRIGATÓRIO: responda primeiro exatamente a dúvida/comentário do cliente. Depois, se houver campo pendente, conduza com uma única pergunta.
+Não invente preço, endereço, prazo exato ou dado técnico fora das regras.
+
+${CFG_REGRAS_TECNICAS}`;
+  const user = `MENSAGEM DO CLIENTE: ${args.mensagemCliente}
+
+PEDIDO ATUAL:
+${resumo}
+
+PRÓXIMA PERGUNTA TÉCNICA, se fizer sentido continuar o orçamento: ${args.proxima || "nenhuma; pergunte se deseja acrescentar item ou gerar orçamento"}`;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12_000);
+    const resp = await fetch(AI_GATEWAY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${LOVABLE_API_KEY || OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        temperature: 0.25,
+        max_tokens: 900,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!resp.ok) throw new Error(`IA ${resp.status}`);
+    const j = await resp.json();
+    const txt = String(j?.choices?.[0]?.message?.content || "").trim();
+    if (txt) return txt;
+  } catch (e) {
+    console.error("cfgResponderComLLM erro:", (e as Error)?.message);
+  }
+  return args.proxima
+    ? `Certo 👍 ${args.proxima}`
+    : `Certo 👍 Quer acrescentar mais algum item ou posso gerar o orçamento?`;
+}
+
 // --- Gerador de PDF (itens explodidos) ---
 function cfgGerarHtml(pedido: CfgPedido, cliente: { nome?: string; telefone?: string }) {
   const linhasHtml = pedido.itens.flatMap((it, idx) =>
