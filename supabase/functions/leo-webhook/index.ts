@@ -1105,6 +1105,7 @@ async function chamarIA(messages: any[], options: { tools?: any[] | null; temper
         ...(options.tools === null ? {} : { tools: options.tools || TOOLS }),
         temperature: options.temperature ?? 0.2, // resposta mais previsível e fiel ao fluxo
         top_p: 0.9,
+        max_tokens: 4096,
       }),
       signal: controller.signal,
     });
@@ -1133,12 +1134,22 @@ function estadoInicialConversa(telefone: string, nome?: string) {
     tipo_cliente: "indefinido",
     nome_cliente: nome || null,
     status: "ativa",
+    etapa_fluxo: "entrada",
+    subtipo_revenda: null,
     largura: null,
     altura: null,
     tipo_perfil: null,
     cep: null,
     frete: null,
     endereco_instalacao: null,
+    quer_entrega: null,
+    entrega_perguntado: false,
+    quer_pintura: null,
+    tipo_pintura: null,
+    pintura_perguntado: false,
+    pecas_avulsas: [],
+    carrinho: [],
+    pedido: { itens: [], total: 0, status: "em_andamento" },
     adicionais: { portinhola: false, alcapao: false },
     adicionais_perguntado: false,
     ultima_mensagem_at: new Date().toISOString(),
@@ -2545,6 +2556,63 @@ const PEDIDO_VAZIO: CfgPedido = { itens: [], total: 0, status: "em_andamento" };
 
 function novoId() { return crypto.randomUUID().slice(0, 8); }
 
+const CFG_REGRAS_TECNICAS = `Regras técnicas Eletroportas:
+- Atendimento serralheiro é configurador técnico: o cliente pode mandar pedido completo, correção, acréscimo ou dúvida em qualquer ordem.
+- Responda primeiro a pergunta do cliente; depois, se necessário, conduza o orçamento sem repetir perguntas já respondidas.
+- Porta de enrolar: largura x altura em metros. Rolo técnico: eixo até 5" soma 0,60m; eixo acima de 5" soma 0,75m.
+- Lâminas: perfil baixo divide altura total por 0,075; perfil alto divide por 0,085; sempre arredonda para cima.
+- Guias: cálculo por metro linear; 1 par = 2 unidades x comprimento.
+- Motores AC: 200/300/400/500/800/1000/1500 kg. Motores DC: 200/300/400/500/800 kg.
+- Portinhola é acesso integrado. Alçapão é acesso emergencial. Nunca usar portinhola e alçapão juntos na mesma porta.
+- Não invente preço. Quando faltar valor no estoque, sinalize como sob consulta e siga o atendimento.`;
+
+function cfgPedidoLeve(pedido: CfgPedido) {
+  return {
+    itens: (pedido.itens || []).map((it) => ({ id: it.id, tipo: it.tipo, config: it.config || {} })),
+    total: pedido.total || 0,
+    status: pedido.status || "em_andamento",
+  };
+}
+
+function cfgFallbackInterpretar(mensagem: string): any[] {
+  const original = mensagem || "";
+  const t = original.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const intencoes: any[] = [];
+  if (/\b(zerar|limpar|recomecar|recomeçar|novo pedido|comecar de novo)\b/.test(t)) return [{ acao: "zerar" }];
+  if (/\b(gerar|fechar|emitir|mandar|enviar)\b.*\b(orcamento|orçamento|pdf)\b|\borcamento\b$|\bfechar pedido\b/.test(t)) return [{ acao: "gerar_orcamento" }];
+  if (/\b(resumo|revisar|conferir)\b/.test(t)) intencoes.push({ acao: "resumo" });
+
+  const patch: any = {};
+  const medida = t.match(/(\d+(?:[\.,]\d+)?)\s*(?:m)?\s*[x×]\s*(\d+(?:[\.,]\d+)?)/);
+  if (medida) {
+    patch.largura = Number(medida[1].replace(",", "."));
+    patch.altura = Number(medida[2].replace(",", "."));
+  }
+  if (/\bentre\s+paredes\b/.test(t)) patch.instalacao = "entre_paredes";
+  else if (/\b(sobreposta|sobrepor|vao\s*\+\s*guias?|vao\s*\+\s*1\s*guia|entre\s+testeiras)\b/.test(t)) patch.instalacao = "sobreposta";
+  const guia = t.match(/\bguia\s*(?:de|para)?\s*(50|60|70|80|90|100)\b/);
+  if (guia) patch.guia_mm = Number(guia[1]);
+  const pot = t.match(/\b(200|300|400|500|800|1000|1500)\s*kg\b/);
+  const acdc = t.match(/\b(AC|DC)\b/i)?.[1]?.toUpperCase();
+  if (pot || acdc) patch.motor = { ...(patch.motor || {}), ...(pot ? { potencia: Number(pot[1]) } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
+  if (/\bmeia\s*cana\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "meia_cana" };
+  else if (/\btransvision\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "transvision" };
+  else if (/\boblongo\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "oblongo" };
+  else if (/\bfechad[ao]\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "fechado" };
+  const cor = t.match(/\b(branca?|preta?|cinza|bege|azul|verde|vermelha?|amarela?)\b/);
+  if (cor) patch.lamina = { ...(patch.lamina || {}), cor: cor[1].replace(/a$/, "o") };
+  const port = t.match(/\bportinhola\s*(VILD|VILE|CENTRO)?\b/i);
+  if (port) patch.portinhola = (port[1] || "CENTRO").toUpperCase();
+  if (/\balcapao\b/.test(t)) patch.alcapao = true;
+  const controles = t.match(/(?:\+\s*)?(\d+)\s*controles?\b/);
+  if (controles) intencoes.push({ acao: "add_item", tipo: "controle", qtd: Number(controles[1]), config: { qtd: Number(controles[1]) } });
+
+  if (Object.keys(patch).length) intencoes.unshift({ acao: medida ? "add_item" : "update_item", tipo: "kit_porta", ref: "kit_porta", config: patch, patch });
+  const parecePergunta = /\?|\b(qual|quais|como|onde|quando|porque|por que|pra que|para que|voc[eê]s|trabalha|serve|pode|tem|faz)\b/.test(t);
+  if (!intencoes.length && parecePergunta) intencoes.push({ acao: "duvida", texto: original });
+  return intencoes;
+}
+
 function carregarPedido(raw: any): CfgPedido {
   if (!raw || typeof raw !== "object") return JSON.parse(JSON.stringify(PEDIDO_VAZIO));
   const itens = Array.isArray(raw.itens) ? raw.itens : [];
@@ -2567,6 +2635,8 @@ async function cfgInterpretar(mensagem: string, pedido: CfgPedido): Promise<any[
   const sys = `Você é um interpretador de pedidos para uma fábrica de portas de enrolar.
 Receba a MENSAGEM do cliente serralheiro + o PEDIDO_ATUAL e devolva SOMENTE JSON:
 { "intencoes": [...] }
+
+${CFG_REGRAS_TECNICAS}
 
 Intenções possíveis:
 - {"acao":"add_item","tipo":"kit_porta|motor|guia|lamina|controle|central|trava_lamina|acessorio","config":{...},"qtd":1}
@@ -2596,10 +2666,11 @@ REGRAS:
 - "+ 2 controles e trocar guia para 70" → [add_item controle qtd 2, update_item kit_porta patch guia_mm 70].
 - "remover central" / "tirar pintura" → update_item kit_porta com central:false / pintura:false.
 - "gerar orçamento" / "fechar pedido" / "pode fechar" → gerar_orcamento.
+- Perguntas/dúvidas técnicas, comerciais ou de uso que não mudam o pedido → duvida.
 - Mensagens vagas tipo "oi" → []. NUNCA invente dados.
 - Devolva APENAS JSON válido, sem explicação.
 
-PEDIDO_ATUAL: ${JSON.stringify(pedido)}`;
+PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
 
   try {
     const resp = await fetch(AI_GATEWAY_URL, {
@@ -2610,19 +2681,24 @@ PEDIDO_ATUAL: ${JSON.stringify(pedido)}`;
         messages: [{ role: "system", content: sys }, { role: "user", content: mensagem }],
         response_format: { type: "json_object" },
         temperature: 0.1,
+        max_tokens: 2048,
       }),
     });
     if (!resp.ok) {
       console.error("cfgInterpretar falhou:", resp.status, await resp.text());
-      return [];
+      return cfgFallbackInterpretar(mensagem);
     }
     const j = await resp.json();
+    if (j?.choices?.[0]?.finish_reason === "length" || j?.choices?.[0]?.finish_reason === "MAX_TOKENS") {
+      console.warn("cfgInterpretar truncado por limite de tokens — usando fallback determinístico");
+      return cfgFallbackInterpretar(mensagem);
+    }
     const content = j?.choices?.[0]?.message?.content || "{}";
     const parsed = JSON.parse(content);
-    return Array.isArray(parsed?.intencoes) ? parsed.intencoes : [];
+    return Array.isArray(parsed?.intencoes) ? parsed.intencoes : cfgFallbackInterpretar(mensagem);
   } catch (e) {
     console.error("cfgInterpretar erro:", (e as Error)?.message);
-    return [];
+    return cfgFallbackInterpretar(mensagem);
   }
 }
 
@@ -2993,6 +3069,52 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
   return linhas.join("\n");
 }
 
+function cfgParecePerguntaOuConversaLivre(mensagem: string): boolean {
+  const t = String(mensagem || "").toLowerCase();
+  return /\?|\b(qual|quais|como|onde|quando|porque|por que|pra que|para que|voc[eê]s|trabalha|serve|pode|tem|faz|boa tarde|bom dia|boa noite|ok|obrigado|valeu)\b/.test(t);
+}
+
+async function cfgResponderComLLM(args: { mensagemCliente: string; pedido: CfgPedido; proxima: string | null }): Promise<string> {
+  const resumo = args.pedido.itens.length ? cfgResumo(args.pedido, { mostrarTotal: !args.proxima }) : "Sem item técnico fechado ainda.";
+  const system = `Você é o Leo, consultor técnico humano da Eletroportas no WhatsApp.
+Responda em português brasileiro, curto e natural (1 a 4 frases), sem dizer que é IA/robô.
+OBRIGATÓRIO: responda primeiro exatamente a dúvida/comentário do cliente. Depois, se houver campo pendente, conduza com uma única pergunta.
+Não invente preço, endereço, prazo exato ou dado técnico fora das regras.
+
+${CFG_REGRAS_TECNICAS}`;
+  const user = `MENSAGEM DO CLIENTE: ${args.mensagemCliente}
+
+PEDIDO ATUAL:
+${resumo}
+
+PRÓXIMA PERGUNTA TÉCNICA, se fizer sentido continuar o orçamento: ${args.proxima || "nenhuma; pergunte se deseja acrescentar item ou gerar orçamento"}`;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12_000);
+    const resp = await fetch(AI_GATEWAY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${LOVABLE_API_KEY || OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        temperature: 0.25,
+        max_tokens: 900,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!resp.ok) throw new Error(`IA ${resp.status}`);
+    const j = await resp.json();
+    const txt = String(j?.choices?.[0]?.message?.content || "").trim();
+    if (txt) return txt;
+  } catch (e) {
+    console.error("cfgResponderComLLM erro:", (e as Error)?.message);
+  }
+  return args.proxima
+    ? `Certo 👍 ${args.proxima}`
+    : `Certo 👍 Quer acrescentar mais algum item ou posso gerar o orçamento?`;
+}
+
 // --- Gerador de PDF (itens explodidos) ---
 function cfgGerarHtml(pedido: CfgPedido, cliente: { nome?: string; telefone?: string }) {
   const linhasHtml = pedido.itens.flatMap((it, idx) =>
@@ -3038,7 +3160,7 @@ function cfgGerarHtml(pedido: CfgPedido, cliente: { nome?: string; telefone?: st
 
 // --- Gerador de resposta humanizada ---
 async function cfgGerarResposta(args: { mensagemCliente: string; pedido: CfgPedido; proxima: string | null; duvidas: string[]; primeiraMsg: boolean }): Promise<string> {
-  const { pedido, proxima, duvidas, primeiraMsg } = args;
+  const { mensagemCliente, pedido, proxima, duvidas, primeiraMsg } = args;
   const completo = !proxima && pedido.itens.length > 0;
   const resumo = pedido.itens.length ? cfgResumo(pedido, { mostrarTotal: completo }) : "";
   const partes: string[] = [];
@@ -3050,7 +3172,9 @@ async function cfgGerarResposta(args: { mensagemCliente: string; pedido: CfgPedi
     );
     return partes.join("\n\n");
   }
-  if (duvidas.length) partes.push("Sobre sua pergunta — vou verificar e te respondo já já. Enquanto isso:");
+  if (duvidas.length || cfgParecePerguntaOuConversaLivre(mensagemCliente)) {
+    return await cfgResponderComLLM({ mensagemCliente, pedido, proxima });
+  }
   if (resumo) partes.push(resumo);
   if (proxima) partes.push(`👉 ${proxima}`);
   else if (pedido.itens.length) partes.push(`👉 Deseja *acrescentar mais algum item* ou posso *gerar o orçamento*?`);
