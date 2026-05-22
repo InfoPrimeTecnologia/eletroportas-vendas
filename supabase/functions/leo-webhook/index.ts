@@ -2556,6 +2556,63 @@ const PEDIDO_VAZIO: CfgPedido = { itens: [], total: 0, status: "em_andamento" };
 
 function novoId() { return crypto.randomUUID().slice(0, 8); }
 
+const CFG_REGRAS_TECNICAS = `Regras técnicas Eletroportas:
+- Atendimento serralheiro é configurador técnico: o cliente pode mandar pedido completo, correção, acréscimo ou dúvida em qualquer ordem.
+- Responda primeiro a pergunta do cliente; depois, se necessário, conduza o orçamento sem repetir perguntas já respondidas.
+- Porta de enrolar: largura x altura em metros. Rolo técnico: eixo até 5" soma 0,60m; eixo acima de 5" soma 0,75m.
+- Lâminas: perfil baixo divide altura total por 0,075; perfil alto divide por 0,085; sempre arredonda para cima.
+- Guias: cálculo por metro linear; 1 par = 2 unidades x comprimento.
+- Motores AC: 200/300/400/500/800/1000/1500 kg. Motores DC: 200/300/400/500/800 kg.
+- Portinhola é acesso integrado. Alçapão é acesso emergencial. Nunca usar portinhola e alçapão juntos na mesma porta.
+- Não invente preço. Quando faltar valor no estoque, sinalize como sob consulta e siga o atendimento.`;
+
+function cfgPedidoLeve(pedido: CfgPedido) {
+  return {
+    itens: (pedido.itens || []).map((it) => ({ id: it.id, tipo: it.tipo, config: it.config || {} })),
+    total: pedido.total || 0,
+    status: pedido.status || "em_andamento",
+  };
+}
+
+function cfgFallbackInterpretar(mensagem: string): any[] {
+  const original = mensagem || "";
+  const t = original.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const intencoes: any[] = [];
+  if (/\b(zerar|limpar|recomecar|recomeçar|novo pedido|comecar de novo)\b/.test(t)) return [{ acao: "zerar" }];
+  if (/\b(gerar|fechar|emitir|mandar|enviar)\b.*\b(orcamento|orçamento|pdf)\b|\borcamento\b$|\bfechar pedido\b/.test(t)) return [{ acao: "gerar_orcamento" }];
+  if (/\b(resumo|revisar|conferir)\b/.test(t)) intencoes.push({ acao: "resumo" });
+
+  const patch: any = {};
+  const medida = t.match(/(\d+(?:[\.,]\d+)?)\s*(?:m)?\s*[x×]\s*(\d+(?:[\.,]\d+)?)/);
+  if (medida) {
+    patch.largura = Number(medida[1].replace(",", "."));
+    patch.altura = Number(medida[2].replace(",", "."));
+  }
+  if (/\bentre\s+paredes\b/.test(t)) patch.instalacao = "entre_paredes";
+  else if (/\b(sobreposta|sobrepor|vao\s*\+\s*guias?|vao\s*\+\s*1\s*guia|entre\s+testeiras)\b/.test(t)) patch.instalacao = "sobreposta";
+  const guia = t.match(/\bguia\s*(?:de|para)?\s*(50|60|70|80|90|100)\b/);
+  if (guia) patch.guia_mm = Number(guia[1]);
+  const pot = t.match(/\b(200|300|400|500|800|1000|1500)\s*kg\b/);
+  const acdc = t.match(/\b(AC|DC)\b/i)?.[1]?.toUpperCase();
+  if (pot || acdc) patch.motor = { ...(patch.motor || {}), ...(pot ? { potencia: Number(pot[1]) } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
+  if (/\bmeia\s*cana\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "meia_cana" };
+  else if (/\btransvision\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "transvision" };
+  else if (/\boblongo\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "oblongo" };
+  else if (/\bfechad[ao]\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "fechado" };
+  const cor = t.match(/\b(branca?|preta?|cinza|bege|azul|verde|vermelha?|amarela?)\b/);
+  if (cor) patch.lamina = { ...(patch.lamina || {}), cor: cor[1].replace(/a$/, "o") };
+  const port = t.match(/\bportinhola\s*(VILD|VILE|CENTRO)?\b/i);
+  if (port) patch.portinhola = (port[1] || "CENTRO").toUpperCase();
+  if (/\balcapao\b/.test(t)) patch.alcapao = true;
+  const controles = t.match(/(?:\+\s*)?(\d+)\s*controles?\b/);
+  if (controles) intencoes.push({ acao: "add_item", tipo: "controle", qtd: Number(controles[1]), config: { qtd: Number(controles[1]) } });
+
+  if (Object.keys(patch).length) intencoes.unshift({ acao: medida ? "add_item" : "update_item", tipo: "kit_porta", ref: "kit_porta", config: patch, patch });
+  const parecePergunta = /\?|\b(qual|quais|como|onde|quando|porque|por que|pra que|para que|voc[eê]s|trabalha|serve|pode|tem|faz)\b/.test(t);
+  if (!intencoes.length && parecePergunta) intencoes.push({ acao: "duvida", texto: original });
+  return intencoes;
+}
+
 function carregarPedido(raw: any): CfgPedido {
   if (!raw || typeof raw !== "object") return JSON.parse(JSON.stringify(PEDIDO_VAZIO));
   const itens = Array.isArray(raw.itens) ? raw.itens : [];
