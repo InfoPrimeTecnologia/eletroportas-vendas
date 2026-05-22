@@ -2686,12 +2686,16 @@ PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
     });
     if (!resp.ok) {
       console.error("cfgInterpretar falhou:", resp.status, await resp.text());
-      return [];
+      return cfgFallbackInterpretar(mensagem);
     }
     const j = await resp.json();
+    if (j?.choices?.[0]?.finish_reason === "length" || j?.choices?.[0]?.finish_reason === "MAX_TOKENS") {
+      console.warn("cfgInterpretar truncado por limite de tokens — usando fallback determinístico");
+      return cfgFallbackInterpretar(mensagem);
+    }
     const content = j?.choices?.[0]?.message?.content || "{}";
     const parsed = JSON.parse(content);
-    return Array.isArray(parsed?.intencoes) ? parsed.intencoes : [];
+    return Array.isArray(parsed?.intencoes) ? parsed.intencoes : cfgFallbackInterpretar(mensagem);
   } catch (e) {
     console.error("cfgInterpretar erro:", (e as Error)?.message);
     return cfgFallbackInterpretar(mensagem);
