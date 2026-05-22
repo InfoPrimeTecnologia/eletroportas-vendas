@@ -202,16 +202,19 @@ export type Database = {
           adicionais: Json
           adicionais_perguntado: boolean
           altura: number | null
+          carrinho: Json
           cep: string | null
           created_at: string
           endereco_instalacao: string | null
           entrega_perguntado: boolean
+          etapa_fluxo: string
           frete: number | null
           id: string
           largura: number | null
           nome_cliente: string | null
           pecas_avulsas: Json
           pintura_perguntado: boolean
+          pre_cadastro: boolean
           quer_entrega: boolean | null
           quer_pintura: boolean | null
           status: string
@@ -227,16 +230,19 @@ export type Database = {
           adicionais?: Json
           adicionais_perguntado?: boolean
           altura?: number | null
+          carrinho?: Json
           cep?: string | null
           created_at?: string
           endereco_instalacao?: string | null
           entrega_perguntado?: boolean
+          etapa_fluxo?: string
           frete?: number | null
           id?: string
           largura?: number | null
           nome_cliente?: string | null
           pecas_avulsas?: Json
           pintura_perguntado?: boolean
+          pre_cadastro?: boolean
           quer_entrega?: boolean | null
           quer_pintura?: boolean | null
           status?: string
@@ -252,16 +258,19 @@ export type Database = {
           adicionais?: Json
           adicionais_perguntado?: boolean
           altura?: number | null
+          carrinho?: Json
           cep?: string | null
           created_at?: string
           endereco_instalacao?: string | null
           entrega_perguntado?: boolean
+          etapa_fluxo?: string
           frete?: number | null
           id?: string
           largura?: number | null
           nome_cliente?: string | null
           pecas_avulsas?: Json
           pintura_perguntado?: boolean
+          pre_cadastro?: boolean
           quer_entrega?: boolean | null
           quer_pintura?: boolean | null
           status?: string
