@@ -1105,6 +1105,7 @@ async function chamarIA(messages: any[], options: { tools?: any[] | null; temper
         ...(options.tools === null ? {} : { tools: options.tools || TOOLS }),
         temperature: options.temperature ?? 0.2, // resposta mais previsível e fiel ao fluxo
         top_p: 0.9,
+        max_tokens: 4096,
       }),
       signal: controller.signal,
     });
