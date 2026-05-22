@@ -857,7 +857,8 @@ const TOOLS = [
         properties: {
           tipo_motor: { type: "string", enum: ["200kg", "300kg", "400kg", "500kg", "800kg", "1500kg"], description: "Opcional, default 300kg" },
           tipo_pintura: { type: "string", enum: ["branco_liso", "preta_fosco", "cinza_texturizado", "cor_especial"], description: "Opcional" },
-          observacoes_tecnicas: { type: "string", description: "Resumo técnico completo da pré-venda para o vendedor: medidas, fotos recebidas, instalação dentro/fora, AC/DC, lâmina, pintura, tensão informada, acesso emergencial, saída auxiliar, portinhola (posição+abertura), alçapão, alertas técnicos." },
+          formato: { type: "string", enum: ["pdf", "imagem", "ambos"], description: "Formato de saída escolhido pelo cliente no MÓDULO 6. Default: pdf." },
+          observacoes_tecnicas: { type: "string", description: "Resumo técnico completo para o vendedor." },
         },
         required: [],
       },
