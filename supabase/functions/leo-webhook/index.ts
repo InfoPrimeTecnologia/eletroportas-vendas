@@ -3033,17 +3033,19 @@ function cfgGerarHtml(pedido: CfgPedido, cliente: { nome?: string; telefone?: st
 
 // --- Gerador de resposta humanizada ---
 async function cfgGerarResposta(args: { mensagemCliente: string; pedido: CfgPedido; proxima: string | null; duvidas: string[]; primeiraMsg: boolean }): Promise<string> {
-  const { mensagemCliente, pedido, proxima, duvidas, primeiraMsg } = args;
-  const resumo = pedido.itens.length ? cfgResumo(pedido) : "";
-  // Resposta deterministica curta — sem 2ª chamada LLM pra evitar latência
+  const { pedido, proxima, duvidas, primeiraMsg } = args;
+  const completo = !proxima && pedido.itens.length > 0;
+  const resumo = pedido.itens.length ? cfgResumo(pedido, { mostrarTotal: completo }) : "";
   const partes: string[] = [];
   if (primeiraMsg && !pedido.itens.length) {
-    partes.push(`Olá! 👋 Você está falando com a Equipe Eletroportas.\n\nVocê pode escolher:\n*1.* Kit porta de enrolar\n*2.* Peças avulsas\n*3.* Motores\n*4.* Acessórios\n\nOu já mandar o pedido direto, ex: _\"3x4 entre paredes AC meia cana branca portinhola VILD\"_.`);
+    partes.push(
+      `Olá! 👋 Você está falando com a Equipe Eletroportas — atendimento *Serralheiro / Parceiro*.\n\n` +
+      `Posso te ajudar com:\n*1.* Kit porta de enrolar\n*2.* Peças avulsas\n*3.* Motores\n*4.* Acessórios\n\n` +
+      `Pode mandar o pedido em texto livre — ex: _"3x4 entre paredes AC meia cana branca portinhola VILD"_ — ou escolher uma opção acima.`
+    );
     return partes.join("\n\n");
   }
-  if (duvidas.length) {
-    partes.push("Sobre sua pergunta — vou verificar e te respondo já já. Enquanto isso:");
-  }
+  if (duvidas.length) partes.push("Sobre sua pergunta — vou verificar e te respondo já já. Enquanto isso:");
   if (resumo) partes.push(resumo);
   if (proxima) partes.push(`👉 ${proxima}`);
   else if (pedido.itens.length) partes.push(`👉 Deseja *acrescentar mais algum item* ou posso *gerar o orçamento*?`);
