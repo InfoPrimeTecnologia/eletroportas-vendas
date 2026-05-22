@@ -262,6 +262,43 @@ const PRECOS = {
   alcapao: 649.94,
 };
 
+// ===========================
+// MÓDULO 8 — REGRAS INDUSTRIAIS (helpers puros)
+// ===========================
+/** Rolo segundo o eixo: 4.5"/5" → 0,60 m; > 5" → 0,75 m. */
+function calcRolo(eixoPolegadas?: number): number {
+  if (!eixoPolegadas || eixoPolegadas <= 5) return 0.60;
+  return 0.75;
+}
+/** Qtd de lâminas: perfil baixo ÷ 0,075; perfil alto ÷ 0,085. Arredonda pra cima. */
+function calcLaminas(alturaTotal: number, perfil: "baixo" | "alto"): number {
+  const divisor = perfil === "alto" ? 0.085 : 0.075;
+  if (!alturaTotal || alturaTotal <= 0) return 0;
+  return Math.ceil(alturaTotal / divisor);
+}
+/** Guias por metro linear. 1 par = 2 unidades. total = qtd × (par ? 2 : 1) × comprimento. */
+function calcGuiasMetrosLineares(qtd: number, par: boolean, comprimentoM: number): number {
+  const unidadesPorItem = par ? 2 : 1;
+  return Math.max(0, (qtd || 0) * unidadesPorItem * (comprimentoM || 0));
+}
+const POTENCIAS_AC = [200, 300, 400, 500, 800, 1000, 1500];
+const POTENCIAS_DC = [200, 300, 400, 500, 800];
+function validarMotor(m: { tipo?: string; ac_dc?: string; potencia?: number }): { ok: boolean; faltando: string[] } {
+  const faltando: string[] = [];
+  if (!m.tipo || !["avulso", "motor_testeiras", "kit_automatizador"].includes(m.tipo)) faltando.push("tipo (avulso, motor+testeiras ou kit automatizador)");
+  if (!m.ac_dc || !["AC", "DC"].includes(m.ac_dc)) faltando.push("AC ou DC");
+  const lista = m.ac_dc === "DC" ? POTENCIAS_DC : POTENCIAS_AC;
+  if (!m.potencia || !lista.includes(m.potencia)) faltando.push(`potência (${lista.join("/")} kg)`);
+  return { ok: faltando.length === 0, faltando };
+}
+/** Portinhola e alçapão não podem coexistir na mesma porta. */
+function validarPortinholaAlcapao(cfg: { portinhola?: boolean; alcapao?: boolean }): { ok: boolean; erro?: string } {
+  if (cfg.portinhola && cfg.alcapao) return { ok: false, erro: "Portinhola e alçapão não podem ser usados juntos na mesma porta." };
+  return { ok: true };
+}
+
+
+
 interface OrcamentoInput {
   largura: number;
   altura: number;
