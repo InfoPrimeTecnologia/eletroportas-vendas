@@ -851,7 +851,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "gerar_orcamento",
-      description: "Gera o orçamento PDF e envia ao cliente via WhatsApp. NÃO precisa de argumentos — lê automaticamente do [ESTADO] gravado no banco (largura, altura, tipo_cliente, tipo_perfil, frete). Se faltar algum dado, retorna DADOS_INSUFICIENTES.",
+      description: "Gera o orçamento (PDF, imagem ou ambos) e envia ao cliente via WhatsApp. Lê automaticamente do [ESTADO] e do carrinho. Use 'formato' para escolher pdf | imagem | ambos. Se faltar dado, retorna DADOS_INSUFICIENTES.",
       parameters: {
         type: "object",
         properties: {
