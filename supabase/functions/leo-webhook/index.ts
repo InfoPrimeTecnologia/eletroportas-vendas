@@ -2949,16 +2949,16 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
 }
 
 // --- Resumo em texto ---
-function cfgResumo(pedido: CfgPedido): string {
+function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): string {
   if (!pedido.itens.length) return "_(carrinho vazio)_";
-  const linhas: string[] = ["*Resumo parcial do pedido:*"];
+  const linhas: string[] = ["*Itens anotados até agora:*"];
   let n = 1;
   for (const it of pedido.itens) {
     const c = it.config || {};
     if (it.tipo === "kit_porta") {
       const rolo = calcRolo(Number(c.eixo_polegadas) || eixoPorAltura(Number(c.altura) || 0));
       linhas.push(`${n++}. Porta de enrolar${c?.motor?.ac_dc ? " automática" : ""}`);
-      if (c.largura && c.altura) linhas.push(`   Medida: ${c.largura} x (${c.altura} + ${rolo.toFixed(2)})`);
+      if (c.largura && c.altura) linhas.push(`   Medida: ${c.largura}m × ${c.altura}m  _(+ rolo ${rolo.toFixed(2)}m)_`);
       if (c.instalacao) linhas.push(`   Instalação: ${String(c.instalacao).replace("_", " ")}`);
       if (c?.motor?.ac_dc) linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + "kg" : ""}`);
       if (c?.lamina?.modelo) linhas.push(`   Lâmina: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
@@ -2981,7 +2981,10 @@ function cfgResumo(pedido: CfgPedido): string {
       linhas.push(`${n++}. ${it.tipo}`);
     }
   }
-  if (pedido.total > 0) linhas.push(`\n*Total parcial:* R$ ${pedido.total.toFixed(2).replace(".", ",")}${pedido.sob_consulta ? " _(alguns itens sob consulta)_" : ""}`);
+  // Só mostra total quando o pedido está pronto (sem campos faltando)
+  if (opts.mostrarTotal && pedido.total > 0) {
+    linhas.push(`\n*Total:* R$ ${pedido.total.toFixed(2).replace(".", ",")}${pedido.sob_consulta ? " _(alguns itens sob consulta)_" : ""}`);
+  }
   return linhas.join("\n");
 }
 
