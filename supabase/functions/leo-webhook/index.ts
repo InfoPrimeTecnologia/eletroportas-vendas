@@ -2910,11 +2910,16 @@ async function explodirItem(item: CfgItem): Promise<CfgLinha[]> {
   return [];
 }
 
-async function cfgRecalcular(pedido: CfgPedido): Promise<CfgPedido> {
+async function cfgRecalcular(pedido: CfgPedido, opts: { explodir?: boolean } = {}): Promise<CfgPedido> {
   let total = 0;
   let sob = false;
   for (const it of pedido.itens) {
-    it.explosao = await explodirItem(it);
+    if (opts.explodir) {
+      it.explosao = await explodirItem(it);
+    } else {
+      // Mantém a explosão anterior se houver, mas não recalcula a cada turno
+      it.explosao = it.explosao || [];
+    }
     it.subtotal = +(it.explosao.reduce((s, l) => s + l.total, 0)).toFixed(2);
     total += it.subtotal;
     if (it.explosao.some((l) => l.sob_consulta)) sob = true;
@@ -2949,16 +2954,16 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
 }
 
 // --- Resumo em texto ---
-function cfgResumo(pedido: CfgPedido): string {
+function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): string {
   if (!pedido.itens.length) return "_(carrinho vazio)_";
-  const linhas: string[] = ["*Resumo parcial do pedido:*"];
+  const linhas: string[] = ["*Itens anotados até agora:*"];
   let n = 1;
   for (const it of pedido.itens) {
     const c = it.config || {};
     if (it.tipo === "kit_porta") {
       const rolo = calcRolo(Number(c.eixo_polegadas) || eixoPorAltura(Number(c.altura) || 0));
       linhas.push(`${n++}. Porta de enrolar${c?.motor?.ac_dc ? " automática" : ""}`);
-      if (c.largura && c.altura) linhas.push(`   Medida: ${c.largura} x (${c.altura} + ${rolo.toFixed(2)})`);
+      if (c.largura && c.altura) linhas.push(`   Medida: ${c.largura}m × ${c.altura}m  _(+ rolo ${rolo.toFixed(2)}m)_`);
       if (c.instalacao) linhas.push(`   Instalação: ${String(c.instalacao).replace("_", " ")}`);
       if (c?.motor?.ac_dc) linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + "kg" : ""}`);
       if (c?.lamina?.modelo) linhas.push(`   Lâmina: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
@@ -2981,7 +2986,10 @@ function cfgResumo(pedido: CfgPedido): string {
       linhas.push(`${n++}. ${it.tipo}`);
     }
   }
-  if (pedido.total > 0) linhas.push(`\n*Total parcial:* R$ ${pedido.total.toFixed(2).replace(".", ",")}${pedido.sob_consulta ? " _(alguns itens sob consulta)_" : ""}`);
+  // Só mostra total quando o pedido está pronto (sem campos faltando)
+  if (opts.mostrarTotal && pedido.total > 0) {
+    linhas.push(`\n*Total:* R$ ${pedido.total.toFixed(2).replace(".", ",")}${pedido.sob_consulta ? " _(alguns itens sob consulta)_" : ""}`);
+  }
   return linhas.join("\n");
 }
 
@@ -3030,17 +3038,19 @@ function cfgGerarHtml(pedido: CfgPedido, cliente: { nome?: string; telefone?: st
 
 // --- Gerador de resposta humanizada ---
 async function cfgGerarResposta(args: { mensagemCliente: string; pedido: CfgPedido; proxima: string | null; duvidas: string[]; primeiraMsg: boolean }): Promise<string> {
-  const { mensagemCliente, pedido, proxima, duvidas, primeiraMsg } = args;
-  const resumo = pedido.itens.length ? cfgResumo(pedido) : "";
-  // Resposta deterministica curta — sem 2ª chamada LLM pra evitar latência
+  const { pedido, proxima, duvidas, primeiraMsg } = args;
+  const completo = !proxima && pedido.itens.length > 0;
+  const resumo = pedido.itens.length ? cfgResumo(pedido, { mostrarTotal: completo }) : "";
   const partes: string[] = [];
   if (primeiraMsg && !pedido.itens.length) {
-    partes.push(`Olá! 👋 Você está falando com a Equipe Eletroportas.\n\nVocê pode escolher:\n*1.* Kit porta de enrolar\n*2.* Peças avulsas\n*3.* Motores\n*4.* Acessórios\n\nOu já mandar o pedido direto, ex: _\"3x4 entre paredes AC meia cana branca portinhola VILD\"_.`);
+    partes.push(
+      `Olá! 👋 Você está falando com a Equipe Eletroportas — atendimento *Serralheiro / Parceiro*.\n\n` +
+      `Posso te ajudar com:\n*1.* Kit porta de enrolar\n*2.* Peças avulsas\n*3.* Motores\n*4.* Acessórios\n\n` +
+      `Pode mandar o pedido em texto livre — ex: _"3x4 entre paredes AC meia cana branca portinhola VILD"_ — ou escolher uma opção acima.`
+    );
     return partes.join("\n\n");
   }
-  if (duvidas.length) {
-    partes.push("Sobre sua pergunta — vou verificar e te respondo já já. Enquanto isso:");
-  }
+  if (duvidas.length) partes.push("Sobre sua pergunta — vou verificar e te respondo já já. Enquanto isso:");
   if (resumo) partes.push(resumo);
   if (proxima) partes.push(`👉 ${proxima}`);
   else if (pedido.itens.length) partes.push(`👉 Deseja *acrescentar mais algum item* ou posso *gerar o orçamento*?`);
@@ -3069,9 +3079,12 @@ async function rodarConfigurador(args: {
   const intencoes = await cfgInterpretar(mensagem, pedido);
   console.log("🧠 cfg intencoes:", JSON.stringify(intencoes));
 
-  // 2) Aplica
+  // 2) Aplica (sem explodir BOM ainda — apenas atualiza config)
   const r = cfgAplicar(pedido, intencoes);
-  pedido = await cfgRecalcular(r.pedido);
+  // Só explode/consulta estoque quando: cliente pediu orçamento OU pedido está completo
+  const proximaCheck = cfgProximaPergunta(r.pedido);
+  const deveExplodir = r.quer_gerar || (!proximaCheck && r.pedido.itens.length > 0);
+  pedido = await cfgRecalcular(r.pedido, { explodir: deveExplodir });
 
   // 3) Persiste
   await supabase
