@@ -2617,6 +2617,12 @@ const CFG_REGRAS_TECNICAS = `Regras técnicas Eletroportas:
 - Guias: cálculo por metro linear; 1 par = 2 unidades x comprimento.
 - Motores AC: 200/300/400/500/800/1000/1500 kg. Motores DC: 200/300/400/500/800 kg.
 - Portinhola é acesso integrado. Alçapão é acesso emergencial. Nunca usar portinhola e alçapão juntos na mesma porta.
+- Tipo de instalação (sempre 1 dos 4):
+  • entre_testeiras: desconto 0,02 no eixo/soleira/lâminas (com trava de lâminas: -0,03 nas lâminas).
+  • vao_1guia: vão + profundidade da guia (mm/1000) - 0,02 (com trava: -0,03 nas lâminas).
+  • vao_guias: vão + guia_esq + guia_dir - 0,02 (com trava: -0,03 nas lâminas).
+  • entre_paredes: desconto 0,07 (com trava: -0,08 nas lâminas).
+- Nunca mostrar a fórmula ao cliente; mostrar apenas o resultado final em metros.
 - Não invente preço. Quando faltar valor no estoque, sinalize como sob consulta e siga o atendimento.`;
 
 function cfgPedidoLeve(pedido: CfgPedido) {
