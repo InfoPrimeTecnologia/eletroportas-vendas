@@ -3279,12 +3279,15 @@ async function explodirItem(item: CfgItem): Promise<CfgLinha[]> {
     const mm = Number(cfg.mm);
     if (!mm) return [];
     const compr = Number(cfg.comprimento_m) || 0;
-    const pares = Number(cfg.qtd_pares) || 0;
-    const unidades = Number(cfg.qtd_unidades) || 0;
-    const totalMl = calcGuiasMetrosLineares(pares || unidades, !!pares, compr);
+    const paresLegacy = Number(cfg.qtd_pares) || 0;
+    const unidadesLegacy = Number(cfg.qtd_unidades) || 0;
+    const qtdGenerica = Number(cfg.qtd) || 0;
+    const isPar = !!paresLegacy || cfg.tipo_unidade === "par";
+    const qtd = paresLegacy || unidadesLegacy || qtdGenerica;
+    const totalMl = calcGuiasMetrosLineares(qtd, isPar, compr);
     if (!totalMl) return [];
     const p = await precoEstoque(`guia lateral ${mm}mm`);
-    return [{ sku: p?.sku || "GUIA", descricao: p?.nome || `Guia lateral ${mm}mm${pares ? " (par)" : ""}`, und: p?.und || "M", qtd: totalMl, valor_unit: p?.preco || 0, total: (p?.preco || 0) * totalMl, sob_consulta: !p }];
+    return [{ sku: p?.sku || "GUIA", descricao: p?.nome || `Guia lateral ${mm}mm${isPar ? " (par)" : ""}`, und: p?.und || "M", qtd: totalMl, valor_unit: p?.preco || 0, total: (p?.preco || 0) * totalMl, sob_consulta: !p }];
   }
   if (item.tipo === "controle") {
     const qtd = Number(cfg.qtd) || 1;
