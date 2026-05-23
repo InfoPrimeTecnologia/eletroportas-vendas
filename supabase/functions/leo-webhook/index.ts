@@ -3535,7 +3535,15 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
     } else if (it.tipo === "motor") {
       linhas.push(`${n++}. Motor ${c.ac_dc || "?"} ${c.potencia || "?"}kg x ${c.qtd || 1}`);
     } else if (it.tipo === "guia") {
-      linhas.push(`${n++}. Guia ${c.mm || "?"}mm — ${c.qtd_pares ? c.qtd_pares + " par(es)" : c.qtd_unidades ? c.qtd_unidades + " un" : (c.qtd || "?") + (c.tipo_unidade === "par" ? " par(es)" : c.tipo_unidade === "unidade" ? " un" : "")} de ${c.comprimento_m || "?"}m`);
+      const isPar = !!c.qtd_pares || c.tipo_unidade === "par";
+      const qtdN = Number(c.qtd_pares || c.qtd_unidades || c.qtd || 0);
+      const comp = Number(c.comprimento_m || 0);
+      const ml = qtdN * (isPar ? 2 : 1) * (comp || 0);
+      const baseQtd = qtdN || "?";
+      const unidade = isPar ? "par(es)" : "un";
+      const compStr = comp ? `${comp}m` : "?m";
+      const mlStr = ml ? ` → *${ml.toFixed(2)} m lineares*` : "";
+      linhas.push(`${n++}. ${baseQtd} ${unidade} de guia ${c.mm || "?"}mm × ${compStr}${mlStr}`);
     } else if (it.tipo === "controle") {
       linhas.push(`${n++}. Controle remoto x ${c.qtd || 1}`);
     } else if (it.tipo === "central") {
