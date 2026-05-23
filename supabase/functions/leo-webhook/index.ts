@@ -2754,7 +2754,7 @@ Receba a MENSAGEM do cliente serralheiro + o PEDIDO_ATUAL e devolva SOMENTE JSON
 ${CFG_REGRAS_TECNICAS}
 
 Intenções possíveis:
-- {"acao":"add_item","tipo":"kit_porta|motor|guia|lamina|controle|central|trava_lamina|acessorio","config":{...},"qtd":1}
+- {"acao":"add_item","tipo":"kit_porta|motor|guia|lamina|soleira|eixo|controle|central|trava_lamina|portinhola|alcapao|pintura|acessorio","config":{...},"qtd":1}
 - {"acao":"update_item","ref":"<id ou 'ultimo' ou tipo>","patch":{...}}
 - {"acao":"remove_item","ref":"<id ou 'ultimo' ou tipo ou descricao>"}
 - {"acao":"set_qtd","ref":"...","qtd":N}
@@ -2763,6 +2763,11 @@ Intenções possíveis:
 - {"acao":"zerar"}
 - {"acao":"escolher_menu","opcao":1|2|3|4}  // 1 kit / 2 peças / 3 motores / 4 acessórios
 - {"acao":"duvida","texto":"<o que ele perguntou>"}
+
+CARRINHO MULTI-ITEM: o pedido é um CARRINHO. NUNCA reinicie o fluxo quando o cliente acrescentar avulsos.
+Se já existe um kit_porta no carrinho e o cliente diz "+20 controles" / "5 pares de guia 50" / "2 centrais" / "trocar guia para 70" → gere as intenções correspondentes SEM apagar nada.
+"trocar guia para X" = update_item kit_porta patch guia_mm:X. "+ N controles" = add_item controle qtd N. "remover central / sem pintura" = update_item kit_porta patch central:false / pintura:false.
+Só zerar quando o cliente disser explicitamente "zerar/novo pedido/recomeçar".
 
 Para kit_porta a config pode conter qualquer subconjunto de:
 {"largura":metros, "altura":metros,
@@ -2774,9 +2779,20 @@ Para kit_porta a config pode conter qualquer subconjunto de:
  "portinhola":"VILD|VILE|CENTRO"|false,
  "alcapao":true|false, "pintura":"eletrostatica"|false, "central":true|false, "controles":N}
 
-Para motor avulso: {"ac_dc":"AC|DC","potencia":N,"qtd":N}.
-Para guia: {"mm":N,"comprimento_m":N,"qtd_pares":N} (ou qtd_unidades).
-Para controle: {"qtd":N}.
+Avulsos (cada um vira um item separado no carrinho):
+- motor: {"ac_dc":"AC|DC","potencia":N,"qtd":N}
+- guia: {"mm":N,"comprimento_m":N,"qtd_pares":N} ou qtd_unidades
+- lamina: {"modelo":"meia_cana|...","perfil":"baixo|alto","cor":"...","comprimento_m":N,"qtd":N}
+- soleira: {"comprimento_m":N,"qtd":N}
+- eixo: {"polegadas":N,"comprimento_m":N,"qtd":N}
+- controle: {"qtd":N}
+- central: {"qtd":N}
+- trava_lamina: {"qtd":N}
+- portinhola: {"modelo":"VILD|VILE|CENTRO","qtd":N}
+- alcapao: {"qtd":N}
+- pintura: {"cor":"...","area_m2":N}
+- acessorio: {"descricao":"...","qtd":N}
+
 
 REGRAS:
 - Extraia TUDO que estiver na mensagem (medida "3x4", "AC", "meia cana", "branca", "portinhola VILD", "guia 70", "+2 controles").
