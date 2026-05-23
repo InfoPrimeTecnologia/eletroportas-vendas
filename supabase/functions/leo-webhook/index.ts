@@ -2724,7 +2724,9 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   const cor = t.match(/\b(branca?|preta?|cinza|bege|azul|verde|vermelha?|amarela?)\b/);
   if (cor) patch.lamina = { ...(patch.lamina || {}), cor: cor[1].replace(/a$/, "o") };
   const port = t.match(/\bportinhola\s*(vild|vile|centro)?\b/i);
-  if (port) patch.portinhola = (port[1] || "CENTRO").toUpperCase();
+  // Nunca assumir posição: só grava VILD/VILE/CENTRO se o cliente disse explicitamente.
+  // Caso contrário marca como `true` (indefinido) para o validador perguntar.
+  if (port) patch.portinhola = port[1] ? port[1].toUpperCase() : true;
   // Portinhola cortada vs inteira
   if (/\bportinhola\b.*\b(inteira|ajuste\s+(?:no\s+)?local)\b|\b(inteira|ajuste\s+(?:no\s+)?local)\b.*\bportinhola\b/.test(t)) patch.portinhola_cortada = false;
   else if (/\bportinhola\b.*\bcortad[ao]s?\b|\bl[âa]minas?\s+cortad[ao]s?\b/.test(t)) patch.portinhola_cortada = true;
@@ -2826,7 +2828,7 @@ Para kit_porta a config pode conter qualquer subconjunto de:
  "motor":{"ac_dc":"AC|DC","potencia":200|300|400|500|800|1000|1500},
  "lamina":{"modelo":"meia_cana|fechado|transvision|oblongo","perfil":"baixo|alto","cor":"branca|preta|..."},
  "guia_mm":50|60|70|80|90|100, "guia_mm_esq":N, "guia_mm_dir":N,
- "portinhola":"VILD|VILE|CENTRO"|false,
+ "portinhola":"VILD|VILE|CENTRO"|true|false,  // true = cliente pediu portinhola mas NÃO disse a posição (NUNCA assuma — o sistema vai perguntar)
  "alcapao":true|false, "pintura":"eletrostatica"|false, "central":true|false, "controles":N}
 
 Avulsos (cada um vira um item separado no carrinho):
@@ -2838,7 +2840,7 @@ Avulsos (cada um vira um item separado no carrinho):
 - controle: {"qtd":N}
 - central: {"qtd":N}
 - trava_lamina: {"qtd":N}
-- portinhola: {"modelo":"VILD|VILE|CENTRO","qtd":N}
+- portinhola: {"modelo":"VILD|VILE|CENTRO","qtd":N} — só preencha modelo se o cliente disser VILD/VILE/CENTRO. Se ele só disser "portinhola", omita o modelo (o sistema vai perguntar).
 - alcapao: {"qtd":N}
 - pintura: {"cor":"...","area_m2":N}
 - acessorio: {"descricao":"...","qtd":N}
@@ -2846,7 +2848,7 @@ Avulsos (cada um vira um item separado no carrinho):
 
 REGRAS:
 - Extraia TUDO que estiver na mensagem (medida "3x4", "AC", "meia cana", "branca", "portinhola VILD", "guia 70", "+2 controles").
-- "3x4 entre paredes AC meia cana branca portinhola VILD" → 1 add_item kit_porta com TODA a config.
+- NUNCA assuma posição/modelo/cor/medida que o cliente não falou. Ex: "preciso de uma portinhola" → portinhola SEM modelo (não assuma CENTRO). "3x4 entre paredes AC meia cana branca portinhola VILD" → 1 add_item kit_porta com TODA a config.
 - "+ 2 controles e trocar guia para 70" → [add_item controle qtd 2, update_item kit_porta patch guia_mm 70].
 - "remover central" / "tirar pintura" → update_item kit_porta com central:false / pintura:false.
 - "gerar orçamento" / "fechar pedido" / "pode fechar" → gerar_orcamento.
@@ -3187,9 +3189,10 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
     }
   }
 
-  // Portinhola
-  if (cfg?.portinhola) {
-    const modelo = String(typeof cfg.portinhola === "string" ? cfg.portinhola : "CENTRO").toUpperCase();
+  // Portinhola — só explode se a posição foi confirmada pelo cliente (VILD/VILE/CENTRO).
+  const portStr = typeof cfg?.portinhola === "string" ? cfg.portinhola.toUpperCase() : "";
+  if (portStr === "VILD" || portStr === "VILE" || portStr === "CENTRO") {
+    const modelo = portStr;
     const cortada = modelo === "CENTRO" ? true : (cfg?.portinhola_cortada !== false);
     const pPort = await precoEstoque(`portinhola ${modelo}`);
     linhas.push({
@@ -3395,7 +3398,10 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if (!c?.motor?.ac_dc) return "O motor é *AC* ou *DC*?";
       if (!c?.lamina?.modelo) return "Qual o *modelo da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
       if (!c?.lamina?.cor) return "Qual a *cor da lâmina/pintura*?";
-      // VILD/VILE precisa saber se é cortada ou inteira
+      // Portinhola: nunca assumir posição. Se foi pedida sem posição, perguntar.
+      if (c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()))) {
+        return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
+      }
       const port = typeof c.portinhola === "string" ? c.portinhola.toUpperCase() : "";
       if ((port === "VILD" || port === "VILE") && c.portinhola_cortada === undefined) {
         return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
@@ -3430,7 +3436,8 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if (!c.comprimento_m) return "Qual o *comprimento em metros* do eixo?";
     } else if (it.tipo === "portinhola") {
       const c = it.config || {};
-      if (!c.modelo) return "Qual o *modelo da portinhola*? (*VILD* / *VILE* / *CENTRO*)";
+      const modeloOk = typeof c.modelo === "string" && ["VILD","VILE","CENTRO"].includes(String(c.modelo).toUpperCase());
+      if (!modeloOk) return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
       if (!c.qtd) return "Quantas *portinholas*?";
     } else if (it.tipo === "pintura") {
       const c = it.config || {};
@@ -3451,8 +3458,10 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
 function cfgItemIncompleto(it: CfgItem): boolean {
   const c: any = it.config || {};
   switch (it.tipo) {
-    case "kit_porta":
-      return !c.largura || !c.altura || !c.instalacao || !c?.motor?.ac_dc || !c?.lamina?.modelo || !c?.lamina?.cor;
+    case "kit_porta": {
+      const portPend = c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()));
+      return !c.largura || !c.altura || !c.instalacao || !c?.motor?.ac_dc || !c?.lamina?.modelo || !c?.lamina?.cor || portPend;
+    }
     case "motor":
       return !c.potencia || (!c.kit_motor && !c.modelo_motor) || !c.ac_dc;
     case "guia": {
@@ -3466,8 +3475,10 @@ function cfgItemIncompleto(it: CfgItem): boolean {
       return !c.qtd || !c.comprimento_m;
     case "eixo":
       return !c.qtd || !c.polegadas || !c.comprimento_m;
-    case "portinhola":
-      return !c.modelo || !c.qtd;
+    case "portinhola": {
+      const modeloOk = typeof c.modelo === "string" && ["VILD","VILE","CENTRO"].includes(String(c.modelo).toUpperCase());
+      return !modeloOk || !c.qtd;
+    }
     case "pintura":
       return !c.area_m2 || !c.cor;
     case "controle":
@@ -3514,7 +3525,10 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
       if (c?.lamina?.modelo) linhas.push(`   Lâmina: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
       if (c?.lamina?.cor) linhas.push(`   Cor: ${c.lamina.cor}`);
       if (c.guia_mm) linhas.push(`   Guia: ${c.guia_mm}mm`);
-      if (c.portinhola) linhas.push(`   Portinhola: ${typeof c.portinhola === "string" ? c.portinhola : "sim"}`);
+      if (c.portinhola) {
+        const portConf = typeof c.portinhola === "string" && ["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase());
+        linhas.push(`   Portinhola: ${portConf ? c.portinhola.toUpperCase() : "_(posição a definir)_"}`);
+      }
       if (c.alcapao) linhas.push(`   Alçapão: sim`);
       if (c.pintura) linhas.push(`   Pintura eletrostática`);
       if (c.central !== false && c?.motor?.potencia) linhas.push(`   Central de controle inclusa`);
@@ -3536,7 +3550,8 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
     } else if (it.tipo === "eixo") {
       linhas.push(`${n++}. Eixo${c.polegadas ? ` ${c.polegadas}"` : ""}${c.comprimento_m ? ` ${c.comprimento_m}m` : ""} x ${c.qtd || 1}`);
     } else if (it.tipo === "portinhola") {
-      linhas.push(`${n++}. Portinhola ${c.modelo || "CENTRO"} x ${c.qtd || 1}`);
+      const posDef = typeof c.modelo === "string" && ["VILD","VILE","CENTRO"].includes(String(c.modelo).toUpperCase());
+      linhas.push(`${n++}. Portinhola${posDef ? " " + String(c.modelo).toUpperCase() : " _(posição a definir)_"} x ${c.qtd || 1}`);
     } else if (it.tipo === "alcapao") {
       linhas.push(`${n++}. Alçapão x ${c.qtd || 1}`);
     } else if (it.tipo === "pintura") {
