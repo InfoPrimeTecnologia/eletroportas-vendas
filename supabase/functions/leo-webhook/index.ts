@@ -879,7 +879,7 @@ Sempre que adicionar item, PERGUNTE: "👉 Deseja acrescentar mais algum item?"
 # ════════════════════════════════════════
 ### E1 — Medidas
 "Me informa as medidas do vão? Formato: **Largura x Altura** (ex: 5,50 x 3,00). Se souber o rolo: Largura x (Altura + Rolo)." → \`definir_medidas\`.
-Regra do rolo (não pergunte se cliente não informar): eixo 4.5" ou 5" → 0,60 m. Maior que 5" → 0,75 m. Altura total = altura + rolo.
+Regra do rolo (NUNCA assumir antes do eixo): no início mostre "largura x (altura + rolo)". O rolo só é definido após motor + eixo: eixo 4.5" ou 5.5" → 0,60 m; eixos maiores (6"/6.5"/8.5") → 0,75 m. Nunca pergunte o rolo ao cliente.
 
 ### E2 — Configuração (livre)
 "Agora descreva como deseja a porta — automática/manual, cor, modelo de lâmina, portinhola, alçapão, motor."
