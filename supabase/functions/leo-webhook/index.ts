@@ -2610,20 +2610,24 @@ const PEDIDO_VAZIO: CfgPedido = { itens: [], total: 0, status: "em_andamento" };
 function novoId() { return crypto.randomUUID().slice(0, 8); }
 
 const CFG_REGRAS_TECNICAS = `Regras técnicas Eletroportas:
-- Atendimento serralheiro é configurador técnico: o cliente pode mandar pedido completo, correção, acréscimo ou dúvida em qualquer ordem.
-- Responda primeiro a pergunta do cliente; depois, se necessário, conduza o orçamento sem repetir perguntas já respondidas.
-- Porta de enrolar: largura x altura em metros. Rolo técnico: eixo até 5" soma 0,60m; eixo acima de 5" soma 0,75m.
-- Lâminas: perfil baixo divide altura total por 0,075; perfil alto divide por 0,085; sempre arredonda para cima.
-- Guias: cálculo por metro linear; 1 par = 2 unidades x comprimento.
-- Motores AC: 200/300/400/500/800/1000/1500 kg. Motores DC: 200/300/400/500/800 kg.
-- Portinhola é acesso integrado. Alçapão é acesso emergencial. Nunca usar portinhola e alçapão juntos na mesma porta.
-- Tipo de instalação (sempre 1 dos 4):
-  • entre_testeiras: desconto 0,02 no eixo/soleira/lâminas (com trava de lâminas: -0,03 nas lâminas).
-  • vao_1guia: vão + profundidade da guia (mm/1000) - 0,02 (com trava: -0,03 nas lâminas).
-  • vao_guias: vão + guia_esq + guia_dir - 0,02 (com trava: -0,03 nas lâminas).
-  • entre_paredes: desconto 0,07 (com trava: -0,08 nas lâminas).
-- Nunca mostrar a fórmula ao cliente; mostrar apenas o resultado final em metros.
-- Não invente preço. Quando faltar valor no estoque, sinalize como sob consulta e siga o atendimento.`;
+- Configurador técnico + carrinho comercial. Pedido livre OU guiado. NUNCA reinicie o fluxo ao adicionar/alterar itens.
+- Modelos de lâmina: Fechada, Transvision, Oblongo. Padrão = perfil baixo. Perfil alto somente se solicitado.
+- Lâmina parcial (combinação): cliente pode pedir "1m de transvision" misturado no kit. Quantidade da faixa = altura ÷ 0,085. Restante fica no modelo principal. Cada modelo vira linha separada no orçamento.
+- Tipos de instalação (sempre 1 dos 4):
+  • entre_testeiras: desconto 0,02 no eixo/soleira/lâminas (com trava: lâminas -0,03).
+  • vao_1guia: vão + profundidade da guia (mm/1000) - 0,02 (com trava: lâminas -0,03).
+  • vao_guias: vão + guia_esq + guia_dir - 0,02 (com trava: lâminas -0,03).
+  • entre_paredes: desconto 0,07 (com trava: lâminas -0,08).
+- Guias válidas: 50, 60, 70, 100 mm (80 e 90 não existem mais). Auto: largura ≤4m→50, ≤7m→70, >7m→100.
+- Eixo: até 6m → 4.5"; motor 500 → 5.5"; motor ≥700 → 6.5" mínimo.
+- Rolo: eixo 4.5/5.5" → 0,60m; eixos maiores → 0,75m.
+- Motor (auto): peso = m² × 12kg × (1 + margem). Margem 35% padrão; 70% se largura≥9 OU altura≥4. Escolha: ≤200→200, ≤300→300, ≤400→400, ≤500→500, >500→800. Motores AC 200/300/400/500/800/1000/1500. DC 200/300/400/500/800.
+- Kit automatizador = motor + testeiras + central + 2 controles. Motor+testeiras = sem central. Avulso = só motor.
+- Portinhola VILD/VILE: perguntar se *cortada* (com lâminas cortadas) ou *inteira* p/ ajuste local. CENTRO sempre cortada.
+- Portinhola cortada: largura final = largura porta - (0,64 + profundidade da guia em m). 18 lâminas perfil baixo / 19 perfil alto. Separa soleira e lâminas no orçamento.
+- Portinhola e alçapão NUNCA juntos na mesma porta.
+- O CLIENTE NÃO VÊ: fórmulas, peso, regras, cálculos internos. Mostre apenas resultado final em metros e produtos finais.
+- Não invente preço. Faltou no estoque → marca como sob consulta e segue.`;
 
 function cfgPedidoLeve(pedido: CfgPedido) {
   return {
