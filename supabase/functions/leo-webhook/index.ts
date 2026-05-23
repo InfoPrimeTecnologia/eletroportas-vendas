@@ -2603,6 +2603,7 @@ interface CfgPedido {
   total: number;
   status: "em_andamento" | "aguardando_confirmacao" | "finalizado";
   sob_consulta?: boolean;
+  aguardando_retomada?: boolean;
 }
 
 const PEDIDO_VAZIO: CfgPedido = { itens: [], total: 0, status: "em_andamento" };
@@ -3551,6 +3552,30 @@ async function cfgGerarResposta(args: { mensagemCliente: string; pedido: CfgPedi
   return partes.join("\n\n") || "Pode me dizer o que precisa? Ex: _\"3x4 entre paredes AC meia cana branca portinhola VILD\"_";
 }
 
+// --- Classificador de intenção da mensagem ---
+// Diferencia: saudação (nova interação humana), pergunta paralela (dúvida fora do orçamento)
+// e continuação do fluxo. Evita que qualquer "oi" seja tratado como continuação do orçamento.
+function classificarIntencaoConversa(mensagem: string): "saudacao" | "pergunta_paralela" | "continuacao" {
+  const original = String(mensagem || "").trim();
+  if (!original) return "continuacao";
+  const t = original.toLowerCase().replace(/[!.\s]+$/g, "").trim();
+
+  // Saudação pura / abertura social
+  if (/^(oi+|ol[áa]+|opa+|eai+|e a[ií]+|hey+|hi+|hello+|al[ôo]+|menu|bom\s*dia|boa\s*tarde|boa\s*noite|tudo\s*bem\??|tudo\s*certo\??|td\s*bem\??|tudo\s*bom\??|como\s*vai\??|blz|beleza|salve|fala|fala\s*a[íi]|e\s*a[íi])$/i.test(t)) {
+    return "saudacao";
+  }
+
+  // Termos técnicos / comandos de carrinho → continuação
+  const temTecnico = /(\d+\s*[x×]\s*\d+|porta|motor|guia|l[âa]mina|kit|or[çc]amento|portinhola|controle|central|eixo|soleira|cortada|inteira|\bac\b|\bdc\b|\bsim\b|\bn[ãa]o\b|gerar|finalizar|fechar|pedido|acrescentar|adicionar|remover|tirar|trocar|sob\s*consulta|pe[çc]as?|avulsa|acess[óo]rio|alç?ap[ãa]o|pintura|transvision|oblongo|meia\s*cana|fechada|revenda|consumidor|parede|testeira|v[ãa]o|entre|sobreposta|continuar|novo|nova|zerar|recome[çc]ar)/i.test(t);
+  if (temTecnico) return "continuacao";
+
+  // Pergunta paralela (info geral) — sem termos técnicos
+  const ehPergunta = /\?/.test(original) || /^(qual|quais|quanto|quando|onde|como|por\s*que|porque|voc[êe]s|t[êe]m\b|tem\b|trabalha|atende|hor[áa]rio|endere[çc]o|funciona|aberto|fechado|frete|entrega|prazo|garantia|whats|telefone|site|email)/i.test(t);
+  if (ehPergunta) return "pergunta_paralela";
+
+  return "continuacao";
+}
+
 // --- Orquestrador ---
 async function rodarConfigurador(args: {
   conversa: any;
@@ -3569,7 +3594,61 @@ async function rodarConfigurador(args: {
     .maybeSingle();
   let pedido = carregarPedido((row as any)?.pedido);
 
-  // 1) Interpreta
+  // ====== 0) CLASSIFICAÇÃO DE INTENÇÃO (antes de qualquer interpretação técnica) ======
+  // Se está aguardando o cliente decidir entre continuar/novo
+  if (pedido.aguardando_retomada) {
+    const t = mensagem.toLowerCase().trim();
+    const querNovo = /\b(novo|nova|come[çc]ar|iniciar|recome[çc]ar|zerar|do\s*zero|outro|outra|2|op[çc]ao\s*2)\b/.test(t);
+    const querContinuar = /\b(continuar|continua|seguir|de\s*onde\s*paramos|anterior|or[çc]amento\s*anterior|mesmo|1|op[çc]ao\s*1|sim|s)\b/.test(t);
+    if (querNovo) {
+      pedido = { itens: [], total: 0, status: "em_andamento" };
+      await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+      const txt = `Beleza! Vamos começar um novo atendimento. 🚀\n\nPode me dizer o que precisa? Ex: _"3x4 entre paredes AC meia cana branca portinhola VILD"_`;
+      await salvarMensagem(conversa.id, "assistant", txt, { configurador: true, retomada: "novo" });
+      await enviarTexto(telefone, txt);
+      return { pdfEnviado: false, texto: txt };
+    }
+    if (querContinuar) {
+      delete pedido.aguardando_retomada;
+      await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+      const proxima = cfgProximaPergunta(pedido);
+      const resumo = pedido.itens.length ? cfgResumo(pedido, { mostrarTotal: false }) : "";
+      const txt = `Perfeito, vamos continuar de onde paramos.${resumo ? "\n\n" + resumo : ""}\n\n${proxima ? `👉 ${proxima}` : `👉 Deseja *acrescentar mais algum item* ou posso *gerar o orçamento*?`}`;
+      await salvarMensagem(conversa.id, "assistant", txt, { configurador: true, retomada: "continuar" });
+      await enviarTexto(telefone, txt);
+      return { pdfEnviado: false, texto: txt };
+    }
+    const txt = `Só pra confirmar: deseja *continuar o orçamento anterior* ou *iniciar um novo atendimento*?`;
+    await salvarMensagem(conversa.id, "assistant", txt, { configurador: true });
+    await enviarTexto(telefone, txt);
+    return { pdfEnviado: false, texto: txt };
+  }
+
+  const intencaoConversa = classificarIntencaoConversa(mensagem);
+  console.log("🎭 intencao conversa:", intencaoConversa);
+
+  // Saudação + carrinho não vazio → pergunta se quer continuar ou iniciar novo
+  if (intencaoConversa === "saudacao" && pedido.itens.length > 0) {
+    pedido.aguardando_retomada = true;
+    await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+    const primeiro = (nomeCliente || "").trim().split(/\s+/)[0];
+    const ola = primeiro ? `Olá, ${primeiro}! 👋` : `Olá! 👋`;
+    const txt = `${ola} Vi que temos um orçamento em andamento por aqui.\n\nDeseja *continuar o orçamento anterior* ou *iniciar um novo atendimento*?`;
+    await salvarMensagem(conversa.id, "assistant", txt, { configurador: true, pergunta_retomada: true });
+    await enviarTexto(telefone, txt);
+    return { pdfEnviado: false, texto: txt };
+  }
+
+  // Pergunta paralela → responde sem mexer no carrinho
+  if (intencaoConversa === "pergunta_paralela") {
+    const proxima = pedido.itens.length ? cfgProximaPergunta(pedido) : null;
+    const texto = await cfgResponderComLLM({ mensagemCliente: mensagem, pedido, proxima });
+    await salvarMensagem(conversa.id, "assistant", texto, { configurador: true, pergunta_paralela: true });
+    await enviarTexto(telefone, texto);
+    return { pdfEnviado: false, texto };
+  }
+
+  // 1) Interpreta intenções técnicas
   const intencoes = await cfgInterpretar(mensagem, pedido);
   console.log("🧠 cfg intencoes:", JSON.stringify(intencoes));
 
