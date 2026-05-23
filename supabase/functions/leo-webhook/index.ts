@@ -2833,7 +2833,7 @@ Para kit_porta a config pode conter qualquer subconjunto de:
 
 Avulsos (cada um vira um item separado no carrinho):
 - motor: {"ac_dc":"AC|DC","potencia":N,"qtd":N}
-- guia: {"mm":N,"comprimento_m":N,"qtd":N,"tipo_unidade":"par"|"unidade"} — use qtd para a quantidade informada; só preencha tipo_unidade se o cliente disser explicitamente "par(es)" ou "unidade(s)/avulsa(s)". NUNCA repergunte a quantidade se ela já estiver no histórico.
+- guia: {"mm":N,"comprimento_m":N,"qtd":N,"tipo_unidade":"par"|"unidade"} — use qtd para a quantidade informada. Só preencha tipo_unidade="par" se o cliente disser EXPLICITAMENTE "par(es)". Caso contrário deixe vazio: o sistema assume UNIDADE AVULSA automaticamente. NUNCA repergunte quantidade nem se é par/unidade quando o cliente não falou "par".
 - lamina: {"modelo":"meia_cana|...","perfil":"baixo|alto","cor":"...","comprimento_m":N,"qtd":N}
 - soleira: {"comprimento_m":N,"qtd":N}
 - eixo: {"polegadas":N,"comprimento_m":N,"qtd":N}
@@ -3418,7 +3418,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       const qtd = c.qtd ?? c.qtd_pares ?? c.qtd_unidades;
       if (!qtd) return "Quantas *guias* você precisa?";
       if (!c.mm) return "Qual a *espessura/tipo da guia*? (50 / 60 / 70 / 100 mm)";
-      if (!c.tipo_unidade && !c.qtd_pares && !c.qtd_unidades) return `Essas *${qtd} guias de ${c.mm}mm* são em *pares* ou *unidades avulsas*?`;
+      // Não perguntar par/unidade: assume unidade avulsa quando o cliente não disse "par".
       if (!c.comprimento_m) return "Qual o *comprimento em metros* de cada guia?";
     } else if (it.tipo === "lamina") {
       const c = it.config || {};
@@ -3466,8 +3466,7 @@ function cfgItemIncompleto(it: CfgItem): boolean {
       return !c.potencia || (!c.kit_motor && !c.modelo_motor) || !c.ac_dc;
     case "guia": {
       const qtd = c.qtd ?? c.qtd_pares ?? c.qtd_unidades;
-      const tipoOk = c.tipo_unidade || c.qtd_pares || c.qtd_unidades;
-      return !qtd || !c.mm || !tipoOk || !c.comprimento_m;
+      return !qtd || !c.mm || !c.comprimento_m;
     }
     case "lamina":
       return !c.qtd || !c.modelo || !c.comprimento_m;
@@ -3536,7 +3535,15 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
     } else if (it.tipo === "motor") {
       linhas.push(`${n++}. Motor ${c.ac_dc || "?"} ${c.potencia || "?"}kg x ${c.qtd || 1}`);
     } else if (it.tipo === "guia") {
-      linhas.push(`${n++}. Guia ${c.mm || "?"}mm — ${c.qtd_pares ? c.qtd_pares + " par(es)" : c.qtd_unidades ? c.qtd_unidades + " un" : (c.qtd || "?") + (c.tipo_unidade === "par" ? " par(es)" : c.tipo_unidade === "unidade" ? " un" : "")} de ${c.comprimento_m || "?"}m`);
+      const isPar = !!c.qtd_pares || c.tipo_unidade === "par";
+      const qtdN = Number(c.qtd_pares || c.qtd_unidades || c.qtd || 0);
+      const comp = Number(c.comprimento_m || 0);
+      const ml = qtdN * (isPar ? 2 : 1) * (comp || 0);
+      const baseQtd = qtdN || "?";
+      const unidade = isPar ? "par(es)" : "un";
+      const compStr = comp ? `${comp}m` : "?m";
+      const mlStr = ml ? ` → *${ml.toFixed(2)} m lineares*` : "";
+      linhas.push(`${n++}. ${baseQtd} ${unidade} de guia ${c.mm || "?"}mm × ${compStr}${mlStr}`);
     } else if (it.tipo === "controle") {
       linhas.push(`${n++}. Controle remoto x ${c.qtd || 1}`);
     } else if (it.tipo === "central") {
