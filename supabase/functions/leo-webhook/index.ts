@@ -3533,38 +3533,59 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
       if (c.central !== false && c?.motor?.potencia) linhas.push(`   Central de controle inclusa`);
       if ((Number(c.controles) || 0) > 0) linhas.push(`   Controles: ${c.controles}`);
     } else if (it.tipo === "motor") {
-      linhas.push(`${n++}. Motor ${c.ac_dc || "?"} ${c.potencia || "?"}kg x ${c.qtd || 1}`);
+      linhas.push(`${n++}. Motor`);
+      if (c.ac_dc) linhas.push(`   • Tipo: ${c.ac_dc}`);
+      if (c.potencia) linhas.push(`   • Capacidade: ${c.potencia}kg`);
+      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
     } else if (it.tipo === "guia") {
       const isPar = !!c.qtd_pares || c.tipo_unidade === "par";
       const qtdN = Number(c.qtd_pares || c.qtd_unidades || c.qtd || 0);
       const comp = Number(c.comprimento_m || 0);
       const ml = qtdN * (isPar ? 2 : 1) * (comp || 0);
-      const baseQtd = qtdN || "?";
-      const unidade = isPar ? "par(es)" : "un";
-      const compStr = comp ? `${comp}m` : "?m";
-      const mlStr = ml ? ` → *${ml.toFixed(2)} m lineares*` : "";
-      linhas.push(`${n++}. ${baseQtd} ${unidade} de guia ${c.mm || "?"}mm × ${compStr}${mlStr}`);
+      linhas.push(`${n++}. Guias`);
+      if (qtdN) linhas.push(`   • Quantidade: ${qtdN}${isPar ? " par(es)" : ""}`);
+      if (c.mm) linhas.push(`   • Modelo: ${c.mm}mm`);
+      if (comp) linhas.push(`   • Comprimento: ${comp}m`);
+      if (ml) linhas.push(`   • Total: ${ml.toFixed(2)} m lineares`);
     } else if (it.tipo === "controle") {
-      linhas.push(`${n++}. Controle remoto x ${c.qtd || 1}`);
+      linhas.push(`${n++}. Controle remoto`);
+      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
     } else if (it.tipo === "central") {
-      linhas.push(`${n++}. Central de comando x ${c.qtd || 1}`);
+      linhas.push(`${n++}. Central de comando`);
+      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
     } else if (it.tipo === "trava_lamina") {
-      linhas.push(`${n++}. Trava-lâmina x ${c.qtd || 1}`);
+      linhas.push(`${n++}. Trava-lâmina`);
+      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
     } else if (it.tipo === "lamina") {
-      linhas.push(`${n++}. Lâmina${c.modelo ? " " + String(c.modelo).replace("_", " ") : ""}${c.cor ? " " + c.cor : ""}${c.comprimento_m ? ` ${c.comprimento_m}m` : ""} x ${c.qtd || 1}`);
+      linhas.push(`${n++}. Lâminas`);
+      if (c.qtd) linhas.push(`   • Quantidade: ${c.qtd}`);
+      if (c.modelo) linhas.push(`   • Modelo: ${String(c.modelo).replace("_", " ")}`);
+      if (c.cor) linhas.push(`   • Cor: ${c.cor}`);
+      if (c.comprimento_m) linhas.push(`   • Tamanho: ${c.comprimento_m}m`);
     } else if (it.tipo === "soleira") {
-      linhas.push(`${n++}. Soleira${c.comprimento_m ? ` ${c.comprimento_m}m` : ""} x ${c.qtd || 1}`);
+      linhas.push(`${n++}. Soleira`);
+      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
+      if (c.comprimento_m) linhas.push(`   • Comprimento: ${c.comprimento_m}m`);
     } else if (it.tipo === "eixo") {
-      linhas.push(`${n++}. Eixo${c.polegadas ? ` ${c.polegadas}"` : ""}${c.comprimento_m ? ` ${c.comprimento_m}m` : ""} x ${c.qtd || 1}`);
+      linhas.push(`${n++}. Eixos`);
+      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
+      if (c.polegadas) linhas.push(`   • Bitola: ${c.polegadas}"`);
+      if (c.comprimento_m) linhas.push(`   • Comprimento: ${c.comprimento_m}m`);
     } else if (it.tipo === "portinhola") {
       const posDef = typeof c.modelo === "string" && ["VILD","VILE","CENTRO"].includes(String(c.modelo).toUpperCase());
-      linhas.push(`${n++}. Portinhola${posDef ? " " + String(c.modelo).toUpperCase() : " _(posição a definir)_"} x ${c.qtd || 1}`);
+      linhas.push(`${n++}. Portinhola`);
+      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
+      linhas.push(`   • ${posDef ? "Posição: " + String(c.modelo).toUpperCase() : "_posição a definir_"}`);
     } else if (it.tipo === "alcapao") {
-      linhas.push(`${n++}. Alçapão x ${c.qtd || 1}`);
+      linhas.push(`${n++}. Alçapão`);
+      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
     } else if (it.tipo === "pintura") {
-      linhas.push(`${n++}. Pintura eletrostática${c.cor ? " " + c.cor : ""}${c.area_m2 ? ` ${c.area_m2}m²` : ""}`);
+      linhas.push(`${n++}. Pintura eletrostática`);
+      if (c.cor) linhas.push(`   • Cor: ${c.cor}`);
+      if (c.area_m2) linhas.push(`   • Área: ${c.area_m2}m²`);
     } else if (it.tipo === "acessorio") {
-      linhas.push(`${n++}. ${c.descricao || "Acessório"} x ${c.qtd || 1}`);
+      linhas.push(`${n++}. ${c.descricao || "Acessório"}`);
+      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
     } else {
       linhas.push(`${n++}. ${it.tipo}`);
     }
