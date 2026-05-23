@@ -3648,6 +3648,9 @@ async function rodarConfigurador(args: {
     return { pdfEnviado: false, texto };
   }
 
+  // 1) Interpreta intenções técnicas
+  const intencoes = await cfgInterpretar(mensagem, pedido);
+  console.log("🧠 cfg intencoes:", JSON.stringify(intencoes));
 
   // 2) Aplica (sem explodir BOM ainda — apenas atualiza config)
   const r = cfgAplicar(pedido, intencoes);
