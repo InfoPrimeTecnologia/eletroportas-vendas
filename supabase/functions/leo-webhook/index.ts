@@ -3376,15 +3376,80 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
         return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
       }
     } else if (it.tipo === "motor") {
-      if (!it.config?.potencia) return "Motor de quantos *kg*? (200/300/400/500/800)";
-      if (!it.config?.ac_dc) return "*AC* ou *DC*?";
+      const c = it.config || {};
+      if (!c.potencia) return "Esse motor é de quantos *kg*? (200/300/400/500/800/1500)";
+      if (!c.kit_motor && !c.modelo_motor) {
+        return "Qual o *modelo do motor*?\n• *avulso*\n• *motor + testeiras*\n• *kit automatizador*";
+      }
+      if (!c.ac_dc) return "Esse motor é *AC* ou *DC*?";
     } else if (it.tipo === "guia") {
-      if (!it.config?.mm) return "Guia de quantos *mm*? (50 / 60 / 70 / 100)";
-      if (!it.config?.comprimento_m) return "Qual o *comprimento em metros* da guia?";
-      if (!it.config?.qtd_pares && !it.config?.qtd_unidades) return "Quantos *pares* (ou unidades) de guia?";
+      const c = it.config || {};
+      if (!c.qtd_pares && !c.qtd_unidades) return "Quantos *pares* (ou unidades) de guia?";
+      if (!c.mm) return "Qual a *espessura/tipo da guia*? (50 / 60 / 70 / 100 mm)";
+      if (!c.comprimento_m) return "Qual o *comprimento em metros* de cada guia?";
+    } else if (it.tipo === "lamina") {
+      const c = it.config || {};
+      if (!c.qtd) return "Quantas *lâminas* você precisa?";
+      if (!c.modelo) return "Qual o *modelo da lâmina*?\n• *Fechada*\n• *Meia cana*\n• *Transvision*\n• *Oblongo*";
+      if (!c.comprimento_m) return "Qual o *tamanho (comprimento em metros)* de cada lâmina? Ex: `3` ou `2,5`.";
+    } else if (it.tipo === "soleira") {
+      const c = it.config || {};
+      if (!c.qtd) return "Quantas *soleiras*?";
+      if (!c.comprimento_m) return "Qual o *comprimento em metros* da soleira?";
+    } else if (it.tipo === "eixo") {
+      const c = it.config || {};
+      if (!c.qtd) return "Quantos *eixos*?";
+      if (!c.polegadas) return "Qual o *diâmetro do eixo* em polegadas? (4.5 / 5.5 / 6 / 6.5 / 8.5)";
+      if (!c.comprimento_m) return "Qual o *comprimento em metros* do eixo?";
+    } else if (it.tipo === "portinhola") {
+      const c = it.config || {};
+      if (!c.modelo) return "Qual o *modelo da portinhola*? (*VILD* / *VILE* / *CENTRO*)";
+      if (!c.qtd) return "Quantas *portinholas*?";
+    } else if (it.tipo === "pintura") {
+      const c = it.config || {};
+      if (!c.area_m2) return "Qual a *área em m²* da pintura?";
+      if (!c.cor) return "Qual a *cor* da pintura?";
+    } else if (it.tipo === "controle" || it.tipo === "central" || it.tipo === "trava_lamina" || it.tipo === "alcapao") {
+      if (!it.config?.qtd) return `Quantas unidades de *${String(it.tipo).replace("_", " ")}*?`;
+    } else if (it.tipo === "acessorio") {
+      const c = it.config || {};
+      if (!c.descricao) return "Qual *acessório* você precisa? Descreva o item.";
+      if (!c.qtd) return "Quantas unidades desse acessório?";
     }
   }
   return null;
+}
+
+/** Detecta se um item específico está incompleto — usado para evitar precificação prematura. */
+function cfgItemIncompleto(it: CfgItem): boolean {
+  const c: any = it.config || {};
+  switch (it.tipo) {
+    case "kit_porta":
+      return !c.largura || !c.altura || !c.instalacao || !c?.motor?.ac_dc || !c?.lamina?.modelo || !c?.lamina?.cor;
+    case "motor":
+      return !c.potencia || (!c.kit_motor && !c.modelo_motor) || !c.ac_dc;
+    case "guia":
+      return (!c.qtd_pares && !c.qtd_unidades) || !c.mm || !c.comprimento_m;
+    case "lamina":
+      return !c.qtd || !c.modelo || !c.comprimento_m;
+    case "soleira":
+      return !c.qtd || !c.comprimento_m;
+    case "eixo":
+      return !c.qtd || !c.polegadas || !c.comprimento_m;
+    case "portinhola":
+      return !c.modelo || !c.qtd;
+    case "pintura":
+      return !c.area_m2 || !c.cor;
+    case "controle":
+    case "central":
+    case "trava_lamina":
+    case "alcapao":
+      return !c.qtd;
+    case "acessorio":
+      return !c.descricao || !c.qtd;
+    default:
+      return false;
+  }
 }
 
 // --- Resumo em texto ---
