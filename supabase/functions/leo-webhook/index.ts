@@ -3395,9 +3395,17 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
   for (const it of pedido.itens) {
     const c = it.config || {};
     if (it.tipo === "kit_porta") {
-      const rolo = calcRolo(Number(c.eixo_polegadas) || eixoPorAltura(Number(c.altura) || 0));
+      // Só mostra o rolo definitivo quando o eixo já foi definido (manual ou via motor).
+      const eixoDef = Number(c.eixo_polegadas) || (c?.motor?.potencia ? escolherEixoAuto(Number(c.largura) || 0, Number(c.motor.potencia)) : 0);
+      const roloDef = calcRolo(eixoDef);
       linhas.push(`${n++}. Porta de enrolar${c?.motor?.ac_dc ? " automática" : ""}`);
-      if (c.largura && c.altura) linhas.push(`   Medida: ${c.largura}m × ${c.altura}m  _(+ rolo ${rolo.toFixed(2)}m)_`);
+      if (c.largura && c.altura) {
+        if (roloDef !== null) {
+          linhas.push(`   Medida: ${c.largura}m × (${c.altura}m + ${roloDef.toFixed(2)}m de rolo)`);
+        } else {
+          linhas.push(`   Medida: ${c.largura}m × (${c.altura}m + rolo)`);
+        }
+      }
       if (c.instalacao) {
         const labelInst: Record<string, string> = {
           entre_testeiras: "entre testeiras",
