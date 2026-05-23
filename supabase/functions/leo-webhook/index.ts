@@ -2648,7 +2648,10 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
     patch.altura = Number(medida[2].replace(",", "."));
   }
   if (/\bentre\s+paredes\b/.test(t)) patch.instalacao = "entre_paredes";
-  else if (/\b(sobreposta|sobrepor|vao\s*\+\s*guias?|vao\s*\+\s*1\s*guia|entre\s+testeiras)\b/.test(t)) patch.instalacao = "sobreposta";
+  else if (/\bentre\s+testeiras\b/.test(t)) patch.instalacao = "entre_testeiras";
+  else if (/\bv[ãa]o\s*\+\s*1\s*guia\b|\bvao\s*\+\s*1\s*guia\b|\b1\s*guia\b/.test(t)) patch.instalacao = "vao_1guia";
+  else if (/\bv[ãa]o\s*\+\s*guias?\b|\bvao\s*\+\s*guias?\b|\b2\s*guias?\b|\bduas\s*guias?\b/.test(t)) patch.instalacao = "vao_guias";
+  if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
   const guia = t.match(/\bguia\s*(?:de|para)?\s*(50|60|70|80|90|100)\b/);
   if (guia) patch.guia_mm = Number(guia[1]);
   const pot = t.match(/\b(200|300|400|500|800|1000|1500)\s*kg\b/);
