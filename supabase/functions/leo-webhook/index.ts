@@ -3125,7 +3125,15 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
       const rolo = calcRolo(Number(c.eixo_polegadas) || eixoPorAltura(Number(c.altura) || 0));
       linhas.push(`${n++}. Porta de enrolar${c?.motor?.ac_dc ? " automática" : ""}`);
       if (c.largura && c.altura) linhas.push(`   Medida: ${c.largura}m × ${c.altura}m  _(+ rolo ${rolo.toFixed(2)}m)_`);
-      if (c.instalacao) linhas.push(`   Instalação: ${String(c.instalacao).replace("_", " ")}`);
+      if (c.instalacao) {
+        const labelInst: Record<string, string> = {
+          entre_testeiras: "entre testeiras",
+          vao_1guia: "vão + 1 guia",
+          vao_guias: "vão + guias",
+          entre_paredes: "entre paredes",
+        };
+        linhas.push(`   Instalação: ${labelInst[String(c.instalacao)] || String(c.instalacao).replace(/_/g, " ")}${c.trava_lamina ? " (com trava de lâminas)" : ""}`);
+      }
       if (c?.motor?.ac_dc) linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + "kg" : ""}`);
       if (c?.lamina?.modelo) linhas.push(`   Lâmina: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
       if (c?.lamina?.cor) linhas.push(`   Cor: ${c.lamina.cor}`);
