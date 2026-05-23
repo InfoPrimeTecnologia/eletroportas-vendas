@@ -3522,7 +3522,7 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
     } else if (it.tipo === "motor") {
       linhas.push(`${n++}. Motor ${c.ac_dc || "?"} ${c.potencia || "?"}kg x ${c.qtd || 1}`);
     } else if (it.tipo === "guia") {
-      linhas.push(`${n++}. Guia ${c.mm || "?"}mm — ${c.qtd_pares ? c.qtd_pares + " par(es)" : (c.qtd_unidades || "?") + " un"} de ${c.comprimento_m || "?"}m`);
+      linhas.push(`${n++}. Guia ${c.mm || "?"}mm — ${c.qtd_pares ? c.qtd_pares + " par(es)" : c.qtd_unidades ? c.qtd_unidades + " un" : (c.qtd || "?") + (c.tipo_unidade === "par" ? " par(es)" : c.tipo_unidade === "unidade" ? " un" : "")} de ${c.comprimento_m || "?"}m`);
     } else if (it.tipo === "controle") {
       linhas.push(`${n++}. Controle remoto x ${c.qtd || 1}`);
     } else if (it.tipo === "central") {
