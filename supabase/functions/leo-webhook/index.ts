@@ -3564,28 +3564,30 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
       if (c.comprimento_m) linhas.push(`   • Tamanho: ${c.comprimento_m}m`);
     } else if (it.tipo === "soleira") {
       linhas.push(`${n++}. Soleira`);
-      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
+      if (c.qtd) linhas.push(`   • Quantidade: ${c.qtd}`);
       if (c.comprimento_m) linhas.push(`   • Comprimento: ${c.comprimento_m}m`);
     } else if (it.tipo === "eixo") {
       linhas.push(`${n++}. Eixos`);
-      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
+      if (c.qtd) linhas.push(`   • Quantidade: ${c.qtd}`);
       if (c.polegadas) linhas.push(`   • Bitola: ${c.polegadas}"`);
       if (c.comprimento_m) linhas.push(`   • Comprimento: ${c.comprimento_m}m`);
     } else if (it.tipo === "portinhola") {
       const posDef = typeof c.modelo === "string" && ["VILD","VILE","CENTRO"].includes(String(c.modelo).toUpperCase());
       linhas.push(`${n++}. Portinhola`);
-      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
-      linhas.push(`   • ${posDef ? "Posição: " + String(c.modelo).toUpperCase() : "_posição a definir_"}`);
+      if (c.qtd) linhas.push(`   • Quantidade: ${c.qtd}`);
+      if (posDef) linhas.push(`   • Posição: ${String(c.modelo).toUpperCase()}`);
+      else linhas.push(`   • _posição a definir_`);
     } else if (it.tipo === "alcapao") {
       linhas.push(`${n++}. Alçapão`);
-      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
+      if (c.qtd) linhas.push(`   • Quantidade: ${c.qtd}`);
     } else if (it.tipo === "pintura") {
       linhas.push(`${n++}. Pintura eletrostática`);
       if (c.cor) linhas.push(`   • Cor: ${c.cor}`);
       if (c.area_m2) linhas.push(`   • Área: ${c.area_m2}m²`);
     } else if (it.tipo === "acessorio") {
       linhas.push(`${n++}. ${c.descricao || "Acessório"}`);
-      linhas.push(`   • Quantidade: ${c.qtd || 1}`);
+      if (c.qtd) linhas.push(`   • Quantidade: ${c.qtd}`);
+
     } else {
       linhas.push(`${n++}. ${it.tipo}`);
     }
