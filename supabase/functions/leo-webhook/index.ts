@@ -265,10 +265,21 @@ const PRECOS = {
 // ===========================
 // MÓDULO 8 — REGRAS INDUSTRIAIS (helpers puros)
 // ===========================
-/** Rolo segundo o eixo: 4.5"/5" → 0,60 m; > 5" → 0,75 m. */
-function calcRolo(eixoPolegadas?: number): number {
-  if (!eixoPolegadas || eixoPolegadas <= 5) return 0.60;
+/**
+ * Rolo segundo o eixo:
+ *   • 4.5" e 5.5" → 0,60 m
+ *   • 6" / 6.5" / 8.5" (qualquer eixo > 5.5") → 0,75 m
+ * Retorna `null` quando o eixo ainda não foi definido — o chamador
+ * deve então mostrar "(altura + rolo)" e NÃO assumir nenhum valor.
+ */
+function calcRolo(eixoPolegadas?: number): number | null {
+  if (!eixoPolegadas || eixoPolegadas <= 0) return null;
+  if (eixoPolegadas <= 5.5) return 0.60;
   return 0.75;
+}
+/** Versão "segura" para cálculos internos quando precisamos de um número. */
+function calcRoloNum(eixoPolegadas?: number): number {
+  return calcRolo(eixoPolegadas) ?? 0.60;
 }
 /** Qtd de lâminas: perfil baixo ÷ 0,075; perfil alto ÷ 0,085. Arredonda pra cima. */
 function calcLaminas(alturaTotal: number, perfil: "baixo" | "alto"): number {
