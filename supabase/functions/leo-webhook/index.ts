@@ -281,6 +281,59 @@ function calcGuiasMetrosLineares(qtd: number, par: boolean, comprimentoM: number
   const unidadesPorItem = par ? 2 : 1;
   return Math.max(0, (qtd || 0) * unidadesPorItem * (comprimentoM || 0));
 }
+
+/**
+ * Calcula a medida de corte (em metros) para eixo, soleira e lâminas
+ * a partir do vão livre, tipo de instalação, guias e se há trava de lâminas.
+ *
+ * Tipos:
+ *  - entre_testeiras: desconto 0,02 (com trava: lâminas -0,03)
+ *  - vao_1guia:       vão + profundidade_guia - 0,02 (com trava: -0,03 nas lâminas)
+ *  - vao_guias:       vão + guia_esq + guia_dir - 0,02 (com trava: -0,03 nas lâminas)
+ *  - entre_paredes:   desconto 0,07 (com trava: lâminas -0,08)
+ */
+type TipoInstalacao = "entre_testeiras" | "vao_1guia" | "vao_guias" | "entre_paredes";
+function calcMedidaCorte(
+  vaoLivre: number,
+  instalacao: TipoInstalacao,
+  opts: { guia_mm?: number; guia_mm_esq?: number; guia_mm_dir?: number; trava?: boolean } = {}
+): { eixo: number; soleira: number; laminas: number } {
+  const v = Number(vaoLivre) || 0;
+  if (!v) return { eixo: 0, soleira: 0, laminas: 0 };
+  const trava = !!opts.trava;
+  const gM = (mm?: number) => (Number(mm) || 0) / 1000;
+  let base = v;
+  let descLam = 0;
+  switch (instalacao) {
+    case "entre_testeiras":
+      base = v - 0.02;
+      descLam = trava ? -0.01 : 0;
+      break;
+    case "vao_1guia": {
+      const g = gM(opts.guia_mm ?? opts.guia_mm_esq ?? opts.guia_mm_dir);
+      base = v + g - 0.02;
+      descLam = trava ? -0.01 : 0;
+      break;
+    }
+    case "vao_guias": {
+      const ge = gM(opts.guia_mm_esq ?? opts.guia_mm);
+      const gd = gM(opts.guia_mm_dir ?? opts.guia_mm);
+      base = v + ge + gd - 0.02;
+      descLam = trava ? -0.01 : 0;
+      break;
+    }
+    case "entre_paredes":
+      base = v - 0.07;
+      descLam = trava ? -0.01 : 0;
+      break;
+  }
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return {
+    eixo: round(base),
+    soleira: round(base),
+    laminas: round(base + descLam),
+  };
+}
 const POTENCIAS_AC = [200, 300, 400, 500, 800, 1000, 1500];
 const POTENCIAS_DC = [200, 300, 400, 500, 800];
 function validarMotor(m: { tipo?: string; ac_dc?: string; potencia?: number }): { ok: boolean; faltando: string[] } {
