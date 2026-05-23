@@ -3189,9 +3189,10 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
     }
   }
 
-  // Portinhola
-  if (cfg?.portinhola) {
-    const modelo = String(typeof cfg.portinhola === "string" ? cfg.portinhola : "CENTRO").toUpperCase();
+  // Portinhola — só explode se a posição foi confirmada pelo cliente (VILD/VILE/CENTRO).
+  const portStr = typeof cfg?.portinhola === "string" ? cfg.portinhola.toUpperCase() : "";
+  if (portStr === "VILD" || portStr === "VILE" || portStr === "CENTRO") {
+    const modelo = portStr;
     const cortada = modelo === "CENTRO" ? true : (cfg?.portinhola_cortada !== false);
     const pPort = await precoEstoque(`portinhola ${modelo}`);
     linhas.push({
