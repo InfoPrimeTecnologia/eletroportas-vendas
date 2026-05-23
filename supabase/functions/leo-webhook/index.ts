@@ -3755,8 +3755,19 @@ async function rodarConfigurador(args: {
     .update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() })
     .eq("id", conversa.id);
 
-  // 4) Geração de orçamento?
+  // 4) Geração de orçamento? — só se TODOS os itens estiverem completos
+  const faltaAlgo = cfgProximaPergunta(pedido);
+  if (r.quer_gerar && pedido.itens.length && faltaAlgo) {
+    console.warn("🚫 gerar_orcamento bloqueado (configurador) — item incompleto:", faltaAlgo);
+    const itemFaltando = pedido.itens.find((it) => cfgItemIncompleto(it));
+    const tipoNome = itemFaltando ? String(itemFaltando.tipo).replace("_", " ") : "item";
+    const txt = `Antes de gerar o orçamento, preciso completar os dados de *${tipoNome}*.\n\n👉 ${faltaAlgo}`;
+    await salvarMensagem(conversa.id, "assistant", txt, { configurador: true, bloqueio_validacao: true });
+    await enviarTexto(telefone, txt);
+    return { pdfEnviado: false, texto: txt };
+  }
   if (r.quer_gerar && pedido.itens.length) {
+
     const html = cfgGerarHtml(pedido, { nome: nomeCliente, telefone });
     const filename = `orcamento_${Date.now()}.pdf`;
     const pdfBase64 = await gerarPdfPdfShift(html, filename);
