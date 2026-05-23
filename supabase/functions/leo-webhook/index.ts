@@ -2589,7 +2589,7 @@ async function carregarHistorico(conversation_id: string) {
 // é a próxima pergunta. A resposta sai como UMA mensagem com
 // resumo parcial + pergunta única.
 
-type CfgItemTipo = "kit_porta" | "motor" | "guia" | "lamina" | "controle" | "central" | "trava_lamina" | "acessorio";
+type CfgItemTipo = "kit_porta" | "motor" | "guia" | "lamina" | "soleira" | "eixo" | "controle" | "central" | "trava_lamina" | "portinhola" | "alcapao" | "pintura" | "acessorio";
 interface CfgLinha { sku: string; descricao: string; und: string; qtd: number; valor_unit: number; total: number; sob_consulta?: boolean }
 interface CfgItem {
   id: string;
