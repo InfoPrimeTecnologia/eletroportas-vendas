@@ -2866,10 +2866,22 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const altura = Number(cfg?.altura) || 0;
   if (!largura || !altura) return linhas;
   const perfil: "baixo" | "alto" = (cfg?.lamina?.perfil === "alto" ? "alto" : "baixo");
-  const eixo = Number(cfg?.eixo_polegadas) || eixoPorAltura(altura);
-  const rolo = calcRolo(eixo);
+  const eixoPol = Number(cfg?.eixo_polegadas) || eixoPorAltura(altura);
+  const rolo = calcRolo(eixoPol);
   const alturaTotal = altura + rolo;
   const qtdLaminas = calcLaminas(alturaTotal, perfil);
+
+  // Medida de corte conforme tipo de instalação + trava de lâminas
+  const instalacao = (cfg?.instalacao || "entre_paredes") as TipoInstalacao;
+  const corte = calcMedidaCorte(largura, instalacao, {
+    guia_mm: Number(cfg?.guia_mm) || undefined,
+    guia_mm_esq: Number(cfg?.guia_mm_esq) || undefined,
+    guia_mm_dir: Number(cfg?.guia_mm_dir) || undefined,
+    trava: !!cfg?.trava_lamina,
+  });
+  const cortarEixo = corte.eixo || largura;
+  const cortarSoleira = corte.soleira || largura;
+  const cortarLamina = corte.laminas || largura;
 
   // Lâmina
   const modeloLam = String(cfg?.lamina?.modelo || "meia_cana").replace("_", " ");
@@ -2878,38 +2890,45 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const pLam = await precoEstoque(buscaLam);
   linhas.push({
     sku: pLam?.sku || "LAMINA",
-    descricao: pLam?.nome || `Lâmina ${modeloLam} perfil ${perfil}${cor}`,
+    descricao: pLam?.nome || `Lâmina ${modeloLam} perfil ${perfil}${cor} — corte ${cortarLamina.toFixed(2)}m`,
     und: pLam?.und || "UN",
-    qtd: qtdLaminas * largura,
+    qtd: qtdLaminas * cortarLamina,
     valor_unit: pLam?.preco || 0,
-    total: (pLam?.preco || 0) * qtdLaminas * largura,
+    total: (pLam?.preco || 0) * qtdLaminas * cortarLamina,
     sob_consulta: !pLam,
   });
 
   // Guia lateral (par)
-  const mm = Number(cfg?.guia_mm) || 50;
+  const mm = Number(cfg?.guia_mm) || Number(cfg?.guia_mm_esq) || Number(cfg?.guia_mm_dir) || 50;
   const buscaGuia = `guia lateral ${mm}mm`;
   const pGuia = await precoEstoque(buscaGuia);
-  const mlGuia = calcGuiasMetrosLineares(1, true, altura); // 1 par × altura
-  linhas.push({
-    sku: pGuia?.sku || "GUIA",
-    descricao: pGuia?.nome || `Guia lateral ${mm}mm (par)`,
-    und: pGuia?.und || "M",
-    qtd: mlGuia,
-    valor_unit: pGuia?.preco || 0,
-    total: (pGuia?.preco || 0) * mlGuia,
-    sob_consulta: !pGuia,
-  });
+  // Quantas guias o tipo de instalação demanda
+  const guiasNec =
+    instalacao === "entre_testeiras" ? 0 :
+    instalacao === "vao_1guia" ? 1 :
+    2; // vao_guias / entre_paredes usam par
+  const mlGuia = guiasNec > 0 ? guiasNec * altura : 0;
+  if (mlGuia > 0) {
+    linhas.push({
+      sku: pGuia?.sku || "GUIA",
+      descricao: pGuia?.nome || `Guia lateral ${mm}mm (${guiasNec === 1 ? "1 un" : "par"})`,
+      und: pGuia?.und || "M",
+      qtd: mlGuia,
+      valor_unit: pGuia?.preco || 0,
+      total: (pGuia?.preco || 0) * mlGuia,
+      sob_consulta: !pGuia,
+    });
+  }
 
   // Eixo
-  const pEixo = await precoEstoque(`eixo ${eixo}`);
+  const pEixo = await precoEstoque(`eixo ${eixoPol}`);
   linhas.push({
     sku: pEixo?.sku || "EIXO",
-    descricao: pEixo?.nome || `Eixo ${eixo}"`,
+    descricao: pEixo?.nome || `Eixo ${eixoPol}" — corte ${cortarEixo.toFixed(2)}m`,
     und: pEixo?.und || "M",
-    qtd: largura,
+    qtd: cortarEixo,
     valor_unit: pEixo?.preco || 0,
-    total: (pEixo?.preco || 0) * largura,
+    total: (pEixo?.preco || 0) * cortarEixo,
     sob_consulta: !pEixo,
   });
 
@@ -2917,11 +2936,11 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const pSol = await precoEstoque("soleira");
   linhas.push({
     sku: pSol?.sku || "SOLEIRA",
-    descricao: pSol?.nome || "Soleira em T",
+    descricao: pSol?.nome || `Soleira em T — corte ${cortarSoleira.toFixed(2)}m`,
     und: pSol?.und || "M",
-    qtd: largura,
+    qtd: cortarSoleira,
     valor_unit: pSol?.preco || 0,
-    total: (pSol?.preco || 0) * largura,
+    total: (pSol?.preco || 0) * cortarSoleira,
     sob_consulta: !pSol,
   });
 
