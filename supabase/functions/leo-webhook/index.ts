@@ -3128,13 +3128,63 @@ async function explodirItem(item: CfgItem): Promise<CfgLinha[]> {
     return [{ sku: p?.sku || "CONTROLE", descricao: p?.nome || "Controle remoto", und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
   }
   if (item.tipo === "central") {
+    const qtd = Number(cfg.qtd) || 1;
     const p = await precoEstoque("central de comando");
-    return [{ sku: p?.sku || "CENTRAL", descricao: p?.nome || "Central de comando", und: "UN", qtd: 1, valor_unit: p?.preco || 0, total: p?.preco || 0, sob_consulta: !p }];
+    return [{ sku: p?.sku || "CENTRAL", descricao: p?.nome || "Central de comando", und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
   }
   if (item.tipo === "trava_lamina") {
     const qtd = Number(cfg.qtd) || 1;
     const p = await precoEstoque("trava lamina");
     return [{ sku: p?.sku || "TRAVA", descricao: p?.nome || "Trava-lâmina", und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+  }
+  if (item.tipo === "lamina") {
+    const qtd = Number(cfg.qtd) || 1;
+    const compr = Number(cfg.comprimento_m) || 0;
+    const modelo = String(cfg.modelo || "meia_cana").replace("_", " ");
+    const cor = cfg.cor ? ` ${cfg.cor}` : "";
+    const perfil = cfg.perfil || "baixo";
+    const p = await precoEstoque(`lamina ${modelo} ${perfil}${cor}`);
+    const total = (p?.preco || 0) * qtd * (compr || 1);
+    return [{ sku: p?.sku || "LAMINA", descricao: p?.nome || `Lâmina ${modelo} perfil ${perfil}${cor}${compr ? ` ${compr}m` : ""}`, und: p?.und || "UN", qtd: compr ? qtd * compr : qtd, valor_unit: p?.preco || 0, total, sob_consulta: !p }];
+  }
+  if (item.tipo === "soleira") {
+    const qtd = Number(cfg.qtd) || 1;
+    const compr = Number(cfg.comprimento_m) || 0;
+    const p = await precoEstoque("soleira");
+    const total = (p?.preco || 0) * qtd * (compr || 1);
+    return [{ sku: p?.sku || "SOLEIRA", descricao: p?.nome || `Soleira em T${compr ? ` ${compr}m` : ""}`, und: p?.und || "M", qtd: compr ? qtd * compr : qtd, valor_unit: p?.preco || 0, total, sob_consulta: !p }];
+  }
+  if (item.tipo === "eixo") {
+    const qtd = Number(cfg.qtd) || 1;
+    const compr = Number(cfg.comprimento_m) || 0;
+    const pol = Number(cfg.polegadas) || 4.5;
+    const p = await precoEstoque(`eixo ${pol}`);
+    const total = (p?.preco || 0) * qtd * (compr || 1);
+    return [{ sku: p?.sku || "EIXO", descricao: p?.nome || `Eixo ${pol}"${compr ? ` ${compr}m` : ""}`, und: p?.und || "M", qtd: compr ? qtd * compr : qtd, valor_unit: p?.preco || 0, total, sob_consulta: !p }];
+  }
+  if (item.tipo === "portinhola") {
+    const qtd = Number(cfg.qtd) || 1;
+    const modelo = String(cfg.modelo || "CENTRO").toUpperCase();
+    const p = await precoEstoque(`portinhola ${modelo}`);
+    return [{ sku: p?.sku || "PORTINHOLA", descricao: p?.nome || `Portinhola ${modelo}`, und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+  }
+  if (item.tipo === "alcapao") {
+    const qtd = Number(cfg.qtd) || 1;
+    const p = await precoEstoque("alcapao");
+    return [{ sku: p?.sku || "ALCAPAO", descricao: p?.nome || "Alçapão emergencial", und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+  }
+  if (item.tipo === "pintura") {
+    const area = Number(cfg.area_m2) || 0;
+    const cor = cfg.cor || "branca";
+    const p = await precoEstoque(`pintura eletrostatica ${cor}`);
+    const qtd = area || 1;
+    return [{ sku: p?.sku || "PINTURA", descricao: p?.nome || `Pintura eletrostática ${cor}${area ? ` ${area}m²` : ""}`, und: p?.und || "M2", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+  }
+  if (item.tipo === "acessorio") {
+    const qtd = Number(cfg.qtd) || 1;
+    const desc = String(cfg.descricao || "acessorio");
+    const p = await precoEstoque(desc);
+    return [{ sku: p?.sku || "ACESS", descricao: p?.nome || desc, und: p?.und || "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
   }
   return [];
 }
