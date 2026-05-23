@@ -3397,7 +3397,10 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if (!c?.motor?.ac_dc) return "O motor é *AC* ou *DC*?";
       if (!c?.lamina?.modelo) return "Qual o *modelo da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
       if (!c?.lamina?.cor) return "Qual a *cor da lâmina/pintura*?";
-      // VILD/VILE precisa saber se é cortada ou inteira
+      // Portinhola: nunca assumir posição. Se foi pedida sem posição, perguntar.
+      if (c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()))) {
+        return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
+      }
       const port = typeof c.portinhola === "string" ? c.portinhola.toUpperCase() : "";
       if ((port === "VILD" || port === "VILE") && c.portinhola_cortada === undefined) {
         return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
