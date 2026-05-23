@@ -2719,7 +2719,6 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
 
   if (/\balcapao\b/.test(t) && !port) patch.alcapao = true;
   if (/\bpintura\s+eletrostatica\b|\bcom\s+pintura\b/.test(t) && !/sem\s+pintura/.test(t)) patch.pintura = "eletrostatica";
-  if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
 
   // Avulsos
   const ctrl = t.match(/(?:\+\s*)?(\d+)\s*controles?\b/);
