@@ -2641,6 +2641,20 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   if (/\b(gerar|fechar|emitir|mandar|enviar)\b.*\b(orcamento|orçamento|pdf)\b|\borcamento\b$|\bfechar pedido\b/.test(t)) return [{ acao: "gerar_orcamento" }];
   if (/\b(resumo|revisar|conferir)\b/.test(t)) intencoes.push({ acao: "resumo" });
 
+  // Remoções/alterações no kit
+  const removeFlagMap: Array<[RegExp, string]> = [
+    [/\b(retirar|remover|tirar|sem)\s+central\b/, "central"],
+    [/\b(retirar|remover|tirar|sem)\s+pintura\b/, "pintura"],
+    [/\b(retirar|remover|tirar|sem)\s+portinhola\b/, "portinhola"],
+    [/\b(retirar|remover|tirar|sem)\s+alcapao\b/, "alcapao"],
+    [/\b(retirar|remover|tirar|sem)\s+trava\b/, "trava_lamina"],
+  ];
+  for (const [rx, alvo] of removeFlagMap) {
+    if (rx.test(t)) intencoes.push({ acao: "update_item", ref: "kit_porta", patch: { [alvo]: false } });
+  }
+  if (/\b(retirar|remover|tirar)\s+motor\b/.test(t)) intencoes.push({ acao: "remove_item", ref: "motor" });
+  if (/\b(retirar|remover|tirar)\s+controles?\b/.test(t)) intencoes.push({ acao: "remove_item", ref: "controle" });
+
   const patch: any = {};
   const medida = t.match(/(\d+(?:[\.,]\d+)?)\s*(?:m)?\s*[x×]\s*(\d+(?:[\.,]\d+)?)/);
   if (medida) {
@@ -2652,22 +2666,61 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   else if (/\bv[ãa]o\s*\+\s*1\s*guia\b|\bvao\s*\+\s*1\s*guia\b|\b1\s*guia\b/.test(t)) patch.instalacao = "vao_1guia";
   else if (/\bv[ãa]o\s*\+\s*guias?\b|\bvao\s*\+\s*guias?\b|\b2\s*guias?\b|\bduas\s*guias?\b/.test(t)) patch.instalacao = "vao_guias";
   if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
-  const guia = t.match(/\bguia\s*(?:de|para)?\s*(50|60|70|80|90|100)\b/);
-  if (guia) patch.guia_mm = Number(guia[1]);
+
+  // Trocar guia para X
+  const trocaGuia = t.match(/\b(trocar|alterar|mudar)\s+guia\s+(?:para|pra|p\/)\s*(50|60|70|80|90|100)\b/);
+  if (trocaGuia) patch.guia_mm = Number(trocaGuia[2]);
+  else if (!/\bpares?\b/.test(t)) {
+    const guia = t.match(/\bguia\s*(?:de|para)?\s*(50|60|70|80|90|100)\b/);
+    if (guia) patch.guia_mm = Number(guia[1]);
+  }
+  // Trocar motor para AC/DC
+  const trocaMotor = t.match(/\b(trocar|alterar|mudar)\s+motor\s+(?:para|pra|p\/)\s*(AC|DC)\b/i);
+  if (trocaMotor) patch.motor = { ...(patch.motor || {}), ac_dc: trocaMotor[2].toUpperCase() };
+
   const pot = t.match(/\b(200|300|400|500|800|1000|1500)\s*kg\b/);
   const acdc = t.match(/\b(AC|DC)\b/i)?.[1]?.toUpperCase();
-  if (pot || acdc) patch.motor = { ...(patch.motor || {}), ...(pot ? { potencia: Number(pot[1]) } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
+  if ((pot || acdc) && !/\bavulso\b/.test(t)) patch.motor = { ...(patch.motor || {}), ...(pot ? { potencia: Number(pot[1]) } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
   if (/\bmeia\s*cana\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "meia_cana" };
   else if (/\btransvision\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "transvision" };
   else if (/\boblongo\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "oblongo" };
   else if (/\bfechad[ao]\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "fechado" };
   const cor = t.match(/\b(branca?|preta?|cinza|bege|azul|verde|vermelha?|amarela?)\b/);
   if (cor) patch.lamina = { ...(patch.lamina || {}), cor: cor[1].replace(/a$/, "o") };
-  const port = t.match(/\bportinhola\s*(VILD|VILE|CENTRO)?\b/i);
+  const port = t.match(/\bportinhola\s*(vild|vile|centro)?\b/i);
   if (port) patch.portinhola = (port[1] || "CENTRO").toUpperCase();
-  if (/\balcapao\b/.test(t)) patch.alcapao = true;
-  const controles = t.match(/(?:\+\s*)?(\d+)\s*controles?\b/);
-  if (controles) intencoes.push({ acao: "add_item", tipo: "controle", qtd: Number(controles[1]), config: { qtd: Number(controles[1]) } });
+  if (/\balcapao\b/.test(t) && !port) patch.alcapao = true;
+  if (/\bpintura\s+eletrostatica\b|\bcom\s+pintura\b/.test(t) && !/sem\s+pintura/.test(t)) patch.pintura = "eletrostatica";
+
+  // Avulsos
+  const ctrl = t.match(/(?:\+\s*)?(\d+)\s*controles?\b/);
+  if (ctrl) intencoes.push({ acao: "add_item", tipo: "controle", config: { qtd: Number(ctrl[1]) } });
+
+  const cent = t.match(/(?:\+\s*)?(\d+)\s*centrais?\b|(?:\+\s*)?(\d+)\s*central\b/);
+  if (cent) intencoes.push({ acao: "add_item", tipo: "central", config: { qtd: Number(cent[1] || cent[2]) } });
+
+  const paresGuia = t.match(/(?:\+\s*)?(\d+)\s*pares?\s*(?:de\s*)?guias?\s*(?:de\s*)?(50|60|70|80|90|100)?\b/);
+  if (paresGuia) {
+    const compr = t.match(/(\d+(?:[\.,]\d+)?)\s*m\b/);
+    intencoes.push({ acao: "add_item", tipo: "guia", config: { mm: Number(paresGuia[2]) || 50, qtd_pares: Number(paresGuia[1]), comprimento_m: compr ? Number(compr[1].replace(",", ".")) : 0 } });
+  }
+
+  if (/\bmotor\s+avulso\b|\bavulso\b.*\bmotor\b/.test(t)) {
+    const q = t.match(/(\d+)\s*motores?/);
+    intencoes.push({ acao: "add_item", tipo: "motor", config: { qtd: q ? Number(q[1]) : 1, ac_dc: acdc || "AC", potencia: pot ? Number(pot[1]) : undefined } });
+  }
+  if (/\bsoleiras?\s*avulsa?|avulsa?\s*soleira/.test(t)) {
+    const q = t.match(/(\d+)\s*soleiras?/);
+    intencoes.push({ acao: "add_item", tipo: "soleira", config: { qtd: q ? Number(q[1]) : 1 } });
+  }
+  if (/\bl[âa]minas?\s*avulsa?|avulsa?\s*l[âa]mina/.test(t)) {
+    const q = t.match(/(\d+)\s*l[âa]minas?/);
+    intencoes.push({ acao: "add_item", tipo: "lamina", config: { qtd: q ? Number(q[1]) : 1 } });
+  }
+  if (/\beixos?\s*avulso?|avulso?\s*eixo/.test(t)) {
+    const q = t.match(/(\d+)\s*eixos?/);
+    intencoes.push({ acao: "add_item", tipo: "eixo", config: { qtd: q ? Number(q[1]) : 1 } });
+  }
 
   if (Object.keys(patch).length) intencoes.unshift({ acao: medida ? "add_item" : "update_item", tipo: "kit_porta", ref: "kit_porta", config: patch, patch });
   const parecePergunta = /\?|\b(qual|quais|como|onde|quando|porque|por que|pra que|para que|voc[eê]s|trabalha|serve|pode|tem|faz)\b/.test(t);
