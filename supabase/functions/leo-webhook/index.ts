@@ -3321,19 +3321,25 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
   for (const it of pedido.itens) {
     if (it.tipo === "kit_porta") {
       const c = it.config || {};
+      // Apenas o essencial — motor potência/eixo/guia são automáticos pelas regras.
       if (!c.largura || !c.altura) return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
       if (!c.instalacao) return "Qual o tipo de instalação?\n• *entre testeiras*\n• *vão + 1 guia*\n• *vão + guias*\n• *entre paredes*";
-      if ((c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") && !c.guia_mm && !c.guia_mm_esq && !c.guia_mm_dir) return "Qual a profundidade da *guia* em mm? (50/60/70/80/90/100)";
+      if ((c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") && !c.guia_mm && !c.guia_mm_esq && !c.guia_mm_dir) {
+        return "Qual a profundidade da *guia* em mm? (50 / 60 / 70 / 100)";
+      }
       if (!c?.motor?.ac_dc) return "O motor é *AC* ou *DC*?";
-      if (!c?.motor?.potencia) return "Qual a *potência do motor* (200/300/400/500/800/1000/1500 kg)?";
-      if (!c?.lamina?.modelo) return "Qual o *modelo da lâmina* (meia cana / transvision / fechado / oblongo)?";
+      if (!c?.lamina?.modelo) return "Qual o *modelo da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
       if (!c?.lamina?.cor) return "Qual a *cor da lâmina/pintura*?";
-      if (!c?.guia_mm) return "Qual a *guia lateral* (50/60/70/80/90/100 mm)?";
+      // VILD/VILE precisa saber se é cortada ou inteira
+      const port = typeof c.portinhola === "string" ? c.portinhola.toUpperCase() : "";
+      if ((port === "VILD" || port === "VILE") && c.portinhola_cortada === undefined) {
+        return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
+      }
     } else if (it.tipo === "motor") {
-      if (!it.config?.potencia) return "Motor de quantos *kg*? (200/300/400/500/800/1000/1500)";
+      if (!it.config?.potencia) return "Motor de quantos *kg*? (200/300/400/500/800)";
       if (!it.config?.ac_dc) return "*AC* ou *DC*?";
     } else if (it.tipo === "guia") {
-      if (!it.config?.mm) return "Guia de quantos *mm* (50/60/70/80/90/100)?";
+      if (!it.config?.mm) return "Guia de quantos *mm*? (50 / 60 / 70 / 100)";
       if (!it.config?.comprimento_m) return "Qual o *comprimento em metros* da guia?";
       if (!it.config?.qtd_pares && !it.config?.qtd_unidades) return "Quantos *pares* (ou unidades) de guia?";
     }
