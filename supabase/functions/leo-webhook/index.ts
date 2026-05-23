@@ -3341,6 +3341,12 @@ async function cfgRecalcular(pedido: CfgPedido, opts: { explodir?: boolean } = {
   let total = 0;
   let sob = false;
   for (const it of pedido.itens) {
+    // Nunca explode/precifica itens incompletos — evita orçamento prematuro.
+    if (cfgItemIncompleto(it)) {
+      it.explosao = [];
+      it.subtotal = 0;
+      continue;
+    }
     if (opts.explodir) {
       it.explosao = await explodirItem(it);
     } else {
