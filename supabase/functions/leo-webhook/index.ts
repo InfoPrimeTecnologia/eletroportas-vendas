@@ -3472,8 +3472,10 @@ function cfgItemIncompleto(it: CfgItem): boolean {
       return !c.qtd || !c.comprimento_m;
     case "eixo":
       return !c.qtd || !c.polegadas || !c.comprimento_m;
-    case "portinhola":
-      return !c.modelo || !c.qtd;
+    case "portinhola": {
+      const modeloOk = typeof c.modelo === "string" && ["VILD","VILE","CENTRO"].includes(String(c.modelo).toUpperCase());
+      return !modeloOk || !c.qtd;
+    }
     case "pintura":
       return !c.area_m2 || !c.cor;
     case "controle":
