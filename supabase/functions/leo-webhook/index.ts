@@ -3406,8 +3406,10 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if (!c.ac_dc) return "Esse motor é *AC* ou *DC*?";
     } else if (it.tipo === "guia") {
       const c = it.config || {};
-      if (!c.qtd_pares && !c.qtd_unidades) return "Quantos *pares* (ou unidades) de guia?";
+      const qtd = c.qtd ?? c.qtd_pares ?? c.qtd_unidades;
+      if (!qtd) return "Quantas *guias* você precisa?";
       if (!c.mm) return "Qual a *espessura/tipo da guia*? (50 / 60 / 70 / 100 mm)";
+      if (!c.tipo_unidade && !c.qtd_pares && !c.qtd_unidades) return `Essas *${qtd} guias de ${c.mm}mm* são em *pares* ou *unidades avulsas*?`;
       if (!c.comprimento_m) return "Qual o *comprimento em metros* de cada guia?";
     } else if (it.tipo === "lamina") {
       const c = it.config || {};
