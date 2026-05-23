@@ -3452,8 +3452,11 @@ function cfgItemIncompleto(it: CfgItem): boolean {
       return !c.largura || !c.altura || !c.instalacao || !c?.motor?.ac_dc || !c?.lamina?.modelo || !c?.lamina?.cor;
     case "motor":
       return !c.potencia || (!c.kit_motor && !c.modelo_motor) || !c.ac_dc;
-    case "guia":
-      return (!c.qtd_pares && !c.qtd_unidades) || !c.mm || !c.comprimento_m;
+    case "guia": {
+      const qtd = c.qtd ?? c.qtd_pares ?? c.qtd_unidades;
+      const tipoOk = c.tipo_unidade || c.qtd_pares || c.qtd_unidades;
+      return !qtd || !c.mm || !tipoOk || !c.comprimento_m;
+    }
     case "lamina":
       return !c.qtd || !c.modelo || !c.comprimento_m;
     case "soleira":
