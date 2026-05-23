@@ -2603,6 +2603,7 @@ interface CfgPedido {
   total: number;
   status: "em_andamento" | "aguardando_confirmacao" | "finalizado";
   sob_consulta?: boolean;
+  aguardando_retomada?: boolean;
 }
 
 const PEDIDO_VAZIO: CfgPedido = { itens: [], total: 0, status: "em_andamento" };
