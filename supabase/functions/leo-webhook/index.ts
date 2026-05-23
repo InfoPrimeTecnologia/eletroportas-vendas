@@ -2987,16 +2987,23 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const largura = Number(cfg?.largura) || 0;
   const altura = Number(cfg?.altura) || 0;
   if (!largura || !altura) return linhas;
+
+  const modeloLam: string = String(cfg?.lamina?.modelo || "fechado");
   const perfil: "baixo" | "alto" = (cfg?.lamina?.perfil === "alto" ? "alto" : "baixo");
-  const eixoPol = Number(cfg?.eixo_polegadas) || eixoPorAltura(altura);
+
+  // Auto: motor, eixo, guia
+  const acdc = cfg?.motor?.ac_dc || "AC";
+  const pesoInfo = estimarPesoPorta(largura, altura);
+  const potencia = Number(cfg?.motor?.potencia) || escolherMotorPorPeso(pesoInfo.peso_kg);
+  const eixoPol = Number(cfg?.eixo_polegadas) || escolherEixoAuto(largura, potencia);
   const rolo = calcRolo(eixoPol);
   const alturaTotal = altura + rolo;
-  const qtdLaminas = calcLaminas(alturaTotal, perfil);
+  let guia_mm_eff = Number(cfg?.guia_mm) || escolherGuiaAuto(largura);
+  if (!GUIAS_VALIDAS.includes(guia_mm_eff as any)) guia_mm_eff = escolherGuiaAuto(largura);
 
-  // Medida de corte conforme tipo de instalação + trava de lâminas
   const instalacao = (cfg?.instalacao || "entre_paredes") as TipoInstalacao;
   const corte = calcMedidaCorte(largura, instalacao, {
-    guia_mm: Number(cfg?.guia_mm) || undefined,
+    guia_mm: guia_mm_eff,
     guia_mm_esq: Number(cfg?.guia_mm_esq) || undefined,
     guia_mm_dir: Number(cfg?.guia_mm_dir) || undefined,
     trava: !!cfg?.trava_lamina,
@@ -3005,35 +3012,49 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const cortarSoleira = corte.soleira || largura;
   const cortarLamina = corte.laminas || largura;
 
-  // Lâmina
-  const modeloLam = String(cfg?.lamina?.modelo || "meia_cana").replace("_", " ");
-  const cor = cfg?.lamina?.cor ? ` ${cfg.lamina.cor}` : "";
-  const buscaLam = `lamina ${modeloLam} ${perfil}${cor}`;
-  const pLam = await precoEstoque(buscaLam);
-  linhas.push({
-    sku: pLam?.sku || "LAMINA",
-    descricao: pLam?.nome || `Lâmina ${modeloLam} perfil ${perfil}${cor} — corte ${cortarLamina.toFixed(2)}m`,
-    und: pLam?.und || "UN",
-    qtd: qtdLaminas * cortarLamina,
-    valor_unit: pLam?.preco || 0,
-    total: (pLam?.preco || 0) * qtdLaminas * cortarLamina,
-    sob_consulta: !pLam,
-  });
+  // Lâmina principal + faixas parciais (combinação)
+  const combinacao: Array<{ modelo: string; altura_m: number }> = Array.isArray(cfg?.lamina?.combinacao)
+    ? cfg.lamina.combinacao : [];
+  const alturaParcial = combinacao.reduce((s, c) => s + (Number(c.altura_m) || 0), 0);
+  const alturaPrincipal = Math.max(0, alturaTotal - alturaParcial);
+  const qtdLamPrincipal = calcLaminas(alturaPrincipal, perfil);
 
-  // Guia lateral (par)
-  const mm = Number(cfg?.guia_mm) || Number(cfg?.guia_mm_esq) || Number(cfg?.guia_mm_dir) || 50;
-  const buscaGuia = `guia lateral ${mm}mm`;
-  const pGuia = await precoEstoque(buscaGuia);
-  // Quantas guias o tipo de instalação demanda
-  const guiasNec =
-    instalacao === "entre_testeiras" ? 0 :
-    instalacao === "vao_1guia" ? 1 :
-    2; // vao_guias / entre_paredes usam par
+  const cor = cfg?.lamina?.cor ? ` ${cfg.lamina.cor}` : "";
+  const pLam = await precoEstoque(`lamina ${modeloLam.replace("_", " ")} ${perfil}${cor}`);
+  if (qtdLamPrincipal > 0) {
+    linhas.push({
+      sku: pLam?.sku || "LAMINA",
+      descricao: pLam?.nome || `Lâmina ${modeloLam.replace("_", " ")}${cor} — corte ${cortarLamina.toFixed(2)}m`,
+      und: pLam?.und || "UN",
+      qtd: qtdLamPrincipal * cortarLamina,
+      valor_unit: pLam?.preco || 0,
+      total: (pLam?.preco || 0) * qtdLamPrincipal * cortarLamina,
+      sob_consulta: !pLam,
+    });
+  }
+  for (const faixa of combinacao) {
+    const qtdF = calcLaminasParcial(faixa.altura_m);
+    if (qtdF <= 0) continue;
+    const pF = await precoEstoque(`lamina ${String(faixa.modelo).replace("_", " ")} ${perfil}${cor}`);
+    linhas.push({
+      sku: pF?.sku || "LAMINA",
+      descricao: pF?.nome || `Lâmina ${String(faixa.modelo).replace("_", " ")}${cor} — faixa ${faixa.altura_m}m — corte ${cortarLamina.toFixed(2)}m`,
+      und: pF?.und || "UN",
+      qtd: qtdF * cortarLamina,
+      valor_unit: pF?.preco || 0,
+      total: (pF?.preco || 0) * qtdF * cortarLamina,
+      sob_consulta: !pF,
+    });
+  }
+
+  // Guia lateral
+  const pGuia = await precoEstoque(`guia lateral ${guia_mm_eff}mm`);
+  const guiasNec = instalacao === "entre_testeiras" ? 0 : instalacao === "vao_1guia" ? 1 : 2;
   const mlGuia = guiasNec > 0 ? guiasNec * altura : 0;
   if (mlGuia > 0) {
     linhas.push({
       sku: pGuia?.sku || "GUIA",
-      descricao: pGuia?.nome || `Guia lateral ${mm}mm (${guiasNec === 1 ? "1 un" : "par"})`,
+      descricao: pGuia?.nome || `Guia lateral ${guia_mm_eff}mm (${guiasNec === 1 ? "1 un" : "par"})`,
       und: pGuia?.und || "M",
       qtd: mlGuia,
       valor_unit: pGuia?.preco || 0,
@@ -3047,8 +3068,7 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   linhas.push({
     sku: pEixo?.sku || "EIXO",
     descricao: pEixo?.nome || `Eixo ${eixoPol}" — corte ${cortarEixo.toFixed(2)}m`,
-    und: pEixo?.und || "M",
-    qtd: cortarEixo,
+    und: pEixo?.und || "M", qtd: cortarEixo,
     valor_unit: pEixo?.preco || 0,
     total: (pEixo?.preco || 0) * cortarEixo,
     sob_consulta: !pEixo,
@@ -3059,30 +3079,36 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   linhas.push({
     sku: pSol?.sku || "SOLEIRA",
     descricao: pSol?.nome || `Soleira em T — corte ${cortarSoleira.toFixed(2)}m`,
-    und: pSol?.und || "M",
-    qtd: cortarSoleira,
+    und: pSol?.und || "M", qtd: cortarSoleira,
     valor_unit: pSol?.preco || 0,
     total: (pSol?.preco || 0) * cortarSoleira,
     sob_consulta: !pSol,
   });
 
-  // Motor
-  if (cfg?.motor?.potencia) {
-    const pot = Number(cfg.motor.potencia);
-    const acdc = cfg.motor.ac_dc || "AC";
-    const pMot = await precoEstoque(`motor ${pot}kg ${acdc}`);
+  // Motor + (kit automatizador | motor+testeiras | avulso)
+  const kitMotor = cfg?.kit_motor || "kit_automatizador";
+  if (cfg?.motor !== false) {
+    const pMot = await precoEstoque(`motor ${potencia}kg ${acdc}`);
     linhas.push({
-      sku: pMot?.sku || `MOTOR-${pot}KG`,
-      descricao: pMot?.nome || `Motor ${acdc} ${pot}kg`,
-      und: "UN",
-      qtd: 1,
+      sku: pMot?.sku || `MOTOR-${potencia}KG`,
+      descricao: pMot?.nome || `Motor ${acdc} ${potencia}kg`,
+      und: "UN", qtd: 1,
       valor_unit: pMot?.preco || 0,
       total: pMot?.preco || 0,
       sob_consulta: !pMot,
     });
-
-    // Central (default true)
-    if (cfg?.central !== false) {
+    if (kitMotor === "kit_automatizador" || kitMotor === "motor_testeiras") {
+      const pTest = await precoEstoque("testeira");
+      linhas.push({
+        sku: pTest?.sku || "TESTEIRA",
+        descricao: pTest?.nome || "Testeiras (par)",
+        und: "PAR", qtd: 1,
+        valor_unit: pTest?.preco || 0,
+        total: pTest?.preco || 0,
+        sob_consulta: !pTest,
+      });
+    }
+    if (kitMotor === "kit_automatizador" && cfg?.central !== false) {
       const pCen = await precoEstoque("central de comando");
       linhas.push({
         sku: pCen?.sku || "CENTRAL",
@@ -3092,11 +3118,7 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
         total: pCen?.preco || 0,
         sob_consulta: !pCen,
       });
-    }
-
-    // Controles
-    const qtdCtrl = Number(cfg?.controles) || 1;
-    if (qtdCtrl > 0) {
+      const qtdCtrl = Number(cfg?.controles) || 2;
       const pCtrl = await precoEstoque("controle remoto");
       linhas.push({
         sku: pCtrl?.sku || "CONTROLE",
@@ -3111,16 +3133,39 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
 
   // Portinhola
   if (cfg?.portinhola) {
-    const modelo = typeof cfg.portinhola === "string" ? cfg.portinhola : "CENTRO";
+    const modelo = String(typeof cfg.portinhola === "string" ? cfg.portinhola : "CENTRO").toUpperCase();
+    const cortada = modelo === "CENTRO" ? true : (cfg?.portinhola_cortada !== false);
     const pPort = await precoEstoque(`portinhola ${modelo}`);
     linhas.push({
       sku: pPort?.sku || "PORTINHOLA",
-      descricao: pPort?.nome || `Portinhola ${modelo}`,
+      descricao: pPort?.nome || `Portinhola ${modelo}${cortada ? " (cortada)" : " (inteira p/ ajuste local)"}`,
       und: "UN", qtd: 1,
       valor_unit: pPort?.preco || 0,
       total: pPort?.preco || 0,
       sob_consulta: !pPort,
     });
+    if (cortada) {
+      const calc = calcPortinholaCortada(largura, guia_mm_eff, perfil);
+      const pSolP = await precoEstoque("soleira");
+      linhas.push({
+        sku: (pSolP?.sku || "SOLEIRA") + "-P",
+        descricao: `Soleira portinhola — corte ${calc.largura_final.toFixed(2)}m`,
+        und: pSolP?.und || "M", qtd: calc.soleira_m,
+        valor_unit: pSolP?.preco || 0,
+        total: (pSolP?.preco || 0) * calc.soleira_m,
+        sob_consulta: !pSolP,
+      });
+      const pLamP = await precoEstoque(`lamina ${modeloLam.replace("_", " ")} ${perfil}${cor}`);
+      linhas.push({
+        sku: (pLamP?.sku || "LAMINA") + "-P",
+        descricao: `Lâminas portinhola (${calc.qtd_laminas} un) — corte ${calc.largura_final.toFixed(2)}m`,
+        und: pLamP?.und || "UN",
+        qtd: calc.qtd_laminas * calc.largura_final,
+        valor_unit: pLamP?.preco || 0,
+        total: (pLamP?.preco || 0) * calc.qtd_laminas * calc.largura_final,
+        sob_consulta: !pLamP,
+      });
+    }
   }
   // Alçapão
   if (cfg?.alcapao && !cfg?.portinhola) {
@@ -3134,7 +3179,6 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
       sob_consulta: !pAlc,
     });
   }
-
   // Pintura eletrostática
   if (cfg?.pintura) {
     const corP = cfg?.lamina?.cor || "branca";
@@ -3143,11 +3187,22 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
     linhas.push({
       sku: pPint?.sku || "PINTURA",
       descricao: pPint?.nome || `Pintura eletrostática ${corP}`,
-      und: pPint?.und || "M2",
-      qtd: area,
+      und: pPint?.und || "M2", qtd: area,
       valor_unit: pPint?.preco || 0,
       total: (pPint?.preco || 0) * area,
       sob_consulta: !pPint,
+    });
+  }
+  // Trava-lâmina (opcional)
+  if (cfg?.trava_lamina) {
+    const pTr = await precoEstoque("trava lamina");
+    linhas.push({
+      sku: pTr?.sku || "TRAVA",
+      descricao: pTr?.nome || "Trava-lâmina",
+      und: "UN", qtd: 1,
+      valor_unit: pTr?.preco || 0,
+      total: pTr?.preco || 0,
+      sob_consulta: !pTr,
     });
   }
 
