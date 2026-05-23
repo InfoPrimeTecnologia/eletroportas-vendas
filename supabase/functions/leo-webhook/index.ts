@@ -2712,10 +2712,13 @@ Intenções possíveis:
 - {"acao":"duvida","texto":"<o que ele perguntou>"}
 
 Para kit_porta a config pode conter qualquer subconjunto de:
-{"largura":metros, "altura":metros, "instalacao":"entre_paredes|sobreposta",
+{"largura":metros, "altura":metros,
+ "instalacao":"entre_testeiras|vao_1guia|vao_guias|entre_paredes",
+ "trava_lamina":true|false,
  "motor":{"ac_dc":"AC|DC","potencia":200|300|400|500|800|1000|1500},
  "lamina":{"modelo":"meia_cana|fechado|transvision|oblongo","perfil":"baixo|alto","cor":"branca|preta|..."},
- "guia_mm":50|60|70|80|90|100, "portinhola":"VILD|VILE|CENTRO"|false,
+ "guia_mm":50|60|70|80|90|100, "guia_mm_esq":N, "guia_mm_dir":N,
+ "portinhola":"VILD|VILE|CENTRO"|false,
  "alcapao":true|false, "pintura":"eletrostatica"|false, "central":true|false, "controles":N}
 
 Para motor avulso: {"ac_dc":"AC|DC","potencia":N,"qtd":N}.
