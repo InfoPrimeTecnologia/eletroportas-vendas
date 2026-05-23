@@ -2742,7 +2742,17 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   const paresGuia = t.match(/(?:\+\s*)?(\d+)\s*pares?\s*(?:de\s*)?guias?\s*(?:de\s*)?(50|60|70|80|90|100)?\b/);
   if (paresGuia) {
     const compr = t.match(/(\d+(?:[\.,]\d+)?)\s*m\b/);
-    intencoes.push({ acao: "add_item", tipo: "guia", config: { mm: Number(paresGuia[2]) || 50, qtd_pares: Number(paresGuia[1]), comprimento_m: compr ? Number(compr[1].replace(",", ".")) : 0 } });
+    intencoes.push({ acao: "add_item", tipo: "guia", config: { mm: Number(paresGuia[2]) || undefined, qtd: Number(paresGuia[1]), tipo_unidade: "par", comprimento_m: compr ? Number(compr[1].replace(",", ".")) : 0 } });
+  } else {
+    // "10 guias de 60 mm", "4 guias 70", "guias 50mm" — quantidade conhecida, tipo (par/unidade) ainda não
+    const guiaSimples = t.match(/(?:\+\s*)?(\d+)\s*guias?\s*(?:de\s*)?(50|60|70|80|90|100)?\s*(?:mm)?\b/);
+    const guiaSemQtd = !guiaSimples && t.match(/\bguias?\s*(?:de\s*)?(50|60|70|80|90|100)\s*mm\b/);
+    if (guiaSimples) {
+      const compr = t.match(/(\d+(?:[\.,]\d+)?)\s*m(?!m)\b/);
+      intencoes.push({ acao: "add_item", tipo: "guia", config: { mm: Number(guiaSimples[2]) || undefined, qtd: Number(guiaSimples[1]), comprimento_m: compr ? Number(compr[1].replace(",", ".")) : 0 } });
+    } else if (guiaSemQtd) {
+      intencoes.push({ acao: "add_item", tipo: "guia", config: { mm: Number(guiaSemQtd[1]) } });
+    }
   }
 
   if (/\bmotor\s+avulso\b|\bavulso\b.*\bmotor\b/.test(t)) {
