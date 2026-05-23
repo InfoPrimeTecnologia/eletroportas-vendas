@@ -3418,7 +3418,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       const qtd = c.qtd ?? c.qtd_pares ?? c.qtd_unidades;
       if (!qtd) return "Quantas *guias* você precisa?";
       if (!c.mm) return "Qual a *espessura/tipo da guia*? (50 / 60 / 70 / 100 mm)";
-      if (!c.tipo_unidade && !c.qtd_pares && !c.qtd_unidades) return `Essas *${qtd} guias de ${c.mm}mm* são em *pares* ou *unidades avulsas*?`;
+      // Não perguntar par/unidade: assume unidade avulsa quando o cliente não disse "par".
       if (!c.comprimento_m) return "Qual o *comprimento em metros* de cada guia?";
     } else if (it.tipo === "lamina") {
       const c = it.config || {};
