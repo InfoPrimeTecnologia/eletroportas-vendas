@@ -3547,7 +3547,8 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
     } else if (it.tipo === "eixo") {
       linhas.push(`${n++}. Eixo${c.polegadas ? ` ${c.polegadas}"` : ""}${c.comprimento_m ? ` ${c.comprimento_m}m` : ""} x ${c.qtd || 1}`);
     } else if (it.tipo === "portinhola") {
-      linhas.push(`${n++}. Portinhola ${c.modelo || "CENTRO"} x ${c.qtd || 1}`);
+      const posDef = typeof c.modelo === "string" && ["VILD","VILE","CENTRO"].includes(String(c.modelo).toUpperCase());
+      linhas.push(`${n++}. Portinhola${posDef ? " " + String(c.modelo).toUpperCase() : " _(posição a definir)_"} x ${c.qtd || 1}`);
     } else if (it.tipo === "alcapao") {
       linhas.push(`${n++}. Alçapão x ${c.qtd || 1}`);
     } else if (it.tipo === "pintura") {
