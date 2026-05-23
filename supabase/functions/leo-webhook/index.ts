@@ -3525,7 +3525,10 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
       if (c?.lamina?.modelo) linhas.push(`   Lâmina: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
       if (c?.lamina?.cor) linhas.push(`   Cor: ${c.lamina.cor}`);
       if (c.guia_mm) linhas.push(`   Guia: ${c.guia_mm}mm`);
-      if (c.portinhola) linhas.push(`   Portinhola: ${typeof c.portinhola === "string" ? c.portinhola : "sim"}`);
+      if (c.portinhola) {
+        const portConf = typeof c.portinhola === "string" && ["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase());
+        linhas.push(`   Portinhola: ${portConf ? c.portinhola.toUpperCase() : "_(posição a definir)_"}`);
+      }
       if (c.alcapao) linhas.push(`   Alçapão: sim`);
       if (c.pintura) linhas.push(`   Pintura eletrostática`);
       if (c.central !== false && c?.motor?.potencia) linhas.push(`   Central de controle inclusa`);
