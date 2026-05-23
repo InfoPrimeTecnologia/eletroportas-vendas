@@ -2672,10 +2672,10 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
 
   // Trocar guia para X
-  const trocaGuia = t.match(/\b(trocar|alterar|mudar)\s+guia\s+(?:para|pra|p\/)\s*(50|60|70|80|90|100)\b/);
+  const trocaGuia = t.match(/\b(trocar|alterar|mudar)\s+guia\s+(?:para|pra|p\/)\s*(50|60|70|100)\b/);
   if (trocaGuia) patch.guia_mm = Number(trocaGuia[2]);
   else if (!/\bpares?\b/.test(t)) {
-    const guia = t.match(/\bguia\s*(?:de|para)?\s*(50|60|70|80|90|100)\b/);
+    const guia = t.match(/\bguia\s*(?:de|para)?\s*(50|60|70|100)\b/);
     if (guia) patch.guia_mm = Number(guia[1]);
   }
   // Trocar motor para AC/DC
@@ -2685,16 +2685,41 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   const pot = t.match(/\b(200|300|400|500|800|1000|1500)\s*kg\b/);
   const acdc = t.match(/\b(AC|DC)\b/i)?.[1]?.toUpperCase();
   if ((pot || acdc) && !/\bavulso\b/.test(t)) patch.motor = { ...(patch.motor || {}), ...(pot ? { potencia: Number(pot[1]) } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
-  if (/\bmeia\s*cana\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "meia_cana" };
-  else if (/\btransvision\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "transvision" };
+
+  // Kit do motor
+  if (/\bkit\s*automatizador\b/.test(t)) patch.kit_motor = "kit_automatizador";
+  else if (/\bmotor\s*\+?\s*testeiras?\b/.test(t)) patch.kit_motor = "motor_testeiras";
+  else if (/\b(automatizador|motor)\s+avulso\b/.test(t)) patch.kit_motor = "avulso";
+
+  // Modelo de lâmina (Fechada/Transvision/Oblongo + legado meia cana)
+  if (/\btransvision\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "transvision" };
   else if (/\boblongo\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "oblongo" };
   else if (/\bfechad[ao]\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "fechado" };
+  else if (/\bmeia\s*cana\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "meia_cana" };
+  if (/\bperfil\s+alto\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), perfil: "alto" };
+  else if (/\bperfil\s+baixo\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), perfil: "baixo" };
+
+  // Combinação de lâmina parcial: "1m de transvision" / "0,8m de oblongo"
+  const parcial = t.match(/(\d+(?:[\.,]\d+)?)\s*m\s+(?:de\s+)?(transvision|oblongo|fechad[ao])/);
+  if (parcial) {
+    const modeloP = parcial[2].startsWith("fechad") ? "fechado" : parcial[2];
+    const altP = Number(parcial[1].replace(",", "."));
+    const lamCur = patch.lamina || {};
+    const combAtual = Array.isArray(lamCur.combinacao) ? lamCur.combinacao : [];
+    patch.lamina = { ...lamCur, combinacao: [...combAtual, { modelo: modeloP, altura_m: altP }] };
+  }
+
   const cor = t.match(/\b(branca?|preta?|cinza|bege|azul|verde|vermelha?|amarela?)\b/);
   if (cor) patch.lamina = { ...(patch.lamina || {}), cor: cor[1].replace(/a$/, "o") };
   const port = t.match(/\bportinhola\s*(vild|vile|centro)?\b/i);
   if (port) patch.portinhola = (port[1] || "CENTRO").toUpperCase();
+  // Portinhola cortada vs inteira
+  if (/\bportinhola\b.*\b(inteira|ajuste\s+(?:no\s+)?local)\b|\b(inteira|ajuste\s+(?:no\s+)?local)\b.*\bportinhola\b/.test(t)) patch.portinhola_cortada = false;
+  else if (/\bportinhola\b.*\bcortad[ao]s?\b|\bl[âa]minas?\s+cortad[ao]s?\b/.test(t)) patch.portinhola_cortada = true;
+
   if (/\balcapao\b/.test(t) && !port) patch.alcapao = true;
   if (/\bpintura\s+eletrostatica\b|\bcom\s+pintura\b/.test(t) && !/sem\s+pintura/.test(t)) patch.pintura = "eletrostatica";
+  if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
 
   // Avulsos
   const ctrl = t.match(/(?:\+\s*)?(\d+)\s*controles?\b/);
