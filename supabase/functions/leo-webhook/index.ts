@@ -2831,7 +2831,7 @@ Para kit_porta a config pode conter qualquer subconjunto de:
 
 Avulsos (cada um vira um item separado no carrinho):
 - motor: {"ac_dc":"AC|DC","potencia":N,"qtd":N}
-- guia: {"mm":N,"comprimento_m":N,"qtd_pares":N} ou qtd_unidades
+- guia: {"mm":N,"comprimento_m":N,"qtd":N,"tipo_unidade":"par"|"unidade"} — use qtd para a quantidade informada; só preencha tipo_unidade se o cliente disser explicitamente "par(es)" ou "unidade(s)/avulsa(s)". NUNCA repergunte a quantidade se ela já estiver no histórico.
 - lamina: {"modelo":"meia_cana|...","perfil":"baixo|alto","cor":"...","comprimento_m":N,"qtd":N}
 - soleira: {"comprimento_m":N,"qtd":N}
 - eixo: {"polegadas":N,"comprimento_m":N,"qtd":N}
