@@ -2828,7 +2828,7 @@ Para kit_porta a config pode conter qualquer subconjunto de:
  "motor":{"ac_dc":"AC|DC","potencia":200|300|400|500|800|1000|1500},
  "lamina":{"modelo":"meia_cana|fechado|transvision|oblongo","perfil":"baixo|alto","cor":"branca|preta|..."},
  "guia_mm":50|60|70|80|90|100, "guia_mm_esq":N, "guia_mm_dir":N,
- "portinhola":"VILD|VILE|CENTRO"|false,
+ "portinhola":"VILD|VILE|CENTRO"|true|false,  // true = cliente pediu portinhola mas NÃO disse a posição (NUNCA assuma — o sistema vai perguntar)
  "alcapao":true|false, "pintura":"eletrostatica"|false, "central":true|false, "controles":N}
 
 Avulsos (cada um vira um item separado no carrinho):
