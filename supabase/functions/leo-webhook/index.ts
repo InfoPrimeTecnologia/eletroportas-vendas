@@ -281,6 +281,59 @@ function calcGuiasMetrosLineares(qtd: number, par: boolean, comprimentoM: number
   const unidadesPorItem = par ? 2 : 1;
   return Math.max(0, (qtd || 0) * unidadesPorItem * (comprimentoM || 0));
 }
+
+/**
+ * Calcula a medida de corte (em metros) para eixo, soleira e lâminas
+ * a partir do vão livre, tipo de instalação, guias e se há trava de lâminas.
+ *
+ * Tipos:
+ *  - entre_testeiras: desconto 0,02 (com trava: lâminas -0,03)
+ *  - vao_1guia:       vão + profundidade_guia - 0,02 (com trava: -0,03 nas lâminas)
+ *  - vao_guias:       vão + guia_esq + guia_dir - 0,02 (com trava: -0,03 nas lâminas)
+ *  - entre_paredes:   desconto 0,07 (com trava: lâminas -0,08)
+ */
+type TipoInstalacao = "entre_testeiras" | "vao_1guia" | "vao_guias" | "entre_paredes";
+function calcMedidaCorte(
+  vaoLivre: number,
+  instalacao: TipoInstalacao,
+  opts: { guia_mm?: number; guia_mm_esq?: number; guia_mm_dir?: number; trava?: boolean } = {}
+): { eixo: number; soleira: number; laminas: number } {
+  const v = Number(vaoLivre) || 0;
+  if (!v) return { eixo: 0, soleira: 0, laminas: 0 };
+  const trava = !!opts.trava;
+  const gM = (mm?: number) => (Number(mm) || 0) / 1000;
+  let base = v;
+  let descLam = 0;
+  switch (instalacao) {
+    case "entre_testeiras":
+      base = v - 0.02;
+      descLam = trava ? -0.01 : 0;
+      break;
+    case "vao_1guia": {
+      const g = gM(opts.guia_mm ?? opts.guia_mm_esq ?? opts.guia_mm_dir);
+      base = v + g - 0.02;
+      descLam = trava ? -0.01 : 0;
+      break;
+    }
+    case "vao_guias": {
+      const ge = gM(opts.guia_mm_esq ?? opts.guia_mm);
+      const gd = gM(opts.guia_mm_dir ?? opts.guia_mm);
+      base = v + ge + gd - 0.02;
+      descLam = trava ? -0.01 : 0;
+      break;
+    }
+    case "entre_paredes":
+      base = v - 0.07;
+      descLam = trava ? -0.01 : 0;
+      break;
+  }
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return {
+    eixo: round(base),
+    soleira: round(base),
+    laminas: round(base + descLam),
+  };
+}
 const POTENCIAS_AC = [200, 300, 400, 500, 800, 1000, 1500];
 const POTENCIAS_DC = [200, 300, 400, 500, 800];
 function validarMotor(m: { tipo?: string; ac_dc?: string; potencia?: number }): { ok: boolean; faltando: string[] } {
@@ -2564,6 +2617,12 @@ const CFG_REGRAS_TECNICAS = `Regras técnicas Eletroportas:
 - Guias: cálculo por metro linear; 1 par = 2 unidades x comprimento.
 - Motores AC: 200/300/400/500/800/1000/1500 kg. Motores DC: 200/300/400/500/800 kg.
 - Portinhola é acesso integrado. Alçapão é acesso emergencial. Nunca usar portinhola e alçapão juntos na mesma porta.
+- Tipo de instalação (sempre 1 dos 4):
+  • entre_testeiras: desconto 0,02 no eixo/soleira/lâminas (com trava de lâminas: -0,03 nas lâminas).
+  • vao_1guia: vão + profundidade da guia (mm/1000) - 0,02 (com trava: -0,03 nas lâminas).
+  • vao_guias: vão + guia_esq + guia_dir - 0,02 (com trava: -0,03 nas lâminas).
+  • entre_paredes: desconto 0,07 (com trava: -0,08 nas lâminas).
+- Nunca mostrar a fórmula ao cliente; mostrar apenas o resultado final em metros.
 - Não invente preço. Quando faltar valor no estoque, sinalize como sob consulta e siga o atendimento.`;
 
 function cfgPedidoLeve(pedido: CfgPedido) {
@@ -2589,7 +2648,10 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
     patch.altura = Number(medida[2].replace(",", "."));
   }
   if (/\bentre\s+paredes\b/.test(t)) patch.instalacao = "entre_paredes";
-  else if (/\b(sobreposta|sobrepor|vao\s*\+\s*guias?|vao\s*\+\s*1\s*guia|entre\s+testeiras)\b/.test(t)) patch.instalacao = "sobreposta";
+  else if (/\bentre\s+testeiras\b/.test(t)) patch.instalacao = "entre_testeiras";
+  else if (/\bv[ãa]o\s*\+\s*1\s*guia\b|\bvao\s*\+\s*1\s*guia\b|\b1\s*guia\b/.test(t)) patch.instalacao = "vao_1guia";
+  else if (/\bv[ãa]o\s*\+\s*guias?\b|\bvao\s*\+\s*guias?\b|\b2\s*guias?\b|\bduas\s*guias?\b/.test(t)) patch.instalacao = "vao_guias";
+  if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
   const guia = t.match(/\bguia\s*(?:de|para)?\s*(50|60|70|80|90|100)\b/);
   if (guia) patch.guia_mm = Number(guia[1]);
   const pot = t.match(/\b(200|300|400|500|800|1000|1500)\s*kg\b/);
@@ -2650,10 +2712,13 @@ Intenções possíveis:
 - {"acao":"duvida","texto":"<o que ele perguntou>"}
 
 Para kit_porta a config pode conter qualquer subconjunto de:
-{"largura":metros, "altura":metros, "instalacao":"entre_paredes|sobreposta",
+{"largura":metros, "altura":metros,
+ "instalacao":"entre_testeiras|vao_1guia|vao_guias|entre_paredes",
+ "trava_lamina":true|false,
  "motor":{"ac_dc":"AC|DC","potencia":200|300|400|500|800|1000|1500},
  "lamina":{"modelo":"meia_cana|fechado|transvision|oblongo","perfil":"baixo|alto","cor":"branca|preta|..."},
- "guia_mm":50|60|70|80|90|100, "portinhola":"VILD|VILE|CENTRO"|false,
+ "guia_mm":50|60|70|80|90|100, "guia_mm_esq":N, "guia_mm_dir":N,
+ "portinhola":"VILD|VILE|CENTRO"|false,
  "alcapao":true|false, "pintura":"eletrostatica"|false, "central":true|false, "controles":N}
 
 Para motor avulso: {"ac_dc":"AC|DC","potencia":N,"qtd":N}.
@@ -2801,10 +2866,22 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const altura = Number(cfg?.altura) || 0;
   if (!largura || !altura) return linhas;
   const perfil: "baixo" | "alto" = (cfg?.lamina?.perfil === "alto" ? "alto" : "baixo");
-  const eixo = Number(cfg?.eixo_polegadas) || eixoPorAltura(altura);
-  const rolo = calcRolo(eixo);
+  const eixoPol = Number(cfg?.eixo_polegadas) || eixoPorAltura(altura);
+  const rolo = calcRolo(eixoPol);
   const alturaTotal = altura + rolo;
   const qtdLaminas = calcLaminas(alturaTotal, perfil);
+
+  // Medida de corte conforme tipo de instalação + trava de lâminas
+  const instalacao = (cfg?.instalacao || "entre_paredes") as TipoInstalacao;
+  const corte = calcMedidaCorte(largura, instalacao, {
+    guia_mm: Number(cfg?.guia_mm) || undefined,
+    guia_mm_esq: Number(cfg?.guia_mm_esq) || undefined,
+    guia_mm_dir: Number(cfg?.guia_mm_dir) || undefined,
+    trava: !!cfg?.trava_lamina,
+  });
+  const cortarEixo = corte.eixo || largura;
+  const cortarSoleira = corte.soleira || largura;
+  const cortarLamina = corte.laminas || largura;
 
   // Lâmina
   const modeloLam = String(cfg?.lamina?.modelo || "meia_cana").replace("_", " ");
@@ -2813,38 +2890,45 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const pLam = await precoEstoque(buscaLam);
   linhas.push({
     sku: pLam?.sku || "LAMINA",
-    descricao: pLam?.nome || `Lâmina ${modeloLam} perfil ${perfil}${cor}`,
+    descricao: pLam?.nome || `Lâmina ${modeloLam} perfil ${perfil}${cor} — corte ${cortarLamina.toFixed(2)}m`,
     und: pLam?.und || "UN",
-    qtd: qtdLaminas * largura,
+    qtd: qtdLaminas * cortarLamina,
     valor_unit: pLam?.preco || 0,
-    total: (pLam?.preco || 0) * qtdLaminas * largura,
+    total: (pLam?.preco || 0) * qtdLaminas * cortarLamina,
     sob_consulta: !pLam,
   });
 
   // Guia lateral (par)
-  const mm = Number(cfg?.guia_mm) || 50;
+  const mm = Number(cfg?.guia_mm) || Number(cfg?.guia_mm_esq) || Number(cfg?.guia_mm_dir) || 50;
   const buscaGuia = `guia lateral ${mm}mm`;
   const pGuia = await precoEstoque(buscaGuia);
-  const mlGuia = calcGuiasMetrosLineares(1, true, altura); // 1 par × altura
-  linhas.push({
-    sku: pGuia?.sku || "GUIA",
-    descricao: pGuia?.nome || `Guia lateral ${mm}mm (par)`,
-    und: pGuia?.und || "M",
-    qtd: mlGuia,
-    valor_unit: pGuia?.preco || 0,
-    total: (pGuia?.preco || 0) * mlGuia,
-    sob_consulta: !pGuia,
-  });
+  // Quantas guias o tipo de instalação demanda
+  const guiasNec =
+    instalacao === "entre_testeiras" ? 0 :
+    instalacao === "vao_1guia" ? 1 :
+    2; // vao_guias / entre_paredes usam par
+  const mlGuia = guiasNec > 0 ? guiasNec * altura : 0;
+  if (mlGuia > 0) {
+    linhas.push({
+      sku: pGuia?.sku || "GUIA",
+      descricao: pGuia?.nome || `Guia lateral ${mm}mm (${guiasNec === 1 ? "1 un" : "par"})`,
+      und: pGuia?.und || "M",
+      qtd: mlGuia,
+      valor_unit: pGuia?.preco || 0,
+      total: (pGuia?.preco || 0) * mlGuia,
+      sob_consulta: !pGuia,
+    });
+  }
 
   // Eixo
-  const pEixo = await precoEstoque(`eixo ${eixo}`);
+  const pEixo = await precoEstoque(`eixo ${eixoPol}`);
   linhas.push({
     sku: pEixo?.sku || "EIXO",
-    descricao: pEixo?.nome || `Eixo ${eixo}"`,
+    descricao: pEixo?.nome || `Eixo ${eixoPol}" — corte ${cortarEixo.toFixed(2)}m`,
     und: pEixo?.und || "M",
-    qtd: largura,
+    qtd: cortarEixo,
     valor_unit: pEixo?.preco || 0,
-    total: (pEixo?.preco || 0) * largura,
+    total: (pEixo?.preco || 0) * cortarEixo,
     sob_consulta: !pEixo,
   });
 
@@ -2852,11 +2936,11 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const pSol = await precoEstoque("soleira");
   linhas.push({
     sku: pSol?.sku || "SOLEIRA",
-    descricao: pSol?.nome || "Soleira em T",
+    descricao: pSol?.nome || `Soleira em T — corte ${cortarSoleira.toFixed(2)}m`,
     und: pSol?.und || "M",
-    qtd: largura,
+    qtd: cortarSoleira,
     valor_unit: pSol?.preco || 0,
-    total: (pSol?.preco || 0) * largura,
+    total: (pSol?.preco || 0) * cortarSoleira,
     sob_consulta: !pSol,
   });
 
@@ -3011,7 +3095,8 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
     if (it.tipo === "kit_porta") {
       const c = it.config || {};
       if (!c.largura || !c.altura) return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
-      if (!c.instalacao) return "A instalação é *entre paredes* ou *sobreposta*?";
+      if (!c.instalacao) return "Qual o tipo de instalação?\n• *entre testeiras*\n• *vão + 1 guia*\n• *vão + guias*\n• *entre paredes*";
+      if ((c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") && !c.guia_mm && !c.guia_mm_esq && !c.guia_mm_dir) return "Qual a profundidade da *guia* em mm? (50/60/70/80/90/100)";
       if (!c?.motor?.ac_dc) return "O motor é *AC* ou *DC*?";
       if (!c?.motor?.potencia) return "Qual a *potência do motor* (200/300/400/500/800/1000/1500 kg)?";
       if (!c?.lamina?.modelo) return "Qual o *modelo da lâmina* (meia cana / transvision / fechado / oblongo)?";
@@ -3040,7 +3125,15 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
       const rolo = calcRolo(Number(c.eixo_polegadas) || eixoPorAltura(Number(c.altura) || 0));
       linhas.push(`${n++}. Porta de enrolar${c?.motor?.ac_dc ? " automática" : ""}`);
       if (c.largura && c.altura) linhas.push(`   Medida: ${c.largura}m × ${c.altura}m  _(+ rolo ${rolo.toFixed(2)}m)_`);
-      if (c.instalacao) linhas.push(`   Instalação: ${String(c.instalacao).replace("_", " ")}`);
+      if (c.instalacao) {
+        const labelInst: Record<string, string> = {
+          entre_testeiras: "entre testeiras",
+          vao_1guia: "vão + 1 guia",
+          vao_guias: "vão + guias",
+          entre_paredes: "entre paredes",
+        };
+        linhas.push(`   Instalação: ${labelInst[String(c.instalacao)] || String(c.instalacao).replace(/_/g, " ")}${c.trava_lamina ? " (com trava de lâminas)" : ""}`);
+      }
       if (c?.motor?.ac_dc) linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + "kg" : ""}`);
       if (c?.lamina?.modelo) linhas.push(`   Lâmina: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
       if (c?.lamina?.cor) linhas.push(`   Cor: ${c.lamina.cor}`);
