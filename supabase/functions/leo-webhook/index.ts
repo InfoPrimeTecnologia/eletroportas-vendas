@@ -2724,7 +2724,9 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   const cor = t.match(/\b(branca?|preta?|cinza|bege|azul|verde|vermelha?|amarela?)\b/);
   if (cor) patch.lamina = { ...(patch.lamina || {}), cor: cor[1].replace(/a$/, "o") };
   const port = t.match(/\bportinhola\s*(vild|vile|centro)?\b/i);
-  if (port) patch.portinhola = (port[1] || "CENTRO").toUpperCase();
+  // Nunca assumir posição: só grava VILD/VILE/CENTRO se o cliente disse explicitamente.
+  // Caso contrário marca como `true` (indefinido) para o validador perguntar.
+  if (port) patch.portinhola = port[1] ? port[1].toUpperCase() : true;
   // Portinhola cortada vs inteira
   if (/\bportinhola\b.*\b(inteira|ajuste\s+(?:no\s+)?local)\b|\b(inteira|ajuste\s+(?:no\s+)?local)\b.*\bportinhola\b/.test(t)) patch.portinhola_cortada = false;
   else if (/\bportinhola\b.*\bcortad[ao]s?\b|\bl[âa]minas?\s+cortad[ao]s?\b/.test(t)) patch.portinhola_cortada = true;
