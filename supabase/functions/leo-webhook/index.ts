@@ -3457,8 +3457,10 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
 function cfgItemIncompleto(it: CfgItem): boolean {
   const c: any = it.config || {};
   switch (it.tipo) {
-    case "kit_porta":
-      return !c.largura || !c.altura || !c.instalacao || !c?.motor?.ac_dc || !c?.lamina?.modelo || !c?.lamina?.cor;
+    case "kit_porta": {
+      const portPend = c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()));
+      return !c.largura || !c.altura || !c.instalacao || !c?.motor?.ac_dc || !c?.lamina?.modelo || !c?.lamina?.cor || portPend;
+    }
     case "motor":
       return !c.potencia || (!c.kit_motor && !c.modelo_motor) || !c.ac_dc;
     case "guia": {
