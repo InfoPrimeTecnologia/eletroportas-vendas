@@ -2922,11 +2922,64 @@ async function precoEstoque(termo: string, item: any = {}): Promise<{ sku: strin
   return null;
 }
 
+// ===========================================================
+// REGRAS AUTOMÁTICAS — motor / eixo / guia / portinhola
+// ===========================================================
+
+/** Peso estimado da porta: m² × 12 kg, com margem (35% padrão, 70% se porta grande L≥9 ou A≥4). */
+function estimarPesoPorta(largura: number, altura: number): { peso_kg: number; margem: number; grande: boolean } {
+  const base = (Number(largura) || 0) * (Number(altura) || 0) * 12;
+  const grande = (Number(largura) || 0) >= 9 || (Number(altura) || 0) >= 4;
+  const margem = grande ? 0.7 : 0.35;
+  return { peso_kg: +(base * (1 + margem)).toFixed(1), margem, grande };
+}
+
+/** Escolha automática do motor a partir do peso. */
+function escolherMotorPorPeso(pesoKg: number): number {
+  if (pesoKg <= 200) return 200;
+  if (pesoKg <= 300) return 300;
+  if (pesoKg <= 400) return 400;
+  if (pesoKg <= 500) return 500;
+  return 800;
+}
+
+/** Escolha do eixo conforme largura e motor escolhido. */
+function escolherEixoAuto(largura: number, motorKg: number): number {
+  if (motorKg >= 700) return 6.5;
+  if (motorKg >= 500) return 5.5;
+  if ((Number(largura) || 0) <= 6) return 4.5;
+  return 5.5;
+}
+
+/** Guia automática pela largura: ≤4m → 50mm, ≤7m → 70mm, >7m → 100mm. */
+function escolherGuiaAuto(largura: number): 50 | 70 | 100 {
+  const L = Number(largura) || 0;
+  if (L <= 4) return 50;
+  if (L <= 7) return 70;
+  return 100;
+}
+
+const GUIAS_VALIDAS = [50, 60, 70, 100] as const;
+
+/** Rolo conforme polegadas do eixo. */
 function eixoPorAltura(alturaTotal: number): number {
-  // Faixa simplificada — até cliente enviar a tabela oficial
   if (alturaTotal <= 3.5) return 4.5;
-  if (alturaTotal <= 4.5) return 5;
-  return 6;
+  if (alturaTotal <= 4.5) return 5.5;
+  return 6.5;
+}
+
+/** Portinhola cortada: largura final = largura porta - (0,64 + profundidade da guia em m).
+ *  18 lâminas perfil baixo, 19 lâminas perfil alto. */
+function calcPortinholaCortada(largura: number, guia_mm: number, perfil: "baixo" | "alto") {
+  const gM = (Number(guia_mm) || 0) / 1000;
+  const larguraFinal = Math.max(0, +(Number(largura) - (0.64 + gM)).toFixed(2));
+  const qtdLaminas = perfil === "alto" ? 19 : 18;
+  return { largura_final: larguraFinal, qtd_laminas: qtdLaminas, soleira_m: larguraFinal };
+}
+
+/** Lâmina parcial: qtd de lâminas para uma faixa de altura (sempre ÷ 0,085). */
+function calcLaminasParcial(alturaM: number): number {
+  return Math.ceil((Number(alturaM) || 0) / 0.085);
 }
 
 async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
