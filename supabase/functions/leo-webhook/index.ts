@@ -3466,8 +3466,7 @@ function cfgItemIncompleto(it: CfgItem): boolean {
       return !c.potencia || (!c.kit_motor && !c.modelo_motor) || !c.ac_dc;
     case "guia": {
       const qtd = c.qtd ?? c.qtd_pares ?? c.qtd_unidades;
-      const tipoOk = c.tipo_unidade || c.qtd_pares || c.qtd_unidades;
-      return !qtd || !c.mm || !tipoOk || !c.comprimento_m;
+      return !qtd || !c.mm || !c.comprimento_m;
     }
     case "lamina":
       return !c.qtd || !c.modelo || !c.comprimento_m;
