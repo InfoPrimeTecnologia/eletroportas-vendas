@@ -3435,7 +3435,8 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if (!c.comprimento_m) return "Qual o *comprimento em metros* do eixo?";
     } else if (it.tipo === "portinhola") {
       const c = it.config || {};
-      if (!c.modelo) return "Qual o *modelo da portinhola*? (*VILD* / *VILE* / *CENTRO*)";
+      const modeloOk = typeof c.modelo === "string" && ["VILD","VILE","CENTRO"].includes(String(c.modelo).toUpperCase());
+      if (!modeloOk) return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
       if (!c.qtd) return "Quantas *portinholas*?";
     } else if (it.tipo === "pintura") {
       const c = it.config || {};
