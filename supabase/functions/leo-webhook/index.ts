@@ -2610,20 +2610,24 @@ const PEDIDO_VAZIO: CfgPedido = { itens: [], total: 0, status: "em_andamento" };
 function novoId() { return crypto.randomUUID().slice(0, 8); }
 
 const CFG_REGRAS_TECNICAS = `Regras técnicas Eletroportas:
-- Atendimento serralheiro é configurador técnico: o cliente pode mandar pedido completo, correção, acréscimo ou dúvida em qualquer ordem.
-- Responda primeiro a pergunta do cliente; depois, se necessário, conduza o orçamento sem repetir perguntas já respondidas.
-- Porta de enrolar: largura x altura em metros. Rolo técnico: eixo até 5" soma 0,60m; eixo acima de 5" soma 0,75m.
-- Lâminas: perfil baixo divide altura total por 0,075; perfil alto divide por 0,085; sempre arredonda para cima.
-- Guias: cálculo por metro linear; 1 par = 2 unidades x comprimento.
-- Motores AC: 200/300/400/500/800/1000/1500 kg. Motores DC: 200/300/400/500/800 kg.
-- Portinhola é acesso integrado. Alçapão é acesso emergencial. Nunca usar portinhola e alçapão juntos na mesma porta.
-- Tipo de instalação (sempre 1 dos 4):
-  • entre_testeiras: desconto 0,02 no eixo/soleira/lâminas (com trava de lâminas: -0,03 nas lâminas).
-  • vao_1guia: vão + profundidade da guia (mm/1000) - 0,02 (com trava: -0,03 nas lâminas).
-  • vao_guias: vão + guia_esq + guia_dir - 0,02 (com trava: -0,03 nas lâminas).
-  • entre_paredes: desconto 0,07 (com trava: -0,08 nas lâminas).
-- Nunca mostrar a fórmula ao cliente; mostrar apenas o resultado final em metros.
-- Não invente preço. Quando faltar valor no estoque, sinalize como sob consulta e siga o atendimento.`;
+- Configurador técnico + carrinho comercial. Pedido livre OU guiado. NUNCA reinicie o fluxo ao adicionar/alterar itens.
+- Modelos de lâmina: Fechada, Transvision, Oblongo. Padrão = perfil baixo. Perfil alto somente se solicitado.
+- Lâmina parcial (combinação): cliente pode pedir "1m de transvision" misturado no kit. Quantidade da faixa = altura ÷ 0,085. Restante fica no modelo principal. Cada modelo vira linha separada no orçamento.
+- Tipos de instalação (sempre 1 dos 4):
+  • entre_testeiras: desconto 0,02 no eixo/soleira/lâminas (com trava: lâminas -0,03).
+  • vao_1guia: vão + profundidade da guia (mm/1000) - 0,02 (com trava: lâminas -0,03).
+  • vao_guias: vão + guia_esq + guia_dir - 0,02 (com trava: lâminas -0,03).
+  • entre_paredes: desconto 0,07 (com trava: lâminas -0,08).
+- Guias válidas: 50, 60, 70, 100 mm (80 e 90 não existem mais). Auto: largura ≤4m→50, ≤7m→70, >7m→100.
+- Eixo: até 6m → 4.5"; motor 500 → 5.5"; motor ≥700 → 6.5" mínimo.
+- Rolo: eixo 4.5/5.5" → 0,60m; eixos maiores → 0,75m.
+- Motor (auto): peso = m² × 12kg × (1 + margem). Margem 35% padrão; 70% se largura≥9 OU altura≥4. Escolha: ≤200→200, ≤300→300, ≤400→400, ≤500→500, >500→800. Motores AC 200/300/400/500/800/1000/1500. DC 200/300/400/500/800.
+- Kit automatizador = motor + testeiras + central + 2 controles. Motor+testeiras = sem central. Avulso = só motor.
+- Portinhola VILD/VILE: perguntar se *cortada* (com lâminas cortadas) ou *inteira* p/ ajuste local. CENTRO sempre cortada.
+- Portinhola cortada: largura final = largura porta - (0,64 + profundidade da guia em m). 18 lâminas perfil baixo / 19 perfil alto. Separa soleira e lâminas no orçamento.
+- Portinhola e alçapão NUNCA juntos na mesma porta.
+- O CLIENTE NÃO VÊ: fórmulas, peso, regras, cálculos internos. Mostre apenas resultado final em metros e produtos finais.
+- Não invente preço. Faltou no estoque → marca como sob consulta e segue.`;
 
 function cfgPedidoLeve(pedido: CfgPedido) {
   return {
@@ -2668,10 +2672,10 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
 
   // Trocar guia para X
-  const trocaGuia = t.match(/\b(trocar|alterar|mudar)\s+guia\s+(?:para|pra|p\/)\s*(50|60|70|80|90|100)\b/);
+  const trocaGuia = t.match(/\b(trocar|alterar|mudar)\s+guia\s+(?:para|pra|p\/)\s*(50|60|70|100)\b/);
   if (trocaGuia) patch.guia_mm = Number(trocaGuia[2]);
   else if (!/\bpares?\b/.test(t)) {
-    const guia = t.match(/\bguia\s*(?:de|para)?\s*(50|60|70|80|90|100)\b/);
+    const guia = t.match(/\bguia\s*(?:de|para)?\s*(50|60|70|100)\b/);
     if (guia) patch.guia_mm = Number(guia[1]);
   }
   // Trocar motor para AC/DC
@@ -2681,14 +2685,38 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   const pot = t.match(/\b(200|300|400|500|800|1000|1500)\s*kg\b/);
   const acdc = t.match(/\b(AC|DC)\b/i)?.[1]?.toUpperCase();
   if ((pot || acdc) && !/\bavulso\b/.test(t)) patch.motor = { ...(patch.motor || {}), ...(pot ? { potencia: Number(pot[1]) } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
-  if (/\bmeia\s*cana\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "meia_cana" };
-  else if (/\btransvision\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "transvision" };
+
+  // Kit do motor
+  if (/\bkit\s*automatizador\b/.test(t)) patch.kit_motor = "kit_automatizador";
+  else if (/\bmotor\s*\+?\s*testeiras?\b/.test(t)) patch.kit_motor = "motor_testeiras";
+  else if (/\b(automatizador|motor)\s+avulso\b/.test(t)) patch.kit_motor = "avulso";
+
+  // Modelo de lâmina (Fechada/Transvision/Oblongo + legado meia cana)
+  if (/\btransvision\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "transvision" };
   else if (/\boblongo\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "oblongo" };
   else if (/\bfechad[ao]\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "fechado" };
+  else if (/\bmeia\s*cana\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "meia_cana" };
+  if (/\bperfil\s+alto\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), perfil: "alto" };
+  else if (/\bperfil\s+baixo\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), perfil: "baixo" };
+
+  // Combinação de lâmina parcial: "1m de transvision" / "0,8m de oblongo"
+  const parcial = t.match(/(\d+(?:[\.,]\d+)?)\s*m\s+(?:de\s+)?(transvision|oblongo|fechad[ao])/);
+  if (parcial) {
+    const modeloP = parcial[2].startsWith("fechad") ? "fechado" : parcial[2];
+    const altP = Number(parcial[1].replace(",", "."));
+    const lamCur = patch.lamina || {};
+    const combAtual = Array.isArray(lamCur.combinacao) ? lamCur.combinacao : [];
+    patch.lamina = { ...lamCur, combinacao: [...combAtual, { modelo: modeloP, altura_m: altP }] };
+  }
+
   const cor = t.match(/\b(branca?|preta?|cinza|bege|azul|verde|vermelha?|amarela?)\b/);
   if (cor) patch.lamina = { ...(patch.lamina || {}), cor: cor[1].replace(/a$/, "o") };
   const port = t.match(/\bportinhola\s*(vild|vile|centro)?\b/i);
   if (port) patch.portinhola = (port[1] || "CENTRO").toUpperCase();
+  // Portinhola cortada vs inteira
+  if (/\bportinhola\b.*\b(inteira|ajuste\s+(?:no\s+)?local)\b|\b(inteira|ajuste\s+(?:no\s+)?local)\b.*\bportinhola\b/.test(t)) patch.portinhola_cortada = false;
+  else if (/\bportinhola\b.*\bcortad[ao]s?\b|\bl[âa]minas?\s+cortad[ao]s?\b/.test(t)) patch.portinhola_cortada = true;
+
   if (/\balcapao\b/.test(t) && !port) patch.alcapao = true;
   if (/\bpintura\s+eletrostatica\b|\bcom\s+pintura\b/.test(t) && !/sem\s+pintura/.test(t)) patch.pintura = "eletrostatica";
 
@@ -2922,11 +2950,64 @@ async function precoEstoque(termo: string, item: any = {}): Promise<{ sku: strin
   return null;
 }
 
+// ===========================================================
+// REGRAS AUTOMÁTICAS — motor / eixo / guia / portinhola
+// ===========================================================
+
+/** Peso estimado da porta: m² × 12 kg, com margem (35% padrão, 70% se porta grande L≥9 ou A≥4). */
+function estimarPesoPorta(largura: number, altura: number): { peso_kg: number; margem: number; grande: boolean } {
+  const base = (Number(largura) || 0) * (Number(altura) || 0) * 12;
+  const grande = (Number(largura) || 0) >= 9 || (Number(altura) || 0) >= 4;
+  const margem = grande ? 0.7 : 0.35;
+  return { peso_kg: +(base * (1 + margem)).toFixed(1), margem, grande };
+}
+
+/** Escolha automática do motor a partir do peso. */
+function escolherMotorPorPeso(pesoKg: number): number {
+  if (pesoKg <= 200) return 200;
+  if (pesoKg <= 300) return 300;
+  if (pesoKg <= 400) return 400;
+  if (pesoKg <= 500) return 500;
+  return 800;
+}
+
+/** Escolha do eixo conforme largura e motor escolhido. */
+function escolherEixoAuto(largura: number, motorKg: number): number {
+  if (motorKg >= 700) return 6.5;
+  if (motorKg >= 500) return 5.5;
+  if ((Number(largura) || 0) <= 6) return 4.5;
+  return 5.5;
+}
+
+/** Guia automática pela largura: ≤4m → 50mm, ≤7m → 70mm, >7m → 100mm. */
+function escolherGuiaAuto(largura: number): 50 | 70 | 100 {
+  const L = Number(largura) || 0;
+  if (L <= 4) return 50;
+  if (L <= 7) return 70;
+  return 100;
+}
+
+const GUIAS_VALIDAS = [50, 60, 70, 100] as const;
+
+/** Rolo conforme polegadas do eixo. */
 function eixoPorAltura(alturaTotal: number): number {
-  // Faixa simplificada — até cliente enviar a tabela oficial
   if (alturaTotal <= 3.5) return 4.5;
-  if (alturaTotal <= 4.5) return 5;
-  return 6;
+  if (alturaTotal <= 4.5) return 5.5;
+  return 6.5;
+}
+
+/** Portinhola cortada: largura final = largura porta - (0,64 + profundidade da guia em m).
+ *  18 lâminas perfil baixo, 19 lâminas perfil alto. */
+function calcPortinholaCortada(largura: number, guia_mm: number, perfil: "baixo" | "alto") {
+  const gM = (Number(guia_mm) || 0) / 1000;
+  const larguraFinal = Math.max(0, +(Number(largura) - (0.64 + gM)).toFixed(2));
+  const qtdLaminas = perfil === "alto" ? 19 : 18;
+  return { largura_final: larguraFinal, qtd_laminas: qtdLaminas, soleira_m: larguraFinal };
+}
+
+/** Lâmina parcial: qtd de lâminas para uma faixa de altura (sempre ÷ 0,085). */
+function calcLaminasParcial(alturaM: number): number {
+  return Math.ceil((Number(alturaM) || 0) / 0.085);
 }
 
 async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
@@ -2934,16 +3015,23 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const largura = Number(cfg?.largura) || 0;
   const altura = Number(cfg?.altura) || 0;
   if (!largura || !altura) return linhas;
+
+  const modeloLam: string = String(cfg?.lamina?.modelo || "fechado");
   const perfil: "baixo" | "alto" = (cfg?.lamina?.perfil === "alto" ? "alto" : "baixo");
-  const eixoPol = Number(cfg?.eixo_polegadas) || eixoPorAltura(altura);
+
+  // Auto: motor, eixo, guia
+  const acdc = cfg?.motor?.ac_dc || "AC";
+  const pesoInfo = estimarPesoPorta(largura, altura);
+  const potencia = Number(cfg?.motor?.potencia) || escolherMotorPorPeso(pesoInfo.peso_kg);
+  const eixoPol = Number(cfg?.eixo_polegadas) || escolherEixoAuto(largura, potencia);
   const rolo = calcRolo(eixoPol);
   const alturaTotal = altura + rolo;
-  const qtdLaminas = calcLaminas(alturaTotal, perfil);
+  let guia_mm_eff = Number(cfg?.guia_mm) || escolherGuiaAuto(largura);
+  if (!GUIAS_VALIDAS.includes(guia_mm_eff as any)) guia_mm_eff = escolherGuiaAuto(largura);
 
-  // Medida de corte conforme tipo de instalação + trava de lâminas
   const instalacao = (cfg?.instalacao || "entre_paredes") as TipoInstalacao;
   const corte = calcMedidaCorte(largura, instalacao, {
-    guia_mm: Number(cfg?.guia_mm) || undefined,
+    guia_mm: guia_mm_eff,
     guia_mm_esq: Number(cfg?.guia_mm_esq) || undefined,
     guia_mm_dir: Number(cfg?.guia_mm_dir) || undefined,
     trava: !!cfg?.trava_lamina,
@@ -2952,35 +3040,49 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const cortarSoleira = corte.soleira || largura;
   const cortarLamina = corte.laminas || largura;
 
-  // Lâmina
-  const modeloLam = String(cfg?.lamina?.modelo || "meia_cana").replace("_", " ");
-  const cor = cfg?.lamina?.cor ? ` ${cfg.lamina.cor}` : "";
-  const buscaLam = `lamina ${modeloLam} ${perfil}${cor}`;
-  const pLam = await precoEstoque(buscaLam);
-  linhas.push({
-    sku: pLam?.sku || "LAMINA",
-    descricao: pLam?.nome || `Lâmina ${modeloLam} perfil ${perfil}${cor} — corte ${cortarLamina.toFixed(2)}m`,
-    und: pLam?.und || "UN",
-    qtd: qtdLaminas * cortarLamina,
-    valor_unit: pLam?.preco || 0,
-    total: (pLam?.preco || 0) * qtdLaminas * cortarLamina,
-    sob_consulta: !pLam,
-  });
+  // Lâmina principal + faixas parciais (combinação)
+  const combinacao: Array<{ modelo: string; altura_m: number }> = Array.isArray(cfg?.lamina?.combinacao)
+    ? cfg.lamina.combinacao : [];
+  const alturaParcial = combinacao.reduce((s, c) => s + (Number(c.altura_m) || 0), 0);
+  const alturaPrincipal = Math.max(0, alturaTotal - alturaParcial);
+  const qtdLamPrincipal = calcLaminas(alturaPrincipal, perfil);
 
-  // Guia lateral (par)
-  const mm = Number(cfg?.guia_mm) || Number(cfg?.guia_mm_esq) || Number(cfg?.guia_mm_dir) || 50;
-  const buscaGuia = `guia lateral ${mm}mm`;
-  const pGuia = await precoEstoque(buscaGuia);
-  // Quantas guias o tipo de instalação demanda
-  const guiasNec =
-    instalacao === "entre_testeiras" ? 0 :
-    instalacao === "vao_1guia" ? 1 :
-    2; // vao_guias / entre_paredes usam par
+  const cor = cfg?.lamina?.cor ? ` ${cfg.lamina.cor}` : "";
+  const pLam = await precoEstoque(`lamina ${modeloLam.replace("_", " ")} ${perfil}${cor}`);
+  if (qtdLamPrincipal > 0) {
+    linhas.push({
+      sku: pLam?.sku || "LAMINA",
+      descricao: pLam?.nome || `Lâmina ${modeloLam.replace("_", " ")}${cor} — corte ${cortarLamina.toFixed(2)}m`,
+      und: pLam?.und || "UN",
+      qtd: qtdLamPrincipal * cortarLamina,
+      valor_unit: pLam?.preco || 0,
+      total: (pLam?.preco || 0) * qtdLamPrincipal * cortarLamina,
+      sob_consulta: !pLam,
+    });
+  }
+  for (const faixa of combinacao) {
+    const qtdF = calcLaminasParcial(faixa.altura_m);
+    if (qtdF <= 0) continue;
+    const pF = await precoEstoque(`lamina ${String(faixa.modelo).replace("_", " ")} ${perfil}${cor}`);
+    linhas.push({
+      sku: pF?.sku || "LAMINA",
+      descricao: pF?.nome || `Lâmina ${String(faixa.modelo).replace("_", " ")}${cor} — faixa ${faixa.altura_m}m — corte ${cortarLamina.toFixed(2)}m`,
+      und: pF?.und || "UN",
+      qtd: qtdF * cortarLamina,
+      valor_unit: pF?.preco || 0,
+      total: (pF?.preco || 0) * qtdF * cortarLamina,
+      sob_consulta: !pF,
+    });
+  }
+
+  // Guia lateral
+  const pGuia = await precoEstoque(`guia lateral ${guia_mm_eff}mm`);
+  const guiasNec = instalacao === "entre_testeiras" ? 0 : instalacao === "vao_1guia" ? 1 : 2;
   const mlGuia = guiasNec > 0 ? guiasNec * altura : 0;
   if (mlGuia > 0) {
     linhas.push({
       sku: pGuia?.sku || "GUIA",
-      descricao: pGuia?.nome || `Guia lateral ${mm}mm (${guiasNec === 1 ? "1 un" : "par"})`,
+      descricao: pGuia?.nome || `Guia lateral ${guia_mm_eff}mm (${guiasNec === 1 ? "1 un" : "par"})`,
       und: pGuia?.und || "M",
       qtd: mlGuia,
       valor_unit: pGuia?.preco || 0,
@@ -2994,8 +3096,7 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   linhas.push({
     sku: pEixo?.sku || "EIXO",
     descricao: pEixo?.nome || `Eixo ${eixoPol}" — corte ${cortarEixo.toFixed(2)}m`,
-    und: pEixo?.und || "M",
-    qtd: cortarEixo,
+    und: pEixo?.und || "M", qtd: cortarEixo,
     valor_unit: pEixo?.preco || 0,
     total: (pEixo?.preco || 0) * cortarEixo,
     sob_consulta: !pEixo,
@@ -3006,30 +3107,36 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   linhas.push({
     sku: pSol?.sku || "SOLEIRA",
     descricao: pSol?.nome || `Soleira em T — corte ${cortarSoleira.toFixed(2)}m`,
-    und: pSol?.und || "M",
-    qtd: cortarSoleira,
+    und: pSol?.und || "M", qtd: cortarSoleira,
     valor_unit: pSol?.preco || 0,
     total: (pSol?.preco || 0) * cortarSoleira,
     sob_consulta: !pSol,
   });
 
-  // Motor
-  if (cfg?.motor?.potencia) {
-    const pot = Number(cfg.motor.potencia);
-    const acdc = cfg.motor.ac_dc || "AC";
-    const pMot = await precoEstoque(`motor ${pot}kg ${acdc}`);
+  // Motor + (kit automatizador | motor+testeiras | avulso)
+  const kitMotor = cfg?.kit_motor || "kit_automatizador";
+  if (cfg?.motor !== false) {
+    const pMot = await precoEstoque(`motor ${potencia}kg ${acdc}`);
     linhas.push({
-      sku: pMot?.sku || `MOTOR-${pot}KG`,
-      descricao: pMot?.nome || `Motor ${acdc} ${pot}kg`,
-      und: "UN",
-      qtd: 1,
+      sku: pMot?.sku || `MOTOR-${potencia}KG`,
+      descricao: pMot?.nome || `Motor ${acdc} ${potencia}kg`,
+      und: "UN", qtd: 1,
       valor_unit: pMot?.preco || 0,
       total: pMot?.preco || 0,
       sob_consulta: !pMot,
     });
-
-    // Central (default true)
-    if (cfg?.central !== false) {
+    if (kitMotor === "kit_automatizador" || kitMotor === "motor_testeiras") {
+      const pTest = await precoEstoque("testeira");
+      linhas.push({
+        sku: pTest?.sku || "TESTEIRA",
+        descricao: pTest?.nome || "Testeiras (par)",
+        und: "PAR", qtd: 1,
+        valor_unit: pTest?.preco || 0,
+        total: pTest?.preco || 0,
+        sob_consulta: !pTest,
+      });
+    }
+    if (kitMotor === "kit_automatizador" && cfg?.central !== false) {
       const pCen = await precoEstoque("central de comando");
       linhas.push({
         sku: pCen?.sku || "CENTRAL",
@@ -3039,11 +3146,7 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
         total: pCen?.preco || 0,
         sob_consulta: !pCen,
       });
-    }
-
-    // Controles
-    const qtdCtrl = Number(cfg?.controles) || 1;
-    if (qtdCtrl > 0) {
+      const qtdCtrl = Number(cfg?.controles) || 2;
       const pCtrl = await precoEstoque("controle remoto");
       linhas.push({
         sku: pCtrl?.sku || "CONTROLE",
@@ -3058,16 +3161,39 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
 
   // Portinhola
   if (cfg?.portinhola) {
-    const modelo = typeof cfg.portinhola === "string" ? cfg.portinhola : "CENTRO";
+    const modelo = String(typeof cfg.portinhola === "string" ? cfg.portinhola : "CENTRO").toUpperCase();
+    const cortada = modelo === "CENTRO" ? true : (cfg?.portinhola_cortada !== false);
     const pPort = await precoEstoque(`portinhola ${modelo}`);
     linhas.push({
       sku: pPort?.sku || "PORTINHOLA",
-      descricao: pPort?.nome || `Portinhola ${modelo}`,
+      descricao: pPort?.nome || `Portinhola ${modelo}${cortada ? " (cortada)" : " (inteira p/ ajuste local)"}`,
       und: "UN", qtd: 1,
       valor_unit: pPort?.preco || 0,
       total: pPort?.preco || 0,
       sob_consulta: !pPort,
     });
+    if (cortada) {
+      const calc = calcPortinholaCortada(largura, guia_mm_eff, perfil);
+      const pSolP = await precoEstoque("soleira");
+      linhas.push({
+        sku: (pSolP?.sku || "SOLEIRA") + "-P",
+        descricao: `Soleira portinhola — corte ${calc.largura_final.toFixed(2)}m`,
+        und: pSolP?.und || "M", qtd: calc.soleira_m,
+        valor_unit: pSolP?.preco || 0,
+        total: (pSolP?.preco || 0) * calc.soleira_m,
+        sob_consulta: !pSolP,
+      });
+      const pLamP = await precoEstoque(`lamina ${modeloLam.replace("_", " ")} ${perfil}${cor}`);
+      linhas.push({
+        sku: (pLamP?.sku || "LAMINA") + "-P",
+        descricao: `Lâminas portinhola (${calc.qtd_laminas} un) — corte ${calc.largura_final.toFixed(2)}m`,
+        und: pLamP?.und || "UN",
+        qtd: calc.qtd_laminas * calc.largura_final,
+        valor_unit: pLamP?.preco || 0,
+        total: (pLamP?.preco || 0) * calc.qtd_laminas * calc.largura_final,
+        sob_consulta: !pLamP,
+      });
+    }
   }
   // Alçapão
   if (cfg?.alcapao && !cfg?.portinhola) {
@@ -3081,7 +3207,6 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
       sob_consulta: !pAlc,
     });
   }
-
   // Pintura eletrostática
   if (cfg?.pintura) {
     const corP = cfg?.lamina?.cor || "branca";
@@ -3090,11 +3215,22 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
     linhas.push({
       sku: pPint?.sku || "PINTURA",
       descricao: pPint?.nome || `Pintura eletrostática ${corP}`,
-      und: pPint?.und || "M2",
-      qtd: area,
+      und: pPint?.und || "M2", qtd: area,
       valor_unit: pPint?.preco || 0,
       total: (pPint?.preco || 0) * area,
       sob_consulta: !pPint,
+    });
+  }
+  // Trava-lâmina (opcional)
+  if (cfg?.trava_lamina) {
+    const pTr = await precoEstoque("trava lamina");
+    linhas.push({
+      sku: pTr?.sku || "TRAVA",
+      descricao: pTr?.nome || "Trava-lâmina",
+      und: "UN", qtd: 1,
+      valor_unit: pTr?.preco || 0,
+      total: pTr?.preco || 0,
+      sob_consulta: !pTr,
     });
   }
 
@@ -3213,19 +3349,25 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
   for (const it of pedido.itens) {
     if (it.tipo === "kit_porta") {
       const c = it.config || {};
+      // Apenas o essencial — motor potência/eixo/guia são automáticos pelas regras.
       if (!c.largura || !c.altura) return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
       if (!c.instalacao) return "Qual o tipo de instalação?\n• *entre testeiras*\n• *vão + 1 guia*\n• *vão + guias*\n• *entre paredes*";
-      if ((c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") && !c.guia_mm && !c.guia_mm_esq && !c.guia_mm_dir) return "Qual a profundidade da *guia* em mm? (50/60/70/80/90/100)";
+      if ((c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") && !c.guia_mm && !c.guia_mm_esq && !c.guia_mm_dir) {
+        return "Qual a profundidade da *guia* em mm? (50 / 60 / 70 / 100)";
+      }
       if (!c?.motor?.ac_dc) return "O motor é *AC* ou *DC*?";
-      if (!c?.motor?.potencia) return "Qual a *potência do motor* (200/300/400/500/800/1000/1500 kg)?";
-      if (!c?.lamina?.modelo) return "Qual o *modelo da lâmina* (meia cana / transvision / fechado / oblongo)?";
+      if (!c?.lamina?.modelo) return "Qual o *modelo da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
       if (!c?.lamina?.cor) return "Qual a *cor da lâmina/pintura*?";
-      if (!c?.guia_mm) return "Qual a *guia lateral* (50/60/70/80/90/100 mm)?";
+      // VILD/VILE precisa saber se é cortada ou inteira
+      const port = typeof c.portinhola === "string" ? c.portinhola.toUpperCase() : "";
+      if ((port === "VILD" || port === "VILE") && c.portinhola_cortada === undefined) {
+        return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
+      }
     } else if (it.tipo === "motor") {
-      if (!it.config?.potencia) return "Motor de quantos *kg*? (200/300/400/500/800/1000/1500)";
+      if (!it.config?.potencia) return "Motor de quantos *kg*? (200/300/400/500/800)";
       if (!it.config?.ac_dc) return "*AC* ou *DC*?";
     } else if (it.tipo === "guia") {
-      if (!it.config?.mm) return "Guia de quantos *mm* (50/60/70/80/90/100)?";
+      if (!it.config?.mm) return "Guia de quantos *mm*? (50 / 60 / 70 / 100)";
       if (!it.config?.comprimento_m) return "Qual o *comprimento em metros* da guia?";
       if (!it.config?.qtd_pares && !it.config?.qtd_unidades) return "Quantos *pares* (ou unidades) de guia?";
     }
