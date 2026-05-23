@@ -2848,7 +2848,7 @@ Avulsos (cada um vira um item separado no carrinho):
 
 REGRAS:
 - Extraia TUDO que estiver na mensagem (medida "3x4", "AC", "meia cana", "branca", "portinhola VILD", "guia 70", "+2 controles").
-- "3x4 entre paredes AC meia cana branca portinhola VILD" → 1 add_item kit_porta com TODA a config.
+- NUNCA assuma posição/modelo/cor/medida que o cliente não falou. Ex: "preciso de uma portinhola" → portinhola SEM modelo (não assuma CENTRO). "3x4 entre paredes AC meia cana branca portinhola VILD" → 1 add_item kit_porta com TODA a config.
 - "+ 2 controles e trocar guia para 70" → [add_item controle qtd 2, update_item kit_porta patch guia_mm 70].
 - "remover central" / "tirar pintura" → update_item kit_porta com central:false / pintura:false.
 - "gerar orçamento" / "fechar pedido" / "pode fechar" → gerar_orcamento.
