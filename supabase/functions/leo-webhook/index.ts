@@ -2842,6 +2842,12 @@ REGRAS:
 - "gerar orçamento" / "fechar pedido" / "pode fechar" → gerar_orcamento.
 - Perguntas/dúvidas técnicas, comerciais ou de uso que não mudam o pedido → duvida.
 - Mensagens vagas tipo "oi" → []. NUNCA invente dados.
+- VALIDAÇÃO MÍNIMA OBRIGATÓRIA por item (NUNCA preencha o que o cliente não disse):
+  • LÂMINA avulsa: quantidade + tamanho (comprimento_m) + modelo (fechado/meia_cana/transvision/oblongo).
+  • GUIA: quantidade (pares ou unidades) + tipo/espessura (mm) + comprimento_m.
+  • MOTOR: capacidade (potencia) + modelo (kit_motor: avulso | motor_testeiras | kit_automatizador) + AC/DC.
+  Se faltar qualquer um, apenas registre o que o cliente disse — o sistema vai perguntar o restante. Não tente adivinhar.
+- "20 lâminas fechadas" → add_item lamina {qtd:20, modelo:"fechado"} (SEM tamanho — o sistema perguntará).
 - Devolva APENAS JSON válido, sem explicação.
 
 PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
