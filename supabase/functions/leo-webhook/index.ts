@@ -3076,7 +3076,8 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
     if (it.tipo === "kit_porta") {
       const c = it.config || {};
       if (!c.largura || !c.altura) return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
-      if (!c.instalacao) return "A instalação é *entre paredes* ou *sobreposta*?";
+      if (!c.instalacao) return "Qual o tipo de instalação?\n• *entre testeiras*\n• *vão + 1 guia*\n• *vão + guias*\n• *entre paredes*";
+      if ((c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") && !c.guia_mm && !c.guia_mm_esq && !c.guia_mm_dir) return "Qual a profundidade da *guia* em mm? (50/60/70/80/90/100)";
       if (!c?.motor?.ac_dc) return "O motor é *AC* ou *DC*?";
       if (!c?.motor?.potencia) return "Qual a *potência do motor* (200/300/400/500/800/1000/1500 kg)?";
       if (!c?.lamina?.modelo) return "Qual o *modelo da lâmina* (meia cana / transvision / fechado / oblongo)?";
