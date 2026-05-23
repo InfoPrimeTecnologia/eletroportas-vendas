@@ -265,10 +265,21 @@ const PRECOS = {
 // ===========================
 // MÓDULO 8 — REGRAS INDUSTRIAIS (helpers puros)
 // ===========================
-/** Rolo segundo o eixo: 4.5"/5" → 0,60 m; > 5" → 0,75 m. */
-function calcRolo(eixoPolegadas?: number): number {
-  if (!eixoPolegadas || eixoPolegadas <= 5) return 0.60;
+/**
+ * Rolo segundo o eixo:
+ *   • 4.5" e 5.5" → 0,60 m
+ *   • 6" / 6.5" / 8.5" (qualquer eixo > 5.5") → 0,75 m
+ * Retorna `null` quando o eixo ainda não foi definido — o chamador
+ * deve então mostrar "(altura + rolo)" e NÃO assumir nenhum valor.
+ */
+function calcRolo(eixoPolegadas?: number): number | null {
+  if (!eixoPolegadas || eixoPolegadas <= 0) return null;
+  if (eixoPolegadas <= 5.5) return 0.60;
   return 0.75;
+}
+/** Versão "segura" para cálculos internos quando precisamos de um número. */
+function calcRoloNum(eixoPolegadas?: number): number {
+  return calcRolo(eixoPolegadas) ?? 0.60;
 }
 /** Qtd de lâminas: perfil baixo ÷ 0,075; perfil alto ÷ 0,085. Arredonda pra cima. */
 function calcLaminas(alturaTotal: number, perfil: "baixo" | "alto"): number {
@@ -868,7 +879,7 @@ Sempre que adicionar item, PERGUNTE: "👉 Deseja acrescentar mais algum item?"
 # ════════════════════════════════════════
 ### E1 — Medidas
 "Me informa as medidas do vão? Formato: **Largura x Altura** (ex: 5,50 x 3,00). Se souber o rolo: Largura x (Altura + Rolo)." → \`definir_medidas\`.
-Regra do rolo (não pergunte se cliente não informar): eixo 4.5" ou 5" → 0,60 m. Maior que 5" → 0,75 m. Altura total = altura + rolo.
+Regra do rolo (NUNCA assumir antes do eixo): no início mostre "largura x (altura + rolo)". O rolo só é definido após motor + eixo: eixo 4.5" ou 5.5" → 0,60 m; eixos maiores (6"/6.5"/8.5") → 0,75 m. Nunca pergunte o rolo ao cliente.
 
 ### E2 — Configuração (livre)
 "Agora descreva como deseja a porta — automática/manual, cor, modelo de lâmina, portinhola, alçapão, motor."
@@ -3025,7 +3036,7 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const pesoInfo = estimarPesoPorta(largura, altura);
   const potencia = Number(cfg?.motor?.potencia) || escolherMotorPorPeso(pesoInfo.peso_kg);
   const eixoPol = Number(cfg?.eixo_polegadas) || escolherEixoAuto(largura, potencia);
-  const rolo = calcRolo(eixoPol);
+  const rolo = calcRoloNum(eixoPol);
   const alturaTotal = altura + rolo;
   let guia_mm_eff = Number(cfg?.guia_mm) || escolherGuiaAuto(largura);
   if (!GUIAS_VALIDAS.includes(guia_mm_eff as any)) guia_mm_eff = escolherGuiaAuto(largura);
@@ -3384,9 +3395,17 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
   for (const it of pedido.itens) {
     const c = it.config || {};
     if (it.tipo === "kit_porta") {
-      const rolo = calcRolo(Number(c.eixo_polegadas) || eixoPorAltura(Number(c.altura) || 0));
+      // Só mostra o rolo definitivo quando o eixo já foi definido (manual ou via motor).
+      const eixoDef = Number(c.eixo_polegadas) || (c?.motor?.potencia ? escolherEixoAuto(Number(c.largura) || 0, Number(c.motor.potencia)) : 0);
+      const roloDef = calcRolo(eixoDef);
       linhas.push(`${n++}. Porta de enrolar${c?.motor?.ac_dc ? " automática" : ""}`);
-      if (c.largura && c.altura) linhas.push(`   Medida: ${c.largura}m × ${c.altura}m  _(+ rolo ${rolo.toFixed(2)}m)_`);
+      if (c.largura && c.altura) {
+        if (roloDef !== null) {
+          linhas.push(`   Medida: ${c.largura}m × (${c.altura}m + ${roloDef.toFixed(2)}m de rolo)`);
+        } else {
+          linhas.push(`   Medida: ${c.largura}m × (${c.altura}m + rolo)`);
+        }
+      }
       if (c.instalacao) {
         const labelInst: Record<string, string> = {
           entre_testeiras: "entre testeiras",
