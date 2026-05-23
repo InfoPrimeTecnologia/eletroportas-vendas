@@ -2840,7 +2840,7 @@ Avulsos (cada um vira um item separado no carrinho):
 - controle: {"qtd":N}
 - central: {"qtd":N}
 - trava_lamina: {"qtd":N}
-- portinhola: {"modelo":"VILD|VILE|CENTRO","qtd":N}
+- portinhola: {"modelo":"VILD|VILE|CENTRO","qtd":N} — só preencha modelo se o cliente disser VILD/VILE/CENTRO. Se ele só disser "portinhola", omita o modelo (o sistema vai perguntar).
 - alcapao: {"qtd":N}
 - pintura: {"cor":"...","area_m2":N}
 - acessorio: {"descricao":"...","qtd":N}
