@@ -3269,7 +3269,23 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
     } else if (it.tipo === "controle") {
       linhas.push(`${n++}. Controle remoto x ${c.qtd || 1}`);
     } else if (it.tipo === "central") {
-      linhas.push(`${n++}. Central de comando`);
+      linhas.push(`${n++}. Central de comando x ${c.qtd || 1}`);
+    } else if (it.tipo === "trava_lamina") {
+      linhas.push(`${n++}. Trava-lâmina x ${c.qtd || 1}`);
+    } else if (it.tipo === "lamina") {
+      linhas.push(`${n++}. Lâmina${c.modelo ? " " + String(c.modelo).replace("_", " ") : ""}${c.cor ? " " + c.cor : ""}${c.comprimento_m ? ` ${c.comprimento_m}m` : ""} x ${c.qtd || 1}`);
+    } else if (it.tipo === "soleira") {
+      linhas.push(`${n++}. Soleira${c.comprimento_m ? ` ${c.comprimento_m}m` : ""} x ${c.qtd || 1}`);
+    } else if (it.tipo === "eixo") {
+      linhas.push(`${n++}. Eixo${c.polegadas ? ` ${c.polegadas}"` : ""}${c.comprimento_m ? ` ${c.comprimento_m}m` : ""} x ${c.qtd || 1}`);
+    } else if (it.tipo === "portinhola") {
+      linhas.push(`${n++}. Portinhola ${c.modelo || "CENTRO"} x ${c.qtd || 1}`);
+    } else if (it.tipo === "alcapao") {
+      linhas.push(`${n++}. Alçapão x ${c.qtd || 1}`);
+    } else if (it.tipo === "pintura") {
+      linhas.push(`${n++}. Pintura eletrostática${c.cor ? " " + c.cor : ""}${c.area_m2 ? ` ${c.area_m2}m²` : ""}`);
+    } else if (it.tipo === "acessorio") {
+      linhas.push(`${n++}. ${c.descricao || "Acessório"} x ${c.qtd || 1}`);
     } else {
       linhas.push(`${n++}. ${it.tipo}`);
     }
