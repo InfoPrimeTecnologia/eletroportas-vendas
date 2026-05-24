@@ -3553,11 +3553,18 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
   for (const it of pedido.itens) {
     if (it.tipo === "kit_porta") {
       const c = it.config || {};
-      // Fluxo: MEDIDA → LÂMINA → PINTURA → PORTINHOLA → MOTOR AC/DC → MEDIDA DE CORTE → [auto: INSTALAÇÃO → TRAVA → guia auto]
+      // Fluxo: MEDIDA → LÂMINA → PINTURA → AUTOMATIZAÇÃO (AC/DC) → OPCIONAIS (portinhola/alçapão)
+      //        → MEDIDA DE CORTE → [auto: INSTALAÇÃO → TRAVA → guia auto] → CÁLCULOS
       if (!c.largura || !c.altura) return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
       if (!c?.lamina?.modelo) return "Qual o *modelo principal da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
       if (c.quer_pintura === undefined) return "Deseja *pintura eletrostática*?\n• *Sim*\n• *Não*";
       if (c.quer_pintura === true && !c?.lamina?.cor) return "Qual a *cor da pintura*?";
+      // Motor: apenas AC/DC — a capacidade (kg) é SEMPRE automática pelo padrão técnico.
+      if (!c?.motor?.ac_dc) return "Qual *automatização* deseja?\n• *AC*\n• *DC*\n\n_A capacidade (kg), eixo, rolo e segurança são calculados automaticamente._";
+      // OPCIONAIS — antes da medida de corte (afetam cortes, soleira, lâminas).
+      if (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao) {
+        return "Deseja algum *opcional*?\n• *Portinhola*\n• *Alçapão*\n• *Nenhum*";
+      }
       if (c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()))) {
         return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
       }
@@ -3565,8 +3572,6 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if ((port === "VILD" || port === "VILE") && c.portinhola_cortada === undefined) {
         return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
       }
-      // Motor: apenas AC/DC — a capacidade (kg) é SEMPRE automática pelo padrão técnico.
-      if (!c?.motor?.ac_dc) return "Qual automatização deseja?\n• *Motor AC*\n• *Motor DC*\n\n_A capacidade (kg) é calculada automaticamente conforme padrão técnico._";
       if (!c.medida_corte_modo) {
         return "Como deseja definir a *medida de corte*?\n• *Informar manualmente*\n• *Calcular automaticamente*";
       }
