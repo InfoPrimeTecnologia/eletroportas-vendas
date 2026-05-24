@@ -3643,9 +3643,10 @@ function cfgItemIncompleto(it: CfgItem): boolean {
     case "kit_porta": {
       const portPend = c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()));
       const corPend = c.quer_pintura === true && !c?.lamina?.cor;
+      const opcPend = c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao;
       const manualPend = c.medida_corte_modo === "manual" && (!c.medida_eixo_m || !c.medida_lamina_m || !c.medida_soleira_m);
       const autoPend = c.medida_corte_modo === "auto" && (!c.instalacao || c.trava_lamina === undefined);
-      return !c.largura || !c.altura || !c?.motor?.ac_dc || !c?.lamina?.modelo || c.quer_pintura === undefined || corPend || portPend || !c.medida_corte_modo || manualPend || autoPend;
+      return !c.largura || !c.altura || !c?.motor?.ac_dc || !c?.lamina?.modelo || c.quer_pintura === undefined || corPend || opcPend || portPend || !c.medida_corte_modo || manualPend || autoPend;
     }
     case "motor":
       return !c.potencia || (!c.kit_motor && !c.modelo_motor) || !c.ac_dc;
