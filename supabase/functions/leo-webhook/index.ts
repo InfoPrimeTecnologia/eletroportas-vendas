@@ -2,6 +2,44 @@
 // Recebe mensagens da PrimeSync, processa com IA e responde via WhatsApp
 
 import { createClient } from "npm:@supabase/supabase-js@2.95.3";
+// Fase 1 da refatoração modular — tipos, parâmetros e engine semântica
+// foram extraídos. O comportamento permanece idêntico.
+import {
+  type CfgItemTipo,
+  type CfgLinha,
+  type CfgItem,
+  type CfgPedido,
+  type TipoInstalacao,
+  PEDIDO_VAZIO,
+  novoId,
+} from "./shared/tipos.ts";
+import {
+  DOCRYA_URL,
+  PDFSHIFT_URL,
+  AI_GATEWAY_URL,
+  AI_MODEL,
+  SESSION_GAP_MS,
+  COMPANY_LAT,
+  COMPANY_LNG,
+  PRECOS,
+  POTENCIAS_AC,
+  POTENCIAS_DC,
+  GUIAS_VALIDAS,
+  EIXOS_TABELA,
+  CFG_REGRAS_TECNICAS,
+} from "./modules/parametros.ts";
+import {
+  inferirTipoClienteTexto,
+  inferirMedidasTexto,
+  inferirLaminaTexto,
+  inferirAdicionaisTexto,
+  inferirPinturaTexto,
+  inferirCepTexto,
+  inferirEntregaTexto,
+  inferirSubtipoRevendaTexto,
+  inferirPecasAvulsasTexto,
+  inferirRespostaPortinholaCorte,
+} from "./modules/semantica.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
