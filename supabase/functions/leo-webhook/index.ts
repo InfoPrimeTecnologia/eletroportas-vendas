@@ -3166,9 +3166,11 @@ function calcPortinholaCortada(largura: number, guia_mm: number, perfil: "baixo"
   return { largura_final: larguraFinal, qtd_laminas: qtdLaminas, soleira_m: larguraFinal };
 }
 
-/** Lâmina parcial: qtd de lâminas para uma faixa de altura (sempre ÷ 0,085). */
-function calcLaminasParcial(alturaM: number): number {
-  return Math.ceil((Number(alturaM) || 0) / 0.085);
+/** Lâmina parcial: qtd de lâminas para uma faixa de altura.
+ *  perfil baixo → ÷ 0,075 / perfil alto → ÷ 0,085. */
+function calcLaminasParcial(alturaM: number, perfil: "baixo" | "alto" = "alto"): number {
+  const passo = perfil === "baixo" ? 0.075 : 0.085;
+  return Math.ceil((Number(alturaM) || 0) / passo);
 }
 
 async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
