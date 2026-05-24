@@ -4053,6 +4053,16 @@ async function rodarConfigurador(args: {
       });
     }
   }
+  const respostaCortePortinhola = inferirRespostaPortinholaCorte(msgLower);
+  if (respostaCortePortinhola !== undefined) {
+    const kit = pedido.itens.find((it) => it.tipo === "kit_porta");
+    const port = typeof kit?.config?.portinhola === "string" ? kit.config.portinhola.toUpperCase() : "";
+    const pendentePortinholaCorte = (port === "VILD" || port === "VILE") && kit?.config?.portinhola_cortada === undefined;
+    const jaInterpretou = intencoes.some((i: any) => i?.patch?.portinhola_cortada !== undefined || i?.config?.portinhola_cortada !== undefined);
+    if (pendentePortinholaCorte && !jaInterpretou) {
+      intencoes.push({ acao: "update_item", ref: "kit_porta", patch: { portinhola_cortada: respostaCortePortinhola } });
+    }
+  }
   console.log("🧠 cfg intencoes:", JSON.stringify(intencoes));
 
   // 2) Aplica (sem explodir BOM ainda — apenas atualiza config)
