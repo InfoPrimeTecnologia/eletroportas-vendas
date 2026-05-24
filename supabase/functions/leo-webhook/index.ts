@@ -2884,6 +2884,13 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
     const acao = String(ix?.acao || "");
     if (acao === "add_item") {
       const tipo = (ix.tipo || "acessorio") as CfgItemTipo;
+      if (tipo === "motor") {
+        const validacao = validarCapacidadeMotorConfig(ix.config || {});
+        if (!validacao.ok) {
+          duvidas.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+          continue;
+        }
+      }
       // Se for kit_porta e já existe um → faz merge ao invés de criar outro
       if (tipo === "kit_porta") {
         const existente = p.itens.find((i) => i.tipo === "kit_porta");
