@@ -266,39 +266,6 @@ async function atualizarTipoClienteLegado(telefone: string, tipo: "porta_instala
 // ===========================
 // CÁLCULO DE ORÇAMENTO
 // ===========================
-const PRECOS = {
-  perfil_fechado: 136.66,
-  perfil_transvision: 145.42,
-  perfil_oblongo: 162.97,
-  eixo_45: 93.05,
-  eixo_50: 147.49,
-  eixo_65: 264.03,
-  guia_50mm: 26.08,
-  guia_60mm: 31.69,
-  guia_70mm: 36.22,
-  guia_100mm: 49.71,
-  soleira_t: 59.18,
-  reforco_soleira: 37.50,
-  ponteira: 11.95,
-  pvc_guia: 5.19,
-  borracha_soleira: 8.50,
-  pintura_branco_liso: 45.00,
-  pintura_preta_fosco: 52.00,
-  pintura_cinza_texturizado: 58.00,
-  pintura_cor_especial: 65.00,
-  motor_200kg: 746.75,
-  motor_300kg: 762.64,
-  motor_400kg: 935.53,
-  motor_500kg: 1020.90,
-  motor_800kg: 1560.00,
-  motor_1000kg: 2811.69,
-  motor_1500kg: 5375.35,
-  controle_remoto: 89.90,
-  central_comando: 180.50,
-  mao_de_obra_padrao: 800.00,
-  portinhola: 883.84,
-  alcapao: 649.94,
-};
 
 // ===========================
 // MÓDULO 8 — REGRAS INDUSTRIAIS (helpers puros)
@@ -341,7 +308,6 @@ function calcGuiasMetrosLineares(qtd: number, par: boolean, comprimentoM: number
  *  - vao_guias:       vão + guia_esq + guia_dir - 0,02 (com trava: -0,03 nas lâminas)
  *  - entre_paredes:   desconto 0,07 (com trava: lâminas -0,08)
  */
-type TipoInstalacao = "entre_testeiras" | "vao_1guia" | "vao_guias" | "entre_paredes";
 function calcMedidaCorte(
   vaoLivre: number,
   instalacao: TipoInstalacao,
@@ -383,8 +349,6 @@ function calcMedidaCorte(
     laminas: round(base + descLam),
   };
 }
-const POTENCIAS_AC = [200, 300, 400, 500, 800, 1000, 1500];
-const POTENCIAS_DC = [200, 300, 400, 500, 800];
 function validarMotor(m: { tipo?: string; ac_dc?: string; potencia?: number }): { ok: boolean; faltando: string[] } {
   const faltando: string[] = [];
   if (!m.tipo || !["avulso", "motor_testeiras", "kit_automatizador"].includes(m.tipo)) faltando.push("tipo (avulso, motor+testeiras ou kit automatizador)");
@@ -1228,7 +1192,6 @@ async function chamarIA(messages: any[], options: { tools?: any[] | null; temper
 // Conversa — DB
 // ===========================
 // Janela de inatividade: após 3h sem mensagem, considera "nova sessão" e re-saúda
-const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
 
 function estadoInicialConversa(telefone: string, nome?: string) {
   return {
@@ -1333,8 +1296,6 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
 // ===========================
 // FRETE — Cálculo por CEP (Haversine a partir da Eletroportas em Salvador-BA)
 // ===========================
-const COMPANY_LAT = -12.8933071;
-const COMPANY_LNG = -38.3582854;
 
 function getDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
@@ -1484,140 +1445,6 @@ async function salvarMensagem(conversation_id: string, role: string, content: st
   }
 }
 
-function inferirTipoClienteTexto(texto: string): "porta_instalada" | "revenda" | null {
-  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (/\b(serralheiro|serralheria|revenda|revender|revendedor|fornecimento|sem instalacao)\b/.test(t)) return "revenda";
-  if (/\b(cliente\s*final|consumidor\s*final|consumidor|instalada|instalar|instalacao|com instalacao|porta instalada)\b/.test(t)) return "porta_instalada";
-  return null;
-}
-
-function inferirMedidasTexto(texto: string): { largura: number; altura: number } | null {
-  const t = (texto || "").toLowerCase().replace(/,/g, ".");
-  const match = t.match(/(\d+(?:\.\d+)?)\s*(?:x|×|por|\/|-)\s*(\d+(?:\.\d+)?)/i);
-  if (!match) return null;
-  const largura = Number(match[1]);
-  const altura = Number(match[2]);
-  if (!Number.isFinite(largura) || !Number.isFinite(altura) || largura <= 0 || altura <= 0 || largura > 20 || altura > 20) return null;
-  return { largura, altura };
-}
-
-function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo" | null {
-  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-  if (!t) return null;
-  // Match prefixes/typos comuns: "oblong", "oblong.", "transv", "fech", etc.
-  if (/(^|\s)(1|fechad\w*|lis[ao]|meia\s*cana)(\s|$|[.,!?])/.test(t)) return "fechado";
-  if (/(^|\s)(2|transv\w*|visor\w*|visao|visores)(\s|$|[.,!?])/.test(t)) return "transvision";
-  if (/(^|\s)(3|oblong\w*|oblog\w*|perfurad\w*|perfurac\w*)(\s|$|[.,!?])/.test(t)) return "oblongo";
-  return null;
-}
-
-function inferirAdicionaisTexto(texto: string, permitirNegacaoGenerica = false): { portinhola: boolean; alcapao: boolean } | null {
-  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (!t.trim()) return null;
-
-  const negacaoExplicita = /\b(nenhum|nenhuma)\b/.test(t)
-    || /\b(sem|nao quero|não quero|dispenso|dispensar)\b.*\b(portinhola|alcapao|alcapão|alcapa|adicionais?)\b/.test(t);
-  const negacaoGenerica = permitirNegacaoGenerica && /\b(nao|não|sem|dispenso|dispensa|obrigado|obrigada)\b/.test(t);
-  const querNenhum = (negacaoExplicita || negacaoGenerica)
-    && !/\b(portinhola|alcapao|alcapão|alcapa|os dois|ambos|duas|dois)\b/.test(t);
-  if (querNenhum) return { portinhola: false, alcapao: false };
-
-  const ambos = /\b(os dois|ambos|duas|dois|todos|todas)\b/.test(t);
-  const negaPortinhola = /\b(sem|nao|dispenso|recuso)\s+(a\s+)?portinhola\b/.test(t);
-  const negaAlcapao = /\b(sem|nao|dispenso|recuso)\s+(o\s+)?(alcapao|alcapa)\b/.test(t);
-  const portinhola = (ambos || /\b(portinhola|porta de acesso)\b/.test(t)) && !negaPortinhola;
-  const alcapao = (ambos || /\b(alcapao|alcapa)\b/.test(t)) && !negaAlcapao;
-
-  if (portinhola || alcapao) return { portinhola, alcapao };
-  return null;
-}
-
-function inferirPinturaTexto(texto: string): { quer_pintura: boolean; tipo_pintura?: string } | null {
-  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (!t.trim()) return null;
-  // negação clara / sinônimos de "sem pintura" → deve vir ANTES das cores
-  // (evita que "natural" ou "sem cor" sejam mal interpretados)
-  const negacaoPintura = /\b(nao|sem pintura|sem pint|sem cor|sem tinta|nao quero|nao precisa|nao precis|dispens|negativo|nada|natural|galvanizad[ao]|cru|sem acabamento|nenhuma|nenhum)\b/;
-  const afirmacaoPintura = /\b(sim|quero|pode|incluir|coloca|pinta|pintad[ao])\b/;
-  if (negacaoPintura.test(t) && !afirmacaoPintura.test(t)) {
-    return { quer_pintura: false };
-  }
-  // cores explícitas → quer pintura
-  if (/\bbranc(o|a)\b/.test(t)) return { quer_pintura: true, tipo_pintura: "branco_liso" };
-  if (/\bpret(o|a)\b/.test(t)) return { quer_pintura: true, tipo_pintura: "preta_fosco" };
-  if (/\bcinza\b/.test(t)) return { quer_pintura: true, tipo_pintura: "cinza_texturizado" };
-  if (/\b(especial|ral)\b/.test(t)) return { quer_pintura: true, tipo_pintura: "cor_especial" };
-  // afirmação sem cor
-  if (afirmacaoPintura.test(t) && !/\bnao\b/.test(t)) {
-    return { quer_pintura: true };
-  }
-  return null;
-}
-
-function inferirCepTexto(texto: string): string | null {
-  const match = (texto || "").match(/\b\d{5}-?\d{3}\b/);
-  return match ? match[0].replace(/\D/g, "") : null;
-}
-
-function inferirEntregaTexto(texto: string): { quer_entrega: boolean } | null {
-  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (!t.trim()) return null;
-  // Cliente quer BUSCAR/RETIRAR (sem entrega)
-  if (/\b(retirar|retiro|retirada|busc(o|ar|amos)|pego|pegar|vou\s+ai|vou\s+pegar|passo\s+(ai|la|para)\s+(pegar|buscar)|na\s+loja|no\s+local\s+de\s+voces|prefiro\s+(retirar|buscar|pegar)|sem\s+entrega|nao\s+precisa\s+entreg)\b/.test(t)) {
-    return { quer_entrega: false };
-  }
-  // Cliente quer ENTREGA
-  if (/\b(entreg(a|ar|am|uem|ue|uar)|pode\s+entregar|quero\s+entrega|me\s+entreguem|enviem|envio|mandem|manda(r)?|frete|deliver(y)?)\b/.test(t)) {
-    return { quer_entrega: true };
-  }
-  return null;
-}
-
-function inferirSubtipoRevendaTexto(texto: string): "kit" | "pecas" | null {
-  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (!t.trim()) return null;
-  // "porta de 4x5 com lâmina oblongo" é intenção clara de KIT, mesmo se a conversa anterior era peças avulsas.
-  if (inferirMedidasTexto(texto) && /\b(porta|kit|lamina|lâmina)\b/.test(t)) return "kit";
-  if (/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "kit";
-  if (/\b(pec[aá]s?\s*avuls(a|as)|avuls(a|as|o)|somente\s*pec|so\s*pec|apenas\s*pec|peca|pecas|pe[cç]a)\b/.test(t)) return "pecas";
-  // Se o cliente já informou item + quantidade (ex: "queria orçar 5 motores de 200"),
-  // isso é intenção clara de PEÇAS AVULSAS. Não repetir a pergunta KIT/PEÇAS.
-  if (inferirPecasAvulsasTexto(texto).length > 0 && !/\b(kit|porta\s*completa|porta\s*inteira|kit\s*completo|completo|porta\s*toda)\b/.test(t)) return "pecas";
-  return null;
-}
-
-function inferirPecasAvulsasTexto(texto: string): any[] {
-  let entrada = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (!entrada.trim()) return [];
-  // Se a mensagem é claramente identificação (CPF/CNPJ/RG), nunca extrair peças dela
-  if (/\b(cpf|cnpj|rg|inscricao|inscrição)\b/.test(entrada)) return [];
-  // Remove sequências de 11+ dígitos (CPF/CNPJ/telefone) para não virarem "quantidade"
-  entrada = entrada.replace(/\b\d{11,}\b/g, " ");
-  const numerosExtenso: Record<string, string> = {
-    "uma": "1", "um": "1", "duas": "2", "dois": "2", "tres": "3", "quatro": "4",
-    "cinco": "5", "seis": "6", "sete": "7", "oito": "8", "nove": "9", "dez": "10"
-  };
-  entrada = entrada.replace(/\b(uma|um|duas|dois|tres|quatro|cinco|seis|sete|oito|nove|dez)\b/g, (m) => numerosExtenso[m] || m);
-  const partes = entrada.split(/(?:,|;|\s+e\s+|\s*\+\s*|\n)/).map((p) => p.trim()).filter(Boolean);
-  const itens: any[] = [];
-  // Whitelist de produtos conhecidos — evita capturar lixo como "cpf"
-  const PRODUTOS_VALIDOS = /\b(motor|automatizador|controle|central|guia|lamina|lâmina|portinhola|alcapao|alçapão|fechadura|trava|eixo|mola|cabo|kit|porta)\b/;
-  for (const parte of partes) {
-    const inicio = parte.match(/(?:^|\b)(\d{1,4}(?:[,.]\d+)?)\s*(?:x\s*|un\s*|unidades?\s*|pcs?\s*)?(.+?)\s*$/i);
-    const fim = inicio ? null : parte.match(/(.+?)\s+(\d{1,4}(?:[,.]\d+)?)\s*(?:un|unidades?|pcs?)?\s*$/i);
-    if (!inicio && !fim) continue;
-    const quantidade = Number(String(inicio ? inicio[1] : fim?.[2]).replace(",", "."));
-    let nome = String(inicio ? inicio[2] : fim?.[1] || "").replace(/\b(de|da|do|para|com|tipo|modelo)\b/g, " ").replace(/\s+/g, " ").trim();
-    nome = nome.replace(/^(m|mt|metro|metros)\s+/g, "").trim();
-    nome = nome.replace(/\bmotores\b/g, "motor").replace(/\bcontroles\b/g, "controle").replace(/\bcentrais\b/g, "central").replace(/\bguias\b/g, "guia");
-    nome = nome.replace(/\b(motor|automatizador)\s+(\d{2,4})(?!\s*kg)\b/g, "$1 $2kg");
-    if (!Number.isFinite(quantidade) || quantidade <= 0 || quantidade > 9999) continue;
-    if (nome.length < 3) continue;
-    if (!PRODUTOS_VALIDOS.test(nome)) continue;
-    itens.push({ produto_nome: nome, quantidade });
-  }
-  return itens;
-}
 
 function aplicarInferenciasEmEstado(base: any, textos: string[]) {
   const estado = { ...(base || {}) };
@@ -2640,46 +2467,7 @@ async function carregarHistorico(conversation_id: string) {
 // é a próxima pergunta. A resposta sai como UMA mensagem com
 // resumo parcial + pergunta única.
 
-type CfgItemTipo = "kit_porta" | "motor" | "guia" | "lamina" | "soleira" | "eixo" | "controle" | "central" | "trava_lamina" | "portinhola" | "alcapao" | "pintura" | "acessorio";
-interface CfgLinha { sku: string; descricao: string; und: string; qtd: number; valor_unit: number; total: number; sob_consulta?: boolean }
-interface CfgItem {
-  id: string;
-  tipo: CfgItemTipo;
-  config: Record<string, any>;
-  explosao: CfgLinha[];
-  subtotal: number;
-}
-interface CfgPedido {
-  itens: CfgItem[];
-  total: number;
-  status: "em_andamento" | "aguardando_confirmacao" | "finalizado";
-  sob_consulta?: boolean;
-  aguardando_retomada?: boolean;
-}
 
-const PEDIDO_VAZIO: CfgPedido = { itens: [], total: 0, status: "em_andamento" };
-
-function novoId() { return crypto.randomUUID().slice(0, 8); }
-
-const CFG_REGRAS_TECNICAS = `Regras técnicas Eletroportas:
-- Configurador técnico + carrinho comercial. Pedido livre OU guiado. NUNCA reinicie o fluxo ao adicionar/alterar itens.
-- Modelos de lâmina: Fechada, Transvision, Oblongo. Padrão = perfil baixo. Perfil alto somente se solicitado.
-- Lâmina parcial (combinação): cliente pode pedir "1m de transvision" misturado no kit. Quantidade da faixa = altura ÷ 0,085. Restante fica no modelo principal. Cada modelo vira linha separada no orçamento.
-- Tipos de instalação (sempre 1 dos 4):
-  • entre_testeiras: desconto 0,02 no eixo/soleira/lâminas (com trava: lâminas -0,03).
-  • vao_1guia: vão + profundidade da guia (mm/1000) - 0,02 (com trava: lâminas -0,03).
-  • vao_guias: vão + guia_esq + guia_dir - 0,02 (com trava: lâminas -0,03).
-  • entre_paredes: desconto 0,07 (com trava: lâminas -0,08).
-- Guias válidas: 50, 60, 70, 100 mm (80 e 90 não existem mais). Auto: largura ≤4m→50, ≤7m→70, >7m→100.
-- Eixo: até 6m → 4.5"; motor 500 → 5.5"; motor ≥700 → 6.5" mínimo.
-- Rolo: eixo 4.5/5.5" → 0,60m; eixos maiores → 0,75m.
-- Motor (auto): peso = m² × 12kg × (1 + margem). Margem 35% padrão; 70% se largura≥9 OU altura≥4. Escolha: ≤200→200, ≤300→300, ≤400→400, ≤500→500, >500→800. Motores AC 200/300/400/500/800/1000/1500. DC 200/300/400/500/800.
-- Kit automatizador = motor + testeiras + central + 2 controles. Motor+testeiras = sem central. Avulso = só motor.
-- Portinhola VILD/VILE: perguntar se *cortada* (com lâminas cortadas) ou *inteira* p/ ajuste local. CENTRO sempre cortada.
-- Portinhola cortada: largura final = largura porta - (0,64 + profundidade da guia em m). 18 lâminas perfil baixo / 19 perfil alto. Separa soleira e lâminas no orçamento.
-- Portinhola e alçapão NUNCA juntos na mesma porta.
-- O CLIENTE NÃO VÊ: fórmulas, peso, regras, cálculos internos. Mostre apenas resultado final em metros e produtos finais.
-- Não invente preço. Faltou no estoque → marca como sob consulta e segue.`;
 
 function cfgPedidoLeve(pedido: CfgPedido) {
   return {
@@ -2689,13 +2477,6 @@ function cfgPedidoLeve(pedido: CfgPedido) {
   };
 }
 
-function inferirRespostaPortinholaCorte(textoNormalizado: string): boolean | undefined {
-  const t = String(textoNormalizado || "").trim();
-  if (!t) return undefined;
-  if (/\b(sem\s+cortar|inteiras?|ajuste\s+local|ajustar\s+no\s+local)\b/.test(t)) return false;
-  if (/\b(cortadas?|ja\s+cortadas?|prontas?|cortar|corta)\b/.test(t)) return true;
-  return undefined;
-}
 
 function cfgFallbackInterpretar(mensagem: string): any[] {
   const original = mensagem || "";
@@ -3149,13 +2930,6 @@ function escolherMotorPorPeso(pesoKg: number): number {
  * Peso da porta = largura · (altura + rolo) · 12 kg/m².
  * Testa 4.5", 5.5", 6", 6.5", 8.5" e retorna o MENOR aprovado.
  */
-const EIXOS_TABELA = [
-  { pol: 4.5, D: 114.3, e: 2.00 },
-  { pol: 5.5, D: 139.7, e: 2.65 },
-  { pol: 6.0, D: 152.4, e: 3.00 },
-  { pol: 6.5, D: 165.1, e: 3.00 },
-  { pol: 8.5, D: 215.9, e: 3.75 },
-] as const;
 
 function _roloPorPol(pol: number): number {
   return pol <= 5.5 ? 0.60 : 0.75;
@@ -3241,7 +3015,6 @@ function escolherGuiaAuto(largura: number): 50 | 70 | 100 {
   return 100;
 }
 
-const GUIAS_VALIDAS = [50, 60, 70, 100] as const;
 
 /** @deprecated mantido por compatibilidade — usar calcularEixoEstrutural. */
 function eixoPorAltura(alturaTotal: number): number {
