@@ -2558,11 +2558,17 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
 
   const pot = t.match(/\b(200|300|400|500|800|1000|1500)\s*kg\b/);
   const acdc = t.match(/\b(AC|DC)\b/i)?.[1]?.toUpperCase();
-  if ((pot || acdc) && !/\bavulso\b/.test(t)) patch.motor = { ...(patch.motor || {}), ...(pot ? { potencia: Number(pot[1]) } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
+  // Validação: DC só existe até 800 kg. Combinação inválida → alerta e ignora a potência.
+  const potN = pot ? Number(pot[1]) : null;
+  if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
+    intencoes.push({ acao: "duvida", texto: `Motor DC ${potN} kg não existe. Capacidades DC disponíveis: ${POTENCIAS_DC.join("/")} kg. Deseja AC ${potN} kg ou DC com outra capacidade?` });
+  } else if ((pot || acdc) && !/\bavulso\b/.test(t)) {
+    patch.motor = { ...(patch.motor || {}), ...(potN ? { potencia: potN } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
+  }
 
-  // Kit do motor
+  // Formato de venda do motor (avulso | motor+testeiras | kit automatizador)
   if (/\bkit\s*automatizador\b/.test(t)) patch.kit_motor = "kit_automatizador";
-  else if (/\bmotor\s*\+?\s*testeiras?\b/.test(t)) patch.kit_motor = "motor_testeiras";
+  else if (/\bmotor\s*\+?\s*testeiras?\b|\bcom\s+testeiras?\b/.test(t)) patch.kit_motor = "motor_testeiras";
   else if (/\b(automatizador|motor)\s+avulso\b/.test(t)) patch.kit_motor = "avulso";
 
   // Modelo de lâmina (Fechada/Transvision/Oblongo + legado meia cana)
