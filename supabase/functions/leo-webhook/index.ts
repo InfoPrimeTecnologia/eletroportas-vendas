@@ -2684,6 +2684,24 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   else if (/\bv[ãa]o\s*\+\s*1\s*guia\b|\bvao\s*\+\s*1\s*guia\b|\b1\s*guia\b/.test(t)) patch.instalacao = "vao_1guia";
   else if (/\bv[ãa]o\s*\+\s*guias?\b|\bvao\s*\+\s*guias?\b|\b2\s*guias?\b|\bduas\s*guias?\b/.test(t)) patch.instalacao = "vao_guias";
   if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
+  else if (/\bsem\s+trava\b|\bn[ãa]o\s+(?:quero|precis\w*)\s+trava\b|\bdispens\w+\s+trava\b/.test(t)) patch.trava_lamina = false;
+
+  // Pintura (sim/não) reaproveitando inferirPinturaTexto
+  try {
+    const pInf = inferirPinturaTexto(texto);
+    if (pInf) {
+      patch.quer_pintura = pInf.quer_pintura;
+      if (pInf.quer_pintura) {
+        const mapCor: Record<string, string> = { branco_liso: "branco", preta_fosco: "preto", cinza_texturizado: "cinza" };
+        if (pInf.tipo_pintura && mapCor[pInf.tipo_pintura]) {
+          patch.lamina = { ...(patch.lamina || {}), cor: mapCor[pInf.tipo_pintura] };
+        }
+        patch.pintura = "eletrostatica";
+      } else {
+        patch.pintura = null;
+      }
+    }
+  } catch { /* noop */ }
 
   // Trocar guia para X
   const trocaGuia = t.match(/\b(trocar|alterar|mudar)\s+guia\s+(?:para|pra|p\/)\s*(50|60|70|100)\b/);
