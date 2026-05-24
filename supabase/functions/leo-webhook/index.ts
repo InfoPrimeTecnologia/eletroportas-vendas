@@ -3511,6 +3511,11 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       }
     } else if (it.tipo === "motor") {
       const c = it.config || {};
+      const validade = validarCapacidadeMotorConfig(c);
+      if (!validade.ok) {
+        c.potencia = undefined;
+        return validade.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.";
+      }
       if (!c.ac_dc) return "Esse motor é *AC* ou *DC*?\n• *AC* — 200/300/400/500/800/1000/1500 kg\n• *DC* — 200/300/400/500/800 kg";
       const lista = c.ac_dc === "DC" ? POTENCIAS_DC : POTENCIAS_AC;
       if (c.potencia && !lista.includes(Number(c.potencia))) {
