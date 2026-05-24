@@ -2558,9 +2558,32 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
 
   const pot = t.match(/\b(200|300|400|500|800|1000|1500)\s*kg\b/);
   const acdc = t.match(/\b(AC|DC)\b/i)?.[1]?.toUpperCase();
-  // Validação: DC só existe até 800 kg. Combinação inválida → alerta e ignora a potência.
   const potN = pot ? Number(pot[1]) : null;
-  if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
+
+  // Validação genérica: qualquer "<n>kg" mencionado com motor/automatizador precisa existir
+  // no cadastro. Ex.: "motor 20kg" → não é válido, sugerir 200kg e NÃO criar item.
+  const kgGenericoMatch = t.match(/\b(\d{1,4})\s*kg\b/);
+  const mencionaMotor = /\b(motor|automatizador|kit)\b/.test(t);
+  const capacidadesValidas = Array.from(new Set([...POTENCIAS_AC, ...POTENCIAS_DC])).sort((a, b) => a - b);
+  let kgInvalido: number | null = null;
+  if (kgGenericoMatch && mencionaMotor) {
+    const v = Number(kgGenericoMatch[1]);
+    if (!capacidadesValidas.includes(v)) kgInvalido = v;
+  }
+
+  if (kgInvalido !== null) {
+    const sugestao = capacidadesValidas.reduce((a, b) => Math.abs(b - kgInvalido!) < Math.abs(a - kgInvalido!) ? b : a);
+    intencoes.push({
+      acao: "duvida",
+      texto:
+        `Identifiquei um possível erro 👍\n\n` +
+        `• Motor ${kgInvalido} kg não corresponde a uma capacidade cadastrada.\n\n` +
+        `Capacidades disponíveis:\n\n` +
+        `*AC:* ${POTENCIAS_AC.join(" / ")} kg\n` +
+        `*DC:* ${POTENCIAS_DC.join(" / ")} kg\n\n` +
+        `👉 Deseja corrigir para *${sugestao} kg*?`,
+    });
+  } else if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
     intencoes.push({ acao: "duvida", texto: `Motor DC ${potN} kg não existe. Capacidades DC disponíveis: ${POTENCIAS_DC.join("/")} kg. Deseja AC ${potN} kg ou DC com outra capacidade?` });
   } else if ((pot || acdc) && !/\bavulso\b/.test(t)) {
     patch.motor = { ...(patch.motor || {}), ...(potN ? { potencia: potN } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
@@ -2646,7 +2669,8 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   if (/\bmotor\s+avulso\b|\bavulso\b.*\bmotor\b|\bmotor\s*\+?\s*testeiras?\b|\bkit\s*automatizador\b/.test(t)) {
     const q = t.match(/(\d+)\s*motores?/);
     const invalidoDC = potN && acdc === "DC" && !POTENCIAS_DC.includes(potN);
-    if (!invalidoDC) {
+    // Não criar item se capacidade mencionada for inválida (ex.: "motor 20kg").
+    if (!invalidoDC && kgInvalido === null) {
       const kitMotor = /\bkit\s*automatizador\b/.test(t) ? "kit_automatizador"
         : /\bmotor\s*\+?\s*testeiras?\b|\bcom\s+testeiras?\b/.test(t) ? "motor_testeiras"
         : "avulso";
