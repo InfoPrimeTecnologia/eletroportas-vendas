@@ -3617,11 +3617,14 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
       if (c.central === true || (c.central !== false && c?.motor?.ac_dc)) linhas.push(`   Central de controle inclusa`);
       if ((Number(c.controles) || 0) > 0) linhas.push(`   Controles: ${c.controles}`);
     } else if (it.tipo === "motor") {
-      linhas.push(`${n++}. Motor`);
-      if (c.ac_dc) linhas.push(`   • Tipo: ${c.ac_dc}`);
-      if (c.potencia) linhas.push(`   • Capacidade: ${c.potencia}kg`);
+      const km = c.kit_motor || "avulso";
+      const fmt = km === "kit_automatizador" ? "Kit automatizador" : km === "motor_testeiras" ? "Motor + testeiras" : "Motor avulso";
+      linhas.push(`${n++}. ${fmt}${c.ac_dc ? " " + c.ac_dc : ""}${c.potencia ? " " + c.potencia + " kg" : ""}`);
+      if (!c.ac_dc) linhas.push(`   • Tipo: _(AC/DC a definir)_`);
+      if (!c.potencia) linhas.push(`   • Capacidade: _(a definir)_`);
       linhas.push(`   • Quantidade: ${c.qtd || 1}`);
-    } else if (it.tipo === "guia") {
+      if (km === "kit_automatizador") linhas.push(`   • Inclui: motor, testeiras, central e 2 controles`);
+      else if (km === "motor_testeiras") linhas.push(`   • Inclui: motor e testeiras`);
       const isPar = !!c.qtd_pares || c.tipo_unidade === "par";
       const qtdN = Number(c.qtd_pares || c.qtd_unidades || c.qtd || 0);
       const comp = Number(c.comprimento_m || 0);
