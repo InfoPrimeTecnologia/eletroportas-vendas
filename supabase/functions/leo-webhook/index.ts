@@ -2912,7 +2912,15 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
     } else if (acao === "update_item") {
       const it = acharItem(p, ix.ref);
       if (it) {
-        it.config = mergeDeep(it.config, ix.patch || {});
+        const novaConfig = mergeDeep(it.config, ix.patch || {});
+        if (it.tipo === "motor") {
+          const validacao = validarCapacidadeMotorConfig(novaConfig);
+          if (!validacao.ok) {
+            duvidas.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+            continue;
+          }
+        }
+        it.config = novaConfig;
         if (it.tipo === "kit_porta") normalizarKitConfig(it.config);
       }
     } else if (acao === "remove_item") {
