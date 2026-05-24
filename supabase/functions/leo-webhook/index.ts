@@ -3707,16 +3707,24 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
         if (!f?.altura_m || !f?.modelo) continue;
         linhas.push(`   Faixa parcial: ${Number(f.altura_m).toFixed(2).replace(".", ",")} m em lâmina ${String(f.modelo).replace("_", " ")}`);
       }
-      if (c?.lamina?.cor) linhas.push(`   Cor: ${c.lamina.cor}`);
+      // Pintura: linha única (sem repetir cor). "Pintura <cor>" quando há pintura,
+      // "Sem pintura" quando o cliente dispensou.
+      if (c.quer_pintura === true) {
+        const corP = c?.lamina?.cor ? String(c.lamina.cor).replace(/_/g, " ") : null;
+        linhas.push(`   Pintura${corP ? " " + corP : " eletrostática"}`);
+      } else if (c.quer_pintura === false) {
+        linhas.push(`   Sem pintura`);
+        if (c?.lamina?.cor) linhas.push(`   Cor da lâmina: ${String(c.lamina.cor).replace(/_/g, " ")}`);
+      } else if (c?.lamina?.cor) {
+        linhas.push(`   Cor da lâmina: ${String(c.lamina.cor).replace(/_/g, " ")}`);
+      }
       if (c.guia_mm) linhas.push(`   Guia: ${c.guia_mm}mm`);
       if (c.portinhola) {
         const portConf = typeof c.portinhola === "string" && ["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase());
         linhas.push(`   Portinhola: ${portConf ? c.portinhola.toUpperCase() : "_(posição a definir)_"}`);
       }
       if (c.alcapao) linhas.push(`   Alçapão: sim`);
-      if (c.quer_pintura === true) linhas.push(`   Pintura eletrostática: sim`);
-      else if (c.quer_pintura === false) linhas.push(`   Pintura eletrostática: não`);
-      if (c.central !== false && c?.motor?.potencia) linhas.push(`   Central de controle inclusa`);
+      if (c.central === true || (c.central !== false && c?.motor?.ac_dc)) linhas.push(`   Central de controle inclusa`);
       if ((Number(c.controles) || 0) > 0) linhas.push(`   Controles: ${c.controles}`);
     } else if (it.tipo === "motor") {
       linhas.push(`${n++}. Motor`);
