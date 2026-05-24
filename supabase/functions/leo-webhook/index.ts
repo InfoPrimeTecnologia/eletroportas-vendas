@@ -3294,9 +3294,28 @@ async function explodirItem(item: CfgItem): Promise<CfgLinha[]> {
   if (item.tipo === "motor") {
     const pot = Number(cfg.potencia);
     if (!pot) return [];
-    const p = await precoEstoque(`motor ${pot}kg ${cfg.ac_dc || "AC"}`);
+    const acdcM = cfg.ac_dc || "AC";
+    const kitM = cfg.kit_motor || "avulso";
+    const p = await precoEstoque(`motor ${pot}kg ${acdcM}`);
     const qtd = Number(cfg.qtd) || 1;
-    return [{ sku: p?.sku || `MOTOR-${pot}KG`, descricao: p?.nome || `Motor ${cfg.ac_dc || "AC"} ${pot}kg`, und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+    const linhasMot: CfgLinha[] = [];
+    const baseDesc = p?.nome || `Motor ${acdcM} ${pot} kg`;
+    const descPrincipal = kitM === "kit_automatizador"
+      ? `Kit automatizador ${acdcM} ${pot} kg (motor, testeiras, central e 2 controles)`
+      : kitM === "motor_testeiras" ? `${baseDesc} com testeiras`
+      : `${baseDesc} avulso`;
+    linhasMot.push({ sku: p?.sku || `MOTOR-${pot}KG`, descricao: descPrincipal, und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p });
+    if (kitM === "kit_automatizador" || kitM === "motor_testeiras") {
+      const pTest = await precoEstoque("testeira");
+      linhasMot.push({ sku: pTest?.sku || "TESTEIRA", descricao: pTest?.nome || "Testeiras (par)", und: "PAR", qtd, valor_unit: pTest?.preco || 0, total: (pTest?.preco || 0) * qtd, sob_consulta: !pTest });
+    }
+    if (kitM === "kit_automatizador") {
+      const pCen = await precoEstoque("central de comando");
+      linhasMot.push({ sku: pCen?.sku || "CENTRAL", descricao: pCen?.nome || "Central de comando", und: "UN", qtd, valor_unit: pCen?.preco || 0, total: (pCen?.preco || 0) * qtd, sob_consulta: !pCen });
+      const pCtrl = await precoEstoque("controle remoto");
+      linhasMot.push({ sku: pCtrl?.sku || "CONTROLE", descricao: pCtrl?.nome || "Controle remoto", und: "UN", qtd: 2 * qtd, valor_unit: pCtrl?.preco || 0, total: (pCtrl?.preco || 0) * 2 * qtd, sob_consulta: !pCtrl });
+    }
+    return linhasMot;
   }
   if (item.tipo === "guia") {
     const mm = Number(cfg.mm);
