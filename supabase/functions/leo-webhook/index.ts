@@ -2736,6 +2736,14 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   if (/\balcapao\b/.test(t) && !port) patch.alcapao = true;
   if (/\bpintura\s+eletrostatica\b|\bcom\s+pintura\b/.test(t) && !/sem\s+pintura/.test(t)) patch.pintura = "eletrostatica";
 
+  // Medida de corte: manual vs automática
+  if (/\b(informar|manual|manualmente|eu\s+(?:que\s+)?(?:vou\s+)?(?:passo|informo|coloco)|tenho\s+(?:as\s+)?medidas|j[áa]\s+tenho\s+(?:as\s+)?medidas)\b/.test(t)
+      && /\b(corte|medida)/.test(t)) {
+    patch.medida_corte_modo = "manual";
+  } else if (/\b(autom[áa]tic\w*|calcul\w*\s+(?:auto|sozinho|pra\s+mim|por\s+mim)|sistema\s+calcul\w*|voc[êe]\s+calcul\w*|calcula\s+(?:tudo|por\s+mim))\b/.test(t)) {
+    patch.medida_corte_modo = "auto";
+  }
+
   // Avulsos
   const ctrl = t.match(/(?:\+\s*)?(\d+)\s*controles?\b/);
   if (ctrl) intencoes.push({ acao: "add_item", tipo: "controle", config: { qtd: Number(ctrl[1]) } });
