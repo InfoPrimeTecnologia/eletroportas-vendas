@@ -2905,6 +2905,9 @@ REGRAS:
   • MOTOR: capacidade (potencia) + modelo (kit_motor: avulso | motor_testeiras | kit_automatizador) + AC/DC.
   Se faltar qualquer um, apenas registre o que o cliente disse — o sistema vai perguntar o restante. Não tente adivinhar.
 - "20 lâminas fechadas" → add_item lamina {qtd:20, modelo:"fechado"} (SEM tamanho — o sistema perguntará).
+- CORES NÃO SÃO PINTURA: "porta branca", "cor branca", "lâmina preta" → APENAS lamina.cor. NUNCA defina pintura:"eletrostatica" nem quer_pintura:true só por causa de cor.
+- Pintura só é confirmada quando o cliente diz "pintura eletrostática", "com pintura", "pintar de X" ou similar. "Sem pintura" / "não quero pintura" / resposta isolada "Não" enquanto pintura está pendente → update_item kit_porta patch {quer_pintura:false, pintura:false}.
+- FAIXA PARCIAL DE LÂMINA: "porta 10x4 lâmina fechada com 1m de transvision" = UM ÚNICO kit_porta com lamina.modelo:"fechado" E lamina.combinacao:[{modelo:"transvision",altura_m:1}]. NUNCA crie add_item lamina avulso para a faixa parcial.
 - Devolva APENAS JSON válido, sem explicação.
 
 PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
