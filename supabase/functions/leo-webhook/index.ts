@@ -3625,6 +3625,7 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
       linhas.push(`   • Quantidade: ${c.qtd || 1}`);
       if (km === "kit_automatizador") linhas.push(`   • Inclui: motor, testeiras, central e 2 controles`);
       else if (km === "motor_testeiras") linhas.push(`   • Inclui: motor e testeiras`);
+    } else if (it.tipo === "guia") {
       const isPar = !!c.qtd_pares || c.tipo_unidade === "par";
       const qtdN = Number(c.qtd_pares || c.qtd_unidades || c.qtd || 0);
       const comp = Number(c.comprimento_m || 0);
