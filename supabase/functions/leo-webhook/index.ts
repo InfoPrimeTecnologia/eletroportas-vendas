@@ -3224,7 +3224,7 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
     });
   }
   for (const faixa of combinacao) {
-    const qtdF = calcLaminasParcial(faixa.altura_m);
+    const qtdF = calcLaminasParcial(faixa.altura_m, perfil);
     if (qtdF <= 0) continue;
     const pF = await precoEstoque(`lamina ${String(faixa.modelo).replace("_", " ")} ${perfil}${cor}`);
     linhas.push({
