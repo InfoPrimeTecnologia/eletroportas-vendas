@@ -2558,11 +2558,17 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
 
   const pot = t.match(/\b(200|300|400|500|800|1000|1500)\s*kg\b/);
   const acdc = t.match(/\b(AC|DC)\b/i)?.[1]?.toUpperCase();
-  if ((pot || acdc) && !/\bavulso\b/.test(t)) patch.motor = { ...(patch.motor || {}), ...(pot ? { potencia: Number(pot[1]) } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
+  // Validação: DC só existe até 800 kg. Combinação inválida → alerta e ignora a potência.
+  const potN = pot ? Number(pot[1]) : null;
+  if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
+    intencoes.push({ acao: "duvida", texto: `Motor DC ${potN} kg não existe. Capacidades DC disponíveis: ${POTENCIAS_DC.join("/")} kg. Deseja AC ${potN} kg ou DC com outra capacidade?` });
+  } else if ((pot || acdc) && !/\bavulso\b/.test(t)) {
+    patch.motor = { ...(patch.motor || {}), ...(potN ? { potencia: potN } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
+  }
 
-  // Kit do motor
+  // Formato de venda do motor (avulso | motor+testeiras | kit automatizador)
   if (/\bkit\s*automatizador\b/.test(t)) patch.kit_motor = "kit_automatizador";
-  else if (/\bmotor\s*\+?\s*testeiras?\b/.test(t)) patch.kit_motor = "motor_testeiras";
+  else if (/\bmotor\s*\+?\s*testeiras?\b|\bcom\s+testeiras?\b/.test(t)) patch.kit_motor = "motor_testeiras";
   else if (/\b(automatizador|motor)\s+avulso\b/.test(t)) patch.kit_motor = "avulso";
 
   // Modelo de lâmina (Fechada/Transvision/Oblongo + legado meia cana)
@@ -2637,9 +2643,15 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
     }
   }
 
-  if (/\bmotor\s+avulso\b|\bavulso\b.*\bmotor\b/.test(t)) {
+  if (/\bmotor\s+avulso\b|\bavulso\b.*\bmotor\b|\bmotor\s*\+?\s*testeiras?\b|\bkit\s*automatizador\b/.test(t)) {
     const q = t.match(/(\d+)\s*motores?/);
-    intencoes.push({ acao: "add_item", tipo: "motor", config: { qtd: q ? Number(q[1]) : 1, ac_dc: acdc || "AC", potencia: pot ? Number(pot[1]) : undefined } });
+    const invalidoDC = potN && acdc === "DC" && !POTENCIAS_DC.includes(potN);
+    if (!invalidoDC) {
+      const kitMotor = /\bkit\s*automatizador\b/.test(t) ? "kit_automatizador"
+        : /\bmotor\s*\+?\s*testeiras?\b|\bcom\s+testeiras?\b/.test(t) ? "motor_testeiras"
+        : "avulso";
+      intencoes.push({ acao: "add_item", tipo: "motor", config: { qtd: q ? Number(q[1]) : 1, ac_dc: acdc || undefined, potencia: potN || undefined, kit_motor: kitMotor } });
+    }
   }
   if (/\bsoleiras?\s*avulsa?|avulsa?\s*soleira/.test(t)) {
     const q = t.match(/(\d+)\s*soleiras?/);
@@ -3144,11 +3156,20 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
 
   // Motor + (kit automatizador | motor+testeiras | avulso)
   const kitMotor = cfg?.kit_motor || "kit_automatizador";
+  const labelFormato: Record<string, string> = {
+    avulso: "avulso",
+    motor_testeiras: "com testeiras",
+    kit_automatizador: "kit automatizador",
+  };
   if (cfg?.motor !== false) {
     const pMot = await precoEstoque(`motor ${potencia}kg ${acdc}`);
+    const baseDesc = pMot?.nome || `Motor ${acdc} ${potencia} kg`;
+    const descMot = kitMotor === "kit_automatizador"
+      ? `Kit automatizador ${acdc} ${potencia} kg (motor, testeiras, central e 2 controles)`
+      : `${baseDesc} ${labelFormato[kitMotor] || ""}`.trim();
     linhas.push({
       sku: pMot?.sku || `MOTOR-${potencia}KG`,
-      descricao: pMot?.nome || `Motor ${acdc} ${potencia}kg`,
+      descricao: descMot,
       und: "UN", qtd: 1,
       valor_unit: pMot?.preco || 0,
       total: pMot?.preco || 0,
@@ -3273,9 +3294,28 @@ async function explodirItem(item: CfgItem): Promise<CfgLinha[]> {
   if (item.tipo === "motor") {
     const pot = Number(cfg.potencia);
     if (!pot) return [];
-    const p = await precoEstoque(`motor ${pot}kg ${cfg.ac_dc || "AC"}`);
+    const acdcM = cfg.ac_dc || "AC";
+    const kitM = cfg.kit_motor || "avulso";
+    const p = await precoEstoque(`motor ${pot}kg ${acdcM}`);
     const qtd = Number(cfg.qtd) || 1;
-    return [{ sku: p?.sku || `MOTOR-${pot}KG`, descricao: p?.nome || `Motor ${cfg.ac_dc || "AC"} ${pot}kg`, und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+    const linhasMot: CfgLinha[] = [];
+    const baseDesc = p?.nome || `Motor ${acdcM} ${pot} kg`;
+    const descPrincipal = kitM === "kit_automatizador"
+      ? `Kit automatizador ${acdcM} ${pot} kg (motor, testeiras, central e 2 controles)`
+      : kitM === "motor_testeiras" ? `${baseDesc} com testeiras`
+      : `${baseDesc} avulso`;
+    linhasMot.push({ sku: p?.sku || `MOTOR-${pot}KG`, descricao: descPrincipal, und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p });
+    if (kitM === "kit_automatizador" || kitM === "motor_testeiras") {
+      const pTest = await precoEstoque("testeira");
+      linhasMot.push({ sku: pTest?.sku || "TESTEIRA", descricao: pTest?.nome || "Testeiras (par)", und: "PAR", qtd, valor_unit: pTest?.preco || 0, total: (pTest?.preco || 0) * qtd, sob_consulta: !pTest });
+    }
+    if (kitM === "kit_automatizador") {
+      const pCen = await precoEstoque("central de comando");
+      linhasMot.push({ sku: pCen?.sku || "CENTRAL", descricao: pCen?.nome || "Central de comando", und: "UN", qtd, valor_unit: pCen?.preco || 0, total: (pCen?.preco || 0) * qtd, sob_consulta: !pCen });
+      const pCtrl = await precoEstoque("controle remoto");
+      linhasMot.push({ sku: pCtrl?.sku || "CONTROLE", descricao: pCtrl?.nome || "Controle remoto", und: "UN", qtd: 2 * qtd, valor_unit: pCtrl?.preco || 0, total: (pCtrl?.preco || 0) * 2 * qtd, sob_consulta: !pCtrl });
+    }
+    return linhasMot;
   }
   if (item.tipo === "guia") {
     const mm = Number(cfg.mm);
@@ -3425,11 +3465,16 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       }
     } else if (it.tipo === "motor") {
       const c = it.config || {};
-      if (!c.potencia) return "Esse motor é de quantos *kg*? (200/300/400/500/800/1500)";
-      if (!c.kit_motor && !c.modelo_motor) {
-        return "Qual o *modelo do motor*?\n• *avulso*\n• *motor + testeiras*\n• *kit automatizador*";
+      if (!c.ac_dc) return "Esse motor é *AC* ou *DC*?\n• *AC* — 200/300/400/500/800/1000/1500 kg\n• *DC* — 200/300/400/500/800 kg";
+      const lista = c.ac_dc === "DC" ? POTENCIAS_DC : POTENCIAS_AC;
+      if (c.potencia && !lista.includes(Number(c.potencia))) {
+        const inv = c.potencia; c.potencia = undefined;
+        return `Motor ${c.ac_dc} ${inv} kg não existe. Capacidades ${c.ac_dc}: ${lista.join("/")} kg. Qual deseja?`;
       }
-      if (!c.ac_dc) return "Esse motor é *AC* ou *DC*?";
+      if (!c.potencia) return `Qual a *capacidade* do motor ${c.ac_dc}? (${lista.join(" / ")} kg)`;
+      if (!c.kit_motor && !c.modelo_motor) {
+        return "Qual o *formato de venda*?\n• *Motor avulso* — somente o motor\n• *Motor + testeiras*\n• *Kit automatizador* — motor, testeiras, central e 2 controles";
+      }
     } else if (it.tipo === "guia") {
       const c = it.config || {};
       const qtd = c.qtd ?? c.qtd_pares ?? c.qtd_unidades;
@@ -3541,7 +3586,11 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
         };
         linhas.push(`   Instalação: ${labelInst[String(c.instalacao)] || String(c.instalacao).replace(/_/g, " ")}${c.trava_lamina ? " (com trava de lâminas)" : ""}`);
       }
-      if (c?.motor?.ac_dc) linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + "kg" : ""}`);
+      if (c?.motor?.ac_dc) {
+        const km = c.kit_motor || "kit_automatizador";
+        const fmt = km === "kit_automatizador" ? "kit automatizador" : km === "motor_testeiras" ? "com testeiras" : "avulso";
+        linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + " kg" : ""} (${fmt})`);
+      }
       if (c?.lamina?.modelo) linhas.push(`   Lâmina principal: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
       const faixas = Array.isArray(c?.lamina?.combinacao) ? c.lamina.combinacao : [];
       for (const f of faixas) {
@@ -3568,10 +3617,14 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
       if (c.central === true || (c.central !== false && c?.motor?.ac_dc)) linhas.push(`   Central de controle inclusa`);
       if ((Number(c.controles) || 0) > 0) linhas.push(`   Controles: ${c.controles}`);
     } else if (it.tipo === "motor") {
-      linhas.push(`${n++}. Motor`);
-      if (c.ac_dc) linhas.push(`   • Tipo: ${c.ac_dc}`);
-      if (c.potencia) linhas.push(`   • Capacidade: ${c.potencia}kg`);
+      const km = c.kit_motor || "avulso";
+      const fmt = km === "kit_automatizador" ? "Kit automatizador" : km === "motor_testeiras" ? "Motor + testeiras" : "Motor avulso";
+      linhas.push(`${n++}. ${fmt}${c.ac_dc ? " " + c.ac_dc : ""}${c.potencia ? " " + c.potencia + " kg" : ""}`);
+      if (!c.ac_dc) linhas.push(`   • Tipo: _(AC/DC a definir)_`);
+      if (!c.potencia) linhas.push(`   • Capacidade: _(a definir)_`);
       linhas.push(`   • Quantidade: ${c.qtd || 1}`);
+      if (km === "kit_automatizador") linhas.push(`   • Inclui: motor, testeiras, central e 2 controles`);
+      else if (km === "motor_testeiras") linhas.push(`   • Inclui: motor e testeiras`);
     } else if (it.tipo === "guia") {
       const isPar = !!c.qtd_pares || c.tipo_unidade === "par";
       const qtdN = Number(c.qtd_pares || c.qtd_unidades || c.qtd || 0);
