@@ -3841,6 +3841,8 @@ async function cfgGerarResposta(args: { mensagemCliente: string; pedido: CfgPedi
     );
     return partes.join("\n\n");
   }
+  const alertasValidacao = duvidas.filter((d) => /capacidade cadastrada|motor\s+(?:AC|DC)?\s*\d+\s*kg\s+n[ãa]o existe/i.test(d));
+  if (alertasValidacao.length) return alertasValidacao.join("\n\n");
   if (duvidas.length || cfgParecePerguntaOuConversaLivre(mensagemCliente)) {
     return await cfgResponderComLLM({ mensagemCliente, pedido, proxima });
   }
