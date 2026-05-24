@@ -2684,6 +2684,24 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   else if (/\bv[ãa]o\s*\+\s*1\s*guia\b|\bvao\s*\+\s*1\s*guia\b|\b1\s*guia\b/.test(t)) patch.instalacao = "vao_1guia";
   else if (/\bv[ãa]o\s*\+\s*guias?\b|\bvao\s*\+\s*guias?\b|\b2\s*guias?\b|\bduas\s*guias?\b/.test(t)) patch.instalacao = "vao_guias";
   if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
+  else if (/\bsem\s+trava\b|\bn[ãa]o\s+(?:quero|precis\w*)\s+trava\b|\bdispens\w+\s+trava\b/.test(t)) patch.trava_lamina = false;
+
+  // Pintura (sim/não) reaproveitando inferirPinturaTexto
+  try {
+    const pInf = inferirPinturaTexto(texto);
+    if (pInf) {
+      patch.quer_pintura = pInf.quer_pintura;
+      if (pInf.quer_pintura) {
+        const mapCor: Record<string, string> = { branco_liso: "branco", preta_fosco: "preto", cinza_texturizado: "cinza" };
+        if (pInf.tipo_pintura && mapCor[pInf.tipo_pintura]) {
+          patch.lamina = { ...(patch.lamina || {}), cor: mapCor[pInf.tipo_pintura] };
+        }
+        patch.pintura = "eletrostatica";
+      } else {
+        patch.pintura = null;
+      }
+    }
+  } catch { /* noop */ }
 
   // Trocar guia para X
   const trocaGuia = t.match(/\b(trocar|alterar|mudar)\s+guia\s+(?:para|pra|p\/)\s*(50|60|70|100)\b/);
@@ -2735,6 +2753,14 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
 
   if (/\balcapao\b/.test(t) && !port) patch.alcapao = true;
   if (/\bpintura\s+eletrostatica\b|\bcom\s+pintura\b/.test(t) && !/sem\s+pintura/.test(t)) patch.pintura = "eletrostatica";
+
+  // Medida de corte: manual vs automática
+  if (/\b(informar|manual|manualmente|eu\s+(?:que\s+)?(?:vou\s+)?(?:passo|informo|coloco)|tenho\s+(?:as\s+)?medidas|j[áa]\s+tenho\s+(?:as\s+)?medidas)\b/.test(t)
+      && /\b(corte|medida)/.test(t)) {
+    patch.medida_corte_modo = "manual";
+  } else if (/\b(autom[áa]tic\w*|calcul\w*\s+(?:auto|sozinho|pra\s+mim|por\s+mim)|sistema\s+calcul\w*|voc[êe]\s+calcul\w*|calcula\s+(?:tudo|por\s+mim))\b/.test(t)) {
+    patch.medida_corte_modo = "auto";
+  }
 
   // Avulsos
   const ctrl = t.match(/(?:\+\s*)?(\d+)\s*controles?\b/);
@@ -3477,15 +3503,11 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
   for (const it of pedido.itens) {
     if (it.tipo === "kit_porta") {
       const c = it.config || {};
-      // Apenas o essencial — motor potência/eixo/guia são automáticos pelas regras.
+      // Fluxo correto: MEDIDA → LÂMINA → PINTURA → OPCIONAIS → MOTOR → MEDIDA DE CORTE → INSTALAÇÃO → TRAVA
       if (!c.largura || !c.altura) return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
-      if (!c.instalacao) return "Qual o tipo de instalação?\n• *entre testeiras*\n• *vão + 1 guia*\n• *vão + guias*\n• *entre paredes*";
-      if ((c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") && !c.guia_mm && !c.guia_mm_esq && !c.guia_mm_dir) {
-        return "Qual a profundidade da *guia* em mm? (50 / 60 / 70 / 100)";
-      }
-      if (!c?.motor?.ac_dc) return "O motor é *AC* ou *DC*?";
-      if (!c?.lamina?.modelo) return "Qual o *modelo da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
-      if (!c?.lamina?.cor) return "Qual a *cor da lâmina/pintura*?";
+      if (!c?.lamina?.modelo) return "Qual o *modelo principal da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
+      if (c.quer_pintura === undefined) return "Deseja *pintura eletrostática*?\n• *Sim*\n• *Não*";
+      if (c.quer_pintura === true && !c?.lamina?.cor) return "Qual a *cor da pintura*?";
       // Portinhola: nunca assumir posição. Se foi pedida sem posição, perguntar.
       if (c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()))) {
         return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
@@ -3494,6 +3516,20 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if ((port === "VILD" || port === "VILE") && c.portinhola_cortada === undefined) {
         return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
       }
+      if (!c?.motor?.ac_dc) return "Qual automatização deseja?\n• *Motor AC*\n• *Motor DC*";
+      if (!c.medida_corte_modo) {
+        return "Como deseja definir a *medida de corte*?\n• *Informar manualmente*\n• *Calcular automaticamente*";
+      }
+      if (c.medida_corte_modo === "manual") {
+        if (!c.medida_eixo_m) return "Informe a *medida do eixo* (em metros).";
+        if (!c.medida_lamina_m) return "Informe a *medida das lâminas* (em metros).";
+        if (!c.medida_soleira_m) return "Informe a *medida da soleira* (em metros).";
+      }
+      if (!c.instalacao) return "Qual o tipo de instalação?\n• *Entre testeiras*\n• *Vão + 1 guia*\n• *Vão + guias*\n• *Entre paredes*";
+      if ((c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") && !c.guia_mm && !c.guia_mm_esq && !c.guia_mm_dir) {
+        return "Qual a profundidade da *guia* em mm? (50 / 60 / 70 / 100)";
+      }
+      if (c.trava_lamina === undefined) return "Deseja incluir *trava de lâminas*?\n• *Sim*\n• *Não*";
     } else if (it.tipo === "motor") {
       const c = it.config || {};
       if (!c.potencia) return "Esse motor é de quantos *kg*? (200/300/400/500/800/1500)";
@@ -3548,7 +3584,9 @@ function cfgItemIncompleto(it: CfgItem): boolean {
   switch (it.tipo) {
     case "kit_porta": {
       const portPend = c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()));
-      return !c.largura || !c.altura || !c.instalacao || !c?.motor?.ac_dc || !c?.lamina?.modelo || !c?.lamina?.cor || portPend;
+      const corPend = c.quer_pintura === true && !c?.lamina?.cor;
+      const manualPend = c.medida_corte_modo === "manual" && (!c.medida_eixo_m || !c.medida_lamina_m || !c.medida_soleira_m);
+      return !c.largura || !c.altura || !c.instalacao || !c?.motor?.ac_dc || !c?.lamina?.modelo || c.quer_pintura === undefined || corPend || portPend || !c.medida_corte_modo || manualPend || c.trava_lamina === undefined;
     }
     case "motor":
       return !c.potencia || (!c.kit_motor && !c.modelo_motor) || !c.ac_dc;
