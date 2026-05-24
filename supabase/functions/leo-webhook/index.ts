@@ -56,12 +56,6 @@ const PRIMESYNC_TOKEN = Deno.env.get("PRIMESYNC_TOKEN")!;
 const DOCRYA_API_KEY = Deno.env.get("DOCRYA_API_KEY") ?? "";
 const PDFSHIFT_API_KEY = Deno.env.get("PDFSHIFT_API_KEY") ?? "";
 
-const DOCRYA_URL = "https://www.docrya.com/api/v1/html-to-pdf";
-const PDFSHIFT_URL = "https://api.pdfshift.io/v3/convert/pdf";
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-// Modelo Lovable AI para agente de vendas com tool calling
-const AI_MODEL = "google/gemini-3-flash-preview";
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
@@ -356,6 +350,41 @@ function validarMotor(m: { tipo?: string; ac_dc?: string; potencia?: number }): 
   const lista = m.ac_dc === "DC" ? POTENCIAS_DC : POTENCIAS_AC;
   if (!m.potencia || !lista.includes(m.potencia)) faltando.push(`potência (${lista.join("/")} kg)`);
   return { ok: faltando.length === 0, faltando };
+}
+function validarCapacidadeMotorConfig(config: any): { ok: boolean; erro?: string } {
+  const pot = Number(config?.potencia);
+  if (!Number.isFinite(pot) || pot <= 0) return { ok: true };
+  const acdc = String(config?.ac_dc || "").toUpperCase();
+  const lista = acdc === "DC" ? POTENCIAS_DC : acdc === "AC" ? POTENCIAS_AC : Array.from(new Set([...POTENCIAS_AC, ...POTENCIAS_DC]));
+  if (lista.includes(pot)) return { ok: true };
+  const sugestao = lista.reduce((a, b) => Math.abs(b - pot) < Math.abs(a - pot) ? b : a, lista[0]);
+  const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
+  const disponiveis = acdc === "AC" || acdc === "DC"
+    ? `${lista.join(" / ")} kg`
+    : `AC: ${POTENCIAS_AC.join(" / ")} kg · DC: ${POTENCIAS_DC.join(" / ")} kg`;
+  return { ok: false, erro: `Motor${escopo} ${pot} kg não corresponde a uma capacidade cadastrada. Capacidades disponíveis: ${disponiveis}. 👉 Deseja corrigir para *${sugestao} kg*?` };
+}
+function limparCapacidadesMotorInvalidas(pedido: CfgPedido): { pedido: CfgPedido; avisos: string[] } {
+  const avisos: string[] = [];
+  const itens: CfgItem[] = [];
+  for (const it of pedido.itens || []) {
+    if (it.tipo === "motor") {
+      const validacao = validarCapacidadeMotorConfig(it.config || {});
+      if (!validacao.ok) {
+        avisos.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+        continue;
+      }
+    }
+    if (it.tipo === "kit_porta" && it.config?.motor?.potencia) {
+      const validacao = validarCapacidadeMotorConfig(it.config.motor || {});
+      if (!validacao.ok) {
+        avisos.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+        delete it.config.motor.potencia;
+      }
+    }
+    itens.push(it);
+  }
+  return { pedido: { ...pedido, itens }, avisos };
 }
 /** Portinhola e alçapão não podem coexistir na mesma porta. */
 function validarPortinholaAlcapao(cfg: { portinhola?: boolean; alcapao?: boolean }): { ok: boolean; erro?: string } {
@@ -2877,6 +2906,13 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
     const acao = String(ix?.acao || "");
     if (acao === "add_item") {
       const tipo = (ix.tipo || "acessorio") as CfgItemTipo;
+      if (tipo === "motor") {
+        const validacao = validarCapacidadeMotorConfig(ix.config || {});
+        if (!validacao.ok) {
+          duvidas.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+          continue;
+        }
+      }
       // Se for kit_porta e já existe um → faz merge ao invés de criar outro
       if (tipo === "kit_porta") {
         const existente = p.itens.find((i) => i.tipo === "kit_porta");
@@ -2898,7 +2934,15 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
     } else if (acao === "update_item") {
       const it = acharItem(p, ix.ref);
       if (it) {
-        it.config = mergeDeep(it.config, ix.patch || {});
+        const novaConfig = mergeDeep(it.config, ix.patch || {});
+        if (it.tipo === "motor") {
+          const validacao = validarCapacidadeMotorConfig(novaConfig);
+          if (!validacao.ok) {
+            duvidas.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+            continue;
+          }
+        }
+        it.config = novaConfig;
         if (it.tipo === "kit_porta") normalizarKitConfig(it.config);
       }
     } else if (acao === "remove_item") {
@@ -3489,6 +3533,11 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       }
     } else if (it.tipo === "motor") {
       const c = it.config || {};
+      const validade = validarCapacidadeMotorConfig(c);
+      if (!validade.ok) {
+        c.potencia = undefined;
+        return validade.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.";
+      }
       if (!c.ac_dc) return "Esse motor é *AC* ou *DC*?\n• *AC* — 200/300/400/500/800/1000/1500 kg\n• *DC* — 200/300/400/500/800 kg";
       const lista = c.ac_dc === "DC" ? POTENCIAS_DC : POTENCIAS_AC;
       if (c.potencia && !lista.includes(Number(c.potencia))) {
@@ -3814,6 +3863,8 @@ async function cfgGerarResposta(args: { mensagemCliente: string; pedido: CfgPedi
     );
     return partes.join("\n\n");
   }
+  const alertasValidacao = duvidas.filter((d) => /capacidade cadastrada|motor\s+(?:AC|DC)?\s*\d+\s*kg\s+n[ãa]o existe/i.test(d));
+  if (alertasValidacao.length) return alertasValidacao.join("\n\n");
   if (duvidas.length || cfgParecePerguntaOuConversaLivre(mensagemCliente)) {
     return await cfgResponderComLLM({ mensagemCliente, pedido, proxima });
   }
@@ -3864,6 +3915,15 @@ async function rodarConfigurador(args: {
     .eq("id", conversa.id)
     .maybeSingle();
   let pedido = carregarPedido((row as any)?.pedido);
+  const saneamentoMotor = limparCapacidadesMotorInvalidas(pedido);
+  pedido = saneamentoMotor.pedido;
+  if (saneamentoMotor.avisos.length) {
+    await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+    const txt = saneamentoMotor.avisos[0];
+    await salvarMensagem(conversa.id, "assistant", txt, { configurador: true, bloqueio_validacao: true, saneamento_motor: true });
+    await enviarTexto(telefone, txt);
+    return { pdfEnviado: false, texto: txt };
+  }
 
   // ====== 0) CLASSIFICAÇÃO DE INTENÇÃO (antes de qualquer interpretação técnica) ======
   // Se está aguardando o cliente decidir entre continuar/novo
