@@ -2981,19 +2981,25 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
         const existente = p.itens.find((i) => i.tipo === "kit_porta");
         if (existente) {
           existente.config = mergeDeep(existente.config, ix.config || {});
+          normalizarKitConfig(existente.config);
           continue;
         }
       }
-      p.itens.push({
+      const novoItem = {
         id: novoId(),
         tipo,
         config: { ...(ix.config || {}), qtd: Number(ix.qtd) || Number(ix.config?.qtd) || 1 },
         explosao: [],
         subtotal: 0,
-      });
+      };
+      if (tipo === "kit_porta") normalizarKitConfig(novoItem.config);
+      p.itens.push(novoItem);
     } else if (acao === "update_item") {
       const it = acharItem(p, ix.ref);
-      if (it) it.config = mergeDeep(it.config, ix.patch || {});
+      if (it) {
+        it.config = mergeDeep(it.config, ix.patch || {});
+        if (it.tipo === "kit_porta") normalizarKitConfig(it.config);
+      }
     } else if (acao === "remove_item") {
       const it = acharItem(p, ix.ref);
       if (it) p.itens = p.itens.filter((x) => x.id !== it.id);
