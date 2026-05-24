@@ -2669,7 +2669,8 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   if (/\bmotor\s+avulso\b|\bavulso\b.*\bmotor\b|\bmotor\s*\+?\s*testeiras?\b|\bkit\s*automatizador\b/.test(t)) {
     const q = t.match(/(\d+)\s*motores?/);
     const invalidoDC = potN && acdc === "DC" && !POTENCIAS_DC.includes(potN);
-    if (!invalidoDC) {
+    // Não criar item se capacidade mencionada for inválida (ex.: "motor 20kg").
+    if (!invalidoDC && kgInvalido === null) {
       const kitMotor = /\bkit\s*automatizador\b/.test(t) ? "kit_automatizador"
         : /\bmotor\s*\+?\s*testeiras?\b|\bcom\s+testeiras?\b/.test(t) ? "motor_testeiras"
         : "avulso";
