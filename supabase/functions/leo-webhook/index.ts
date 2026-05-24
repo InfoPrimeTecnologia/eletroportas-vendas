@@ -3437,11 +3437,16 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       }
     } else if (it.tipo === "motor") {
       const c = it.config || {};
-      if (!c.potencia) return "Esse motor é de quantos *kg*? (200/300/400/500/800/1500)";
-      if (!c.kit_motor && !c.modelo_motor) {
-        return "Qual o *modelo do motor*?\n• *avulso*\n• *motor + testeiras*\n• *kit automatizador*";
+      if (!c.ac_dc) return "Esse motor é *AC* ou *DC*?\n• *AC* — 200/300/400/500/800/1000/1500 kg\n• *DC* — 200/300/400/500/800 kg";
+      const lista = c.ac_dc === "DC" ? POTENCIAS_DC : POTENCIAS_AC;
+      if (c.potencia && !lista.includes(Number(c.potencia))) {
+        const inv = c.potencia; c.potencia = undefined;
+        return `Motor ${c.ac_dc} ${inv} kg não existe. Capacidades ${c.ac_dc}: ${lista.join("/")} kg. Qual deseja?`;
       }
-      if (!c.ac_dc) return "Esse motor é *AC* ou *DC*?";
+      if (!c.potencia) return `Qual a *capacidade* do motor ${c.ac_dc}? (${lista.join(" / ")} kg)`;
+      if (!c.kit_motor && !c.modelo_motor) {
+        return "Qual o *formato de venda*?\n• *Motor avulso* — somente o motor\n• *Motor + testeiras*\n• *Kit automatizador* — motor, testeiras, central e 2 controles";
+      }
     } else if (it.tipo === "guia") {
       const c = it.config || {};
       const qtd = c.qtd ?? c.qtd_pares ?? c.qtd_unidades;
