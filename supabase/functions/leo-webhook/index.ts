@@ -3670,7 +3670,12 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
         linhas.push(`   Instalação: ${labelInst[String(c.instalacao)] || String(c.instalacao).replace(/_/g, " ")}${c.trava_lamina ? " (com trava de lâminas)" : ""}`);
       }
       if (c?.motor?.ac_dc) linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + "kg" : ""}`);
-      if (c?.lamina?.modelo) linhas.push(`   Lâmina: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
+      if (c?.lamina?.modelo) linhas.push(`   Lâmina principal: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
+      const faixas = Array.isArray(c?.lamina?.combinacao) ? c.lamina.combinacao : [];
+      for (const f of faixas) {
+        if (!f?.altura_m || !f?.modelo) continue;
+        linhas.push(`   Faixa parcial: ${Number(f.altura_m).toFixed(2).replace(".", ",")} m em lâmina ${String(f.modelo).replace("_", " ")}`);
+      }
       if (c?.lamina?.cor) linhas.push(`   Cor: ${c.lamina.cor}`);
       if (c.guia_mm) linhas.push(`   Guia: ${c.guia_mm}mm`);
       if (c.portinhola) {
@@ -3678,7 +3683,8 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
         linhas.push(`   Portinhola: ${portConf ? c.portinhola.toUpperCase() : "_(posição a definir)_"}`);
       }
       if (c.alcapao) linhas.push(`   Alçapão: sim`);
-      if (c.pintura) linhas.push(`   Pintura eletrostática`);
+      if (c.quer_pintura === true) linhas.push(`   Pintura eletrostática: sim`);
+      else if (c.quer_pintura === false) linhas.push(`   Pintura eletrostática: não`);
       if (c.central !== false && c?.motor?.potencia) linhas.push(`   Central de controle inclusa`);
       if ((Number(c.controles) || 0) > 0) linhas.push(`   Controles: ${c.controles}`);
     } else if (it.tipo === "motor") {
