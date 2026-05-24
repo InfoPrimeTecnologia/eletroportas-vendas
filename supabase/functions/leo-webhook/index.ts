@@ -2689,14 +2689,14 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   // Pintura — só infere quando o cliente cita pintura EXPLICITAMENTE.
   // Regra: cor sozinha ("branca", "preta") é apenas cor da lâmina, NÃO confirma pintura eletrostática.
   // Apenas palavras-chave de pintura ou negação direta encerram a pendência.
-  const menc Pintura = /\b(pintura|pintad[ao]|eletrost[áa]tic\w*|tinta)\b/.test(t);
+  const mencPintura = /\b(pintura|pintad[ao]|eletrost[áa]tic\w*|tinta)\b/.test(t);
   const semPintura = /\b(sem\s+pintura|sem\s+tinta|n[ãa]o\s+(?:quero|preciso|precis\w*|vou)\s+(?:de\s+)?pintura|dispens\w+\s+pintura|natural|galvanizad[ao]|cru|sem\s+acabamento)\b/.test(t);
   const respostaCurtaNao = /^\s*(n[ãa]o|nao|n)\b\s*[.!]?\s*$/i.test(texto || "");
   const respostaCurtaSim = /^\s*(sim|s)\b\s*[.!]?\s*$/i.test(texto || "");
   if (semPintura) {
     patch.quer_pintura = false;
     patch.pintura = null;
-  } else if (menc Pintura) {
+  } else if (mencPintura) {
     if (/\b(sem|n[ãa]o)\b/.test(t)) {
       patch.quer_pintura = false;
       patch.pintura = null;
