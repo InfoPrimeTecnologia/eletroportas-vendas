@@ -2651,6 +2651,14 @@ function cfgPedidoLeve(pedido: CfgPedido) {
   };
 }
 
+function inferirRespostaPortinholaCorte(textoNormalizado: string): boolean | undefined {
+  const t = String(textoNormalizado || "").trim();
+  if (!t) return undefined;
+  if (/\b(sem\s+cortar|inteiras?|ajuste\s+local|ajustar\s+no\s+local)\b/.test(t)) return false;
+  if (/\b(cortadas?|ja\s+cortadas?|prontas?|cortar|corta)\b/.test(t)) return true;
+  return undefined;
+}
+
 function cfgFallbackInterpretar(mensagem: string): any[] {
   const original = mensagem || "";
   const t = original.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
