@@ -2643,9 +2643,15 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
     }
   }
 
-  if (/\bmotor\s+avulso\b|\bavulso\b.*\bmotor\b/.test(t)) {
+  if (/\bmotor\s+avulso\b|\bavulso\b.*\bmotor\b|\bmotor\s*\+?\s*testeiras?\b|\bkit\s*automatizador\b/.test(t)) {
     const q = t.match(/(\d+)\s*motores?/);
-    intencoes.push({ acao: "add_item", tipo: "motor", config: { qtd: q ? Number(q[1]) : 1, ac_dc: acdc || "AC", potencia: pot ? Number(pot[1]) : undefined } });
+    const invalidoDC = potN && acdc === "DC" && !POTENCIAS_DC.includes(potN);
+    if (!invalidoDC) {
+      const kitMotor = /\bkit\s*automatizador\b/.test(t) ? "kit_automatizador"
+        : /\bmotor\s*\+?\s*testeiras?\b|\bcom\s+testeiras?\b/.test(t) ? "motor_testeiras"
+        : "avulso";
+      intencoes.push({ acao: "add_item", tipo: "motor", config: { qtd: q ? Number(q[1]) : 1, ac_dc: acdc || undefined, potencia: potN || undefined, kit_motor: kitMotor } });
+    }
   }
   if (/\bsoleiras?\s*avulsa?|avulsa?\s*soleira/.test(t)) {
     const q = t.match(/(\d+)\s*soleiras?/);
