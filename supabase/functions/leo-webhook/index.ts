@@ -3006,6 +3006,10 @@ function normalizarKitConfig(c: any): void {
   // Trava de lâminas: aceita true/false explícitos vindos do extrator/LLM.
   if (c.trava_lamina === "sim") c.trava_lamina = true;
   else if (c.trava_lamina === "nao" || c.trava_lamina === "não") c.trava_lamina = false;
+  if (typeof c.portinhola_cortada === "string") {
+    const v = inferirRespostaPortinholaCorte(c.portinhola_cortada.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+    if (v !== undefined) c.portinhola_cortada = v;
+  }
 }
 
 function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; quer_gerar: boolean; quer_resumo: boolean; duvidas: string[] } {
