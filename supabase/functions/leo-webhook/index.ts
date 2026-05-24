@@ -2686,22 +2686,37 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
   else if (/\bsem\s+trava\b|\bn[ãa]o\s+(?:quero|precis\w*)\s+trava\b|\bdispens\w+\s+trava\b/.test(t)) patch.trava_lamina = false;
 
-  // Pintura (sim/não) reaproveitando inferirPinturaTexto
-  try {
-    const pInf = inferirPinturaTexto(texto);
-    if (pInf) {
-      patch.quer_pintura = pInf.quer_pintura;
-      if (pInf.quer_pintura) {
-        const mapCor: Record<string, string> = { branco_liso: "branco", preta_fosco: "preto", cinza_texturizado: "cinza" };
-        if (pInf.tipo_pintura && mapCor[pInf.tipo_pintura]) {
-          patch.lamina = { ...(patch.lamina || {}), cor: mapCor[pInf.tipo_pintura] };
-        }
-        patch.pintura = "eletrostatica";
-      } else {
-        patch.pintura = null;
+  // Pintura — só infere quando o cliente cita pintura EXPLICITAMENTE.
+  // Regra: cor sozinha ("branca", "preta") é apenas cor da lâmina, NÃO confirma pintura eletrostática.
+  // Apenas palavras-chave de pintura ou negação direta encerram a pendência.
+  const menc Pintura = /\b(pintura|pintad[ao]|eletrost[áa]tic\w*|tinta)\b/.test(t);
+  const semPintura = /\b(sem\s+pintura|sem\s+tinta|n[ãa]o\s+(?:quero|preciso|precis\w*|vou)\s+(?:de\s+)?pintura|dispens\w+\s+pintura|natural|galvanizad[ao]|cru|sem\s+acabamento)\b/.test(t);
+  const respostaCurtaNao = /^\s*(n[ãa]o|nao|n)\b\s*[.!]?\s*$/i.test(texto || "");
+  const respostaCurtaSim = /^\s*(sim|s)\b\s*[.!]?\s*$/i.test(texto || "");
+  if (semPintura) {
+    patch.quer_pintura = false;
+    patch.pintura = null;
+  } else if (menc Pintura) {
+    if (/\b(sem|n[ãa]o)\b/.test(t)) {
+      patch.quer_pintura = false;
+      patch.pintura = null;
+    } else {
+      patch.quer_pintura = true;
+      patch.pintura = "eletrostatica";
+      const corMatch = t.match(/\b(branc[ao]|pret[ao]|cinza|bege|azul|verde|vermelh[ao]|amarel[ao]|ral\s*\d+|especial)\b/);
+      if (corMatch) {
+        const cor = corMatch[1].replace(/a$/, "o").replace(/\s+/g, "_");
+        patch.lamina = { ...(patch.lamina || {}), cor };
       }
     }
-  } catch { /* noop */ }
+  } else if (respostaCurtaNao) {
+    // Resposta isolada "Não" — assume resposta à última pergunta pendente (geralmente pintura).
+    patch.quer_pintura = false;
+    patch.pintura = null;
+  } else if (respostaCurtaSim) {
+    patch.quer_pintura = true;
+    patch.pintura = "eletrostatica";
+  }
 
   // Trocar guia para X
   const trocaGuia = t.match(/\b(trocar|alterar|mudar)\s+guia\s+(?:para|pra|p\/)\s*(50|60|70|100)\b/);
