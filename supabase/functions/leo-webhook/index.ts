@@ -2651,6 +2651,14 @@ function cfgPedidoLeve(pedido: CfgPedido) {
   };
 }
 
+function inferirRespostaPortinholaCorte(textoNormalizado: string): boolean | undefined {
+  const t = String(textoNormalizado || "").trim();
+  if (!t) return undefined;
+  if (/\b(sem\s+cortar|inteiras?|ajuste\s+local|ajustar\s+no\s+local)\b/.test(t)) return false;
+  if (/\b(cortadas?|ja\s+cortadas?|prontas?|cortar|corta)\b/.test(t)) return true;
+  return undefined;
+}
+
 function cfgFallbackInterpretar(mensagem: string): any[] {
   const original = mensagem || "";
   const t = original.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -2762,9 +2770,9 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   // Nunca assumir posição: só grava VILD/VILE/CENTRO se o cliente disse explicitamente.
   // Caso contrário marca como `true` (indefinido) para o validador perguntar.
   if (port) { patch.portinhola = port[1] ? port[1].toUpperCase() : true; patch.opcionais_perguntado = true; }
-  // Portinhola cortada vs inteira
-  if (/\bportinhola\b.*\b(inteira|ajuste\s+(?:no\s+)?local)\b|\b(inteira|ajuste\s+(?:no\s+)?local)\b.*\bportinhola\b/.test(t)) patch.portinhola_cortada = false;
-  else if (/\bportinhola\b.*\bcortad[ao]s?\b|\bl[âa]minas?\s+cortad[ao]s?\b/.test(t)) patch.portinhola_cortada = true;
+  // Portinhola cortada vs inteira — aceita respostas naturais, inclusive isoladas quando esta é a pendência atual.
+  const respPortCorte = inferirRespostaPortinholaCorte(t);
+  if (respPortCorte !== undefined && (port || !Object.keys(patch).length)) patch.portinhola_cortada = respPortCorte;
 
   if (/\balcap[ãa]o\b|\balcapao\b/.test(t) && !port) { patch.alcapao = true; patch.opcionais_perguntado = true; }
   // "Nenhum" opcional / "sem opcionais" → encerra etapa sem portinhola nem alçapão
@@ -2884,6 +2892,7 @@ Para kit_porta a config pode conter qualquer subconjunto de:
  "lamina":{"modelo":"meia_cana|fechado|transvision|oblongo","perfil":"baixo|alto","cor":"branca|preta|..."},
  "guia_mm":50|60|70|80|90|100, "guia_mm_esq":N, "guia_mm_dir":N,
  "portinhola":"VILD|VILE|CENTRO"|true|false,  // true = cliente pediu portinhola mas NÃO disse a posição (NUNCA assuma — o sistema vai perguntar)
+ "portinhola_cortada":true|false, // true = lâminas cortadas de fábrica; false = inteira para ajuste no local
  "alcapao":true|false, "pintura":"eletrostatica"|false, "central":true|false, "controles":N}
 
 Avulsos (cada um vira um item separado no carrinho):
@@ -2918,6 +2927,7 @@ REGRAS:
 - CORES NÃO SÃO PINTURA: "porta branca", "cor branca", "lâmina preta" → APENAS lamina.cor. NUNCA defina pintura:"eletrostatica" nem quer_pintura:true só por causa de cor.
 - Pintura só é confirmada quando o cliente diz "pintura eletrostática", "com pintura", "pintar de X" ou similar. "Sem pintura" / "não quero pintura" / resposta isolada "Não" enquanto pintura está pendente → update_item kit_porta patch {quer_pintura:false, pintura:false}.
 - FAIXA PARCIAL DE LÂMINA: "porta 10x4 lâmina fechada com 1m de transvision" = UM ÚNICO kit_porta com lamina.modelo:"fechado" E lamina.combinacao:[{modelo:"transvision",altura_m:1}]. NUNCA crie add_item lamina avulso para a faixa parcial.
+- PORTINHOLA CORTADA/INTEIRA: se a pergunta pendente for "Portinhola cortada ou inteira?", respostas como "cortada", "cortadas", "já cortada", "pronta", "cortar", "corta" = portinhola_cortada:true. Respostas como "inteira", "inteiras", "ajuste local", "ajustar no local", "sem cortar" = portinhola_cortada:false. Isso encerra a pendência.
 - Devolva APENAS JSON válido, sem explicação.
 
 PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
@@ -2996,6 +3006,10 @@ function normalizarKitConfig(c: any): void {
   // Trava de lâminas: aceita true/false explícitos vindos do extrator/LLM.
   if (c.trava_lamina === "sim") c.trava_lamina = true;
   else if (c.trava_lamina === "nao" || c.trava_lamina === "não") c.trava_lamina = false;
+  if (typeof c.portinhola_cortada === "string") {
+    const v = inferirRespostaPortinholaCorte(c.portinhola_cortada.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+    if (v !== undefined) c.portinhola_cortada = v;
+  }
 }
 
 function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; quer_gerar: boolean; quer_resumo: boolean; duvidas: string[] } {
@@ -4037,6 +4051,16 @@ async function rodarConfigurador(args: {
         ref: "kit_porta",
         patch: { lamina: { combinacao: [{ modelo: modeloP, altura_m: altP }] } },
       });
+    }
+  }
+  const respostaCortePortinhola = inferirRespostaPortinholaCorte(msgLower);
+  if (respostaCortePortinhola !== undefined) {
+    const kit = pedido.itens.find((it) => it.tipo === "kit_porta");
+    const port = typeof kit?.config?.portinhola === "string" ? kit.config.portinhola.toUpperCase() : "";
+    const pendentePortinholaCorte = (port === "VILD" || port === "VILE") && kit?.config?.portinhola_cortada === undefined;
+    const jaInterpretou = intencoes.some((i: any) => i?.patch?.portinhola_cortada !== undefined || i?.config?.portinhola_cortada !== undefined);
+    if (pendentePortinholaCorte && !jaInterpretou) {
+      intencoes.push({ acao: "update_item", ref: "kit_porta", patch: { portinhola_cortada: respostaCortePortinhola } });
     }
   }
   console.log("🧠 cfg intencoes:", JSON.stringify(intencoes));
