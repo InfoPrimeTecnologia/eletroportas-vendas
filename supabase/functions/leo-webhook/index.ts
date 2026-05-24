@@ -364,6 +364,28 @@ function validarCapacidadeMotorConfig(config: any): { ok: boolean; erro?: string
     : `AC: ${POTENCIAS_AC.join(" / ")} kg · DC: ${POTENCIAS_DC.join(" / ")} kg`;
   return { ok: false, erro: `Motor${escopo} ${pot} kg não corresponde a uma capacidade cadastrada. Capacidades disponíveis: ${disponiveis}. 👉 Deseja corrigir para *${sugestao} kg*?` };
 }
+function limparCapacidadesMotorInvalidas(pedido: CfgPedido): { pedido: CfgPedido; avisos: string[] } {
+  const avisos: string[] = [];
+  const itens: CfgItem[] = [];
+  for (const it of pedido.itens || []) {
+    if (it.tipo === "motor") {
+      const validacao = validarCapacidadeMotorConfig(it.config || {});
+      if (!validacao.ok) {
+        avisos.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+        continue;
+      }
+    }
+    if (it.tipo === "kit_porta" && it.config?.motor?.potencia) {
+      const validacao = validarCapacidadeMotorConfig(it.config.motor || {});
+      if (!validacao.ok) {
+        avisos.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+        delete it.config.motor.potencia;
+      }
+    }
+    itens.push(it);
+  }
+  return { pedido: { ...pedido, itens }, avisos };
+}
 /** Portinhola e alçapão não podem coexistir na mesma porta. */
 function validarPortinholaAlcapao(cfg: { portinhola?: boolean; alcapao?: boolean }): { ok: boolean; erro?: string } {
   if (cfg.portinhola && cfg.alcapao) return { ok: false, erro: "Portinhola e alçapão não podem ser usados juntos na mesma porta." };
