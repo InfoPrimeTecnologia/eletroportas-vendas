@@ -3915,6 +3915,15 @@ async function rodarConfigurador(args: {
     .eq("id", conversa.id)
     .maybeSingle();
   let pedido = carregarPedido((row as any)?.pedido);
+  const saneamentoMotor = limparCapacidadesMotorInvalidas(pedido);
+  pedido = saneamentoMotor.pedido;
+  if (saneamentoMotor.avisos.length) {
+    await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+    const txt = saneamentoMotor.avisos[0];
+    await salvarMensagem(conversa.id, "assistant", txt, { configurador: true, bloqueio_validacao: true, saneamento_motor: true });
+    await enviarTexto(telefone, txt);
+    return { pdfEnviado: false, texto: txt };
+  }
 
   // ====== 0) CLASSIFICAÇÃO DE INTENÇÃO (antes de qualquer interpretação técnica) ======
   // Se está aguardando o cliente decidir entre continuar/novo
