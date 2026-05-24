@@ -3966,7 +3966,27 @@ async function rodarConfigurador(args: {
   }
 
   // 1) Interpreta intenções técnicas
-  const intencoes = await cfgInterpretar(mensagem, pedido);
+  let intencoes = await cfgInterpretar(mensagem, pedido);
+  // Pós-processamento: faixa parcial misturada com kit_porta NUNCA vira lâmina avulsa.
+  const msgLower = String(mensagem || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const parcialRx = /(\d+(?:[\.,]\d+)?)\s*m(?:t|ts|etros?)?\s+(?:de\s+)?(transvision|oblongo|fechad[ao])/i;
+  const temParcial = parcialRx.test(msgLower);
+  const temKit = intencoes.some((i: any) => i?.tipo === "kit_porta")
+    || pedido.itens.some((it) => it.tipo === "kit_porta");
+  if (temParcial && temKit) {
+    const parc = msgLower.match(parcialRx);
+    const modeloP = parc && parc[2].startsWith("fechad") ? "fechado" : (parc?.[2] || "");
+    const altP = parc ? Number(parc[1].replace(",", ".")) : 0;
+    // remove qualquer add_item lamina que apareça junto
+    intencoes = intencoes.filter((i: any) => !(i?.acao === "add_item" && i?.tipo === "lamina"));
+    if (modeloP && altP > 0) {
+      intencoes.push({
+        acao: "update_item",
+        ref: "kit_porta",
+        patch: { lamina: { combinacao: [{ modelo: modeloP, altura_m: altP }] } },
+      });
+    }
+  }
   console.log("🧠 cfg intencoes:", JSON.stringify(intencoes));
 
   // 2) Aplica (sem explodir BOM ainda — apenas atualiza config)
