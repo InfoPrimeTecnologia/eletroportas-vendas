@@ -2603,14 +2603,12 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
       acao: "duvida",
       texto:
         `Identifiquei um possível erro 👍\n\n` +
-        `• Motor ${kgInvalido} kg não corresponde a uma capacidade cadastrada.\n\n` +
-        `Capacidades disponíveis:\n\n` +
-        `*AC:* ${POTENCIAS_AC.join(" / ")} kg\n` +
-        `*DC:* ${POTENCIAS_DC.join(" / ")} kg\n\n` +
-        `👉 Deseja corrigir para *${sugestao} kg*?`,
+        `Motor ${kgInvalido} kg não existe no cadastro.\n\n` +
+        `👉 Deseja corrigir para:\n• *${sugestao} kg*\n• Informar outra capacidade`,
     });
   } else if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
-    intencoes.push({ acao: "duvida", texto: `Motor DC ${potN} kg não existe. Capacidades DC disponíveis: ${POTENCIAS_DC.join("/")} kg. Deseja AC ${potN} kg ou DC com outra capacidade?` });
+    const sugDC = POTENCIAS_DC.reduce((a, b) => Math.abs(b - potN) < Math.abs(a - potN) ? b : a);
+    intencoes.push({ acao: "duvida", texto: `Identifiquei um possível erro 👍\n\nMotor DC ${potN} kg não existe no cadastro.\n\n👉 Deseja corrigir para:\n• *DC ${sugDC} kg*\n• *AC ${potN} kg*\n• Informar outra capacidade` });
   } else if ((pot || acdc) && !/\bavulso\b/.test(t)) {
     patch.motor = { ...(patch.motor || {}), ...(potN ? { potencia: potN } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
   }
