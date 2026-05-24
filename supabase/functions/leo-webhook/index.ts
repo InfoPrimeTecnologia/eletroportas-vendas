@@ -2966,6 +2966,28 @@ function acharItem(pedido: CfgPedido, ref: string): CfgItem | undefined {
   );
 }
 
+/**
+ * Normaliza campos do kit_porta para evitar perguntas repetidas quando o
+ * cliente já forneceu a informação em outro formato.
+ *  - `pintura` truthy ("eletrostatica" / true) e `quer_pintura` indefinido → quer_pintura = true
+ *  - `pintura` === false/null e `quer_pintura` indefinido → quer_pintura = false
+ *  - Sinônimos de modelo/instalação/posição/cor já caem em campos próprios via extrator.
+ */
+function normalizarKitConfig(c: any): void {
+  if (!c || typeof c !== "object") return;
+  if (c.quer_pintura === undefined) {
+    if (c.pintura === false || c.pintura === null) c.quer_pintura = false;
+    else if (c.pintura === true || (typeof c.pintura === "string" && c.pintura.trim())) c.quer_pintura = true;
+  }
+  // Se cliente disse "sem pintura" (pintura=false), garante coerência
+  if (c.quer_pintura === false) c.pintura = false;
+  // Se quer pintura e a cor da lâmina já é conhecida, isso encerra a sub-pergunta de cor.
+  // (cfgProximaPergunta já checa lamina.cor, então nada mais a fazer aqui.)
+  // Trava de lâminas: aceita true/false explícitos vindos do extrator/LLM.
+  if (c.trava_lamina === "sim") c.trava_lamina = true;
+  else if (c.trava_lamina === "nao" || c.trava_lamina === "não") c.trava_lamina = false;
+}
+
 function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; quer_gerar: boolean; quer_resumo: boolean; duvidas: string[] } {
   let p: CfgPedido = JSON.parse(JSON.stringify(pedido));
   let quer_gerar = false;
@@ -2981,19 +3003,25 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
         const existente = p.itens.find((i) => i.tipo === "kit_porta");
         if (existente) {
           existente.config = mergeDeep(existente.config, ix.config || {});
+          normalizarKitConfig(existente.config);
           continue;
         }
       }
-      p.itens.push({
+      const novoItem = {
         id: novoId(),
         tipo,
         config: { ...(ix.config || {}), qtd: Number(ix.qtd) || Number(ix.config?.qtd) || 1 },
         explosao: [],
         subtotal: 0,
-      });
+      };
+      if (tipo === "kit_porta") normalizarKitConfig(novoItem.config);
+      p.itens.push(novoItem);
     } else if (acao === "update_item") {
       const it = acharItem(p, ix.ref);
-      if (it) it.config = mergeDeep(it.config, ix.patch || {});
+      if (it) {
+        it.config = mergeDeep(it.config, ix.patch || {});
+        if (it.tipo === "kit_porta") normalizarKitConfig(it.config);
+      }
     } else if (acao === "remove_item") {
       const it = acharItem(p, ix.ref);
       if (it) p.itens = p.itens.filter((x) => x.id !== it.id);
