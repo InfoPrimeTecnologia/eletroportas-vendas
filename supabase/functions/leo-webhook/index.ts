@@ -2761,12 +2761,22 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   const port = t.match(/\bportinhola\s*(vild|vile|centro)?\b/i);
   // Nunca assumir posição: só grava VILD/VILE/CENTRO se o cliente disse explicitamente.
   // Caso contrário marca como `true` (indefinido) para o validador perguntar.
-  if (port) patch.portinhola = port[1] ? port[1].toUpperCase() : true;
+  if (port) { patch.portinhola = port[1] ? port[1].toUpperCase() : true; patch.opcionais_perguntado = true; }
   // Portinhola cortada vs inteira
   if (/\bportinhola\b.*\b(inteira|ajuste\s+(?:no\s+)?local)\b|\b(inteira|ajuste\s+(?:no\s+)?local)\b.*\bportinhola\b/.test(t)) patch.portinhola_cortada = false;
   else if (/\bportinhola\b.*\bcortad[ao]s?\b|\bl[âa]minas?\s+cortad[ao]s?\b/.test(t)) patch.portinhola_cortada = true;
 
-  if (/\balcapao\b/.test(t) && !port) patch.alcapao = true;
+  if (/\balcap[ãa]o\b|\balcapao\b/.test(t) && !port) { patch.alcapao = true; patch.opcionais_perguntado = true; }
+  // "Nenhum" opcional / "sem opcionais" → encerra etapa sem portinhola nem alçapão
+  if (/\b(nenhum|nenhuma|sem\s+opcionais?|sem\s+(?:portinhola|alcap[ãa]o)|n[ãa]o\s+(?:quero|preciso)\s+(?:opcional|portinhola|alcap[ãa]o))\b/.test(t)) {
+    patch.opcionais_perguntado = true;
+    if (!port && !patch.portinhola) patch.portinhola = false;
+    if (!patch.alcapao) patch.alcapao = false;
+  }
+  // Central de controle mencionada sem quantidade → inclusa no kit (não pergunta de novo)
+  if (/\bcentral(\s+de\s+(comando|controle))?\b/.test(t) && !/\d+\s*centrais?\b|\d+\s*central\b/.test(t)) {
+    patch.central = true;
+  }
   if (/\bpintura\s+eletrostatica\b|\bcom\s+pintura\b/.test(t) && !/sem\s+pintura/.test(t)) patch.pintura = "eletrostatica";
 
   // Medida de corte: manual vs automática
