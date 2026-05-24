@@ -351,6 +351,19 @@ function validarMotor(m: { tipo?: string; ac_dc?: string; potencia?: number }): 
   if (!m.potencia || !lista.includes(m.potencia)) faltando.push(`potência (${lista.join("/")} kg)`);
   return { ok: faltando.length === 0, faltando };
 }
+function validarCapacidadeMotorConfig(config: any): { ok: boolean; erro?: string } {
+  const pot = Number(config?.potencia);
+  if (!Number.isFinite(pot) || pot <= 0) return { ok: true };
+  const acdc = String(config?.ac_dc || "").toUpperCase();
+  const lista = acdc === "DC" ? POTENCIAS_DC : acdc === "AC" ? POTENCIAS_AC : Array.from(new Set([...POTENCIAS_AC, ...POTENCIAS_DC]));
+  if (lista.includes(pot)) return { ok: true };
+  const sugestao = lista.reduce((a, b) => Math.abs(b - pot) < Math.abs(a - pot) ? b : a, lista[0]);
+  const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
+  const disponiveis = acdc === "AC" || acdc === "DC"
+    ? `${lista.join(" / ")} kg`
+    : `AC: ${POTENCIAS_AC.join(" / ")} kg · DC: ${POTENCIAS_DC.join(" / ")} kg`;
+  return { ok: false, erro: `Motor${escopo} ${pot} kg não corresponde a uma capacidade cadastrada. Capacidades disponíveis: ${disponiveis}. 👉 Deseja corrigir para *${sugestao} kg*?` };
+}
 /** Portinhola e alçapão não podem coexistir na mesma porta. */
 function validarPortinholaAlcapao(cfg: { portinhola?: boolean; alcapao?: boolean }): { ok: boolean; erro?: string } {
   if (cfg.portinhola && cfg.alcapao) return { ok: false, erro: "Portinhola e alçapão não podem ser usados juntos na mesma porta." };
