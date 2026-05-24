@@ -3586,7 +3586,11 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
         };
         linhas.push(`   Instalação: ${labelInst[String(c.instalacao)] || String(c.instalacao).replace(/_/g, " ")}${c.trava_lamina ? " (com trava de lâminas)" : ""}`);
       }
-      if (c?.motor?.ac_dc) linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + "kg" : ""}`);
+      if (c?.motor?.ac_dc) {
+        const km = c.kit_motor || "kit_automatizador";
+        const fmt = km === "kit_automatizador" ? "kit automatizador" : km === "motor_testeiras" ? "com testeiras" : "avulso";
+        linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + " kg" : ""} (${fmt})`);
+      }
       if (c?.lamina?.modelo) linhas.push(`   Lâmina principal: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
       const faixas = Array.isArray(c?.lamina?.combinacao) ? c.lamina.combinacao : [];
       for (const f of faixas) {
