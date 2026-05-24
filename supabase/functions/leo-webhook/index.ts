@@ -3003,12 +3003,98 @@ function escolherMotorPorPeso(pesoKg: number): number {
   return 800;
 }
 
-/** Escolha do eixo conforme largura e motor escolhido. */
-function escolherEixoAuto(largura: number, motorKg: number): number {
-  if (motorKg >= 700) return 6.5;
-  if (motorKg >= 500) return 5.5;
-  if ((Number(largura) || 0) <= 6) return 4.5;
-  return 5.5;
+/**
+ * Cálculo estrutural do eixo (viga simplesmente apoiada, carga distribuída).
+ * Critério: flecha δ = (5·w·L⁴)/(384·E·I) ≤ L/300
+ *   - L em mm (largura da porta)
+ *   - w em N/mm (carga distribuída linear)
+ *   - E = 200.000 N/mm² (aço)
+ *   - I = (π/64)·(D⁴ − d⁴), tubo de aço
+ * Peso da porta = largura · (altura + rolo) · 12 kg/m².
+ * Testa 4.5", 5.5", 6", 6.5", 8.5" e retorna o MENOR aprovado.
+ */
+const EIXOS_TABELA = [
+  { pol: 4.5, D: 114.3, e: 2.00 },
+  { pol: 5.5, D: 139.7, e: 2.65 },
+  { pol: 6.0, D: 152.4, e: 3.00 },
+  { pol: 6.5, D: 165.1, e: 3.00 },
+  { pol: 8.5, D: 215.9, e: 3.75 },
+] as const;
+
+function _roloPorPol(pol: number): number {
+  return pol <= 5.5 ? 0.60 : 0.75;
+}
+
+function _inerciaTubo_mm4(D: number, e: number): number {
+  const d = D - 2 * e;
+  return (Math.PI / 64) * (Math.pow(D, 4) - Math.pow(d, 4));
+}
+
+function calcularEixoEstrutural(largura_m: number, altura_m: number): {
+  pol: number;
+  peso_kg: number;
+  rolo: number;
+  altura_total: number;
+  flecha_mm: number;
+  flecha_max_mm: number;
+  aprovado: boolean;
+  tentativas: Array<{ pol: number; flecha_mm: number; flecha_max_mm: number; aprovado: boolean }>;
+} {
+  const L_mm = (Number(largura_m) || 0) * 1000;
+  const E = 200000; // N/mm²
+  const tentativas: Array<{ pol: number; flecha_mm: number; flecha_max_mm: number; aprovado: boolean }> = [];
+
+  for (const eixo of EIXOS_TABELA) {
+    const rolo = _roloPorPol(eixo.pol);
+    const alturaTotal = (Number(altura_m) || 0) + rolo;
+    const area = (Number(largura_m) || 0) * alturaTotal;
+    const peso_kg = area * 12;
+    const peso_N = peso_kg * 9.81;
+    const w = L_mm > 0 ? peso_N / L_mm : 0; // N/mm
+    const I = _inerciaTubo_mm4(eixo.D, eixo.e);
+    const flecha = I > 0 ? (5 * w * Math.pow(L_mm, 4)) / (384 * E * I) : Infinity;
+    const flechaMax = L_mm / 300;
+    const aprovado = flecha <= flechaMax;
+    tentativas.push({ pol: eixo.pol, flecha_mm: +flecha.toFixed(2), flecha_max_mm: +flechaMax.toFixed(2), aprovado });
+    if (aprovado) {
+      return {
+        pol: eixo.pol,
+        peso_kg: +peso_kg.toFixed(1),
+        rolo,
+        altura_total: +alturaTotal.toFixed(2),
+        flecha_mm: +flecha.toFixed(2),
+        flecha_max_mm: +flechaMax.toFixed(2),
+        aprovado: true,
+        tentativas,
+      };
+    }
+  }
+  // Nenhum aprovado → retorna o maior (8.5") como fallback
+  const ultimo = EIXOS_TABELA[EIXOS_TABELA.length - 1];
+  const rolo = _roloPorPol(ultimo.pol);
+  const alturaTotal = (Number(altura_m) || 0) + rolo;
+  const peso_kg = (Number(largura_m) || 0) * alturaTotal * 12;
+  const last = tentativas[tentativas.length - 1];
+  return {
+    pol: ultimo.pol,
+    peso_kg: +peso_kg.toFixed(1),
+    rolo,
+    altura_total: +alturaTotal.toFixed(2),
+    flecha_mm: last.flecha_mm,
+    flecha_max_mm: last.flecha_max_mm,
+    aprovado: false,
+    tentativas,
+  };
+}
+
+/** Escolha do eixo: cálculo estrutural (substitui regra empírica por largura/motor). */
+function escolherEixoAuto(largura: number, _motorKg: number, altura?: number): number {
+  const alt = Number(altura) || 0;
+  if (!largura || !alt) {
+    // sem altura ainda, fallback conservador pela largura
+    return (Number(largura) || 0) <= 6 ? 4.5 : 5.5;
+  }
+  return calcularEixoEstrutural(Number(largura), alt).pol;
 }
 
 /** Guia automática pela largura: ≤4m → 50mm, ≤7m → 70mm, >7m → 100mm. */
@@ -3021,7 +3107,7 @@ function escolherGuiaAuto(largura: number): 50 | 70 | 100 {
 
 const GUIAS_VALIDAS = [50, 60, 70, 100] as const;
 
-/** Rolo conforme polegadas do eixo. */
+/** @deprecated mantido por compatibilidade — usar calcularEixoEstrutural. */
 function eixoPorAltura(alturaTotal: number): number {
   if (alturaTotal <= 3.5) return 4.5;
   if (alturaTotal <= 4.5) return 5.5;
