@@ -3141,7 +3141,7 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const acdc = cfg?.motor?.ac_dc || "AC";
   const pesoInfo = estimarPesoPorta(largura, altura);
   const potencia = Number(cfg?.motor?.potencia) || escolherMotorPorPeso(pesoInfo.peso_kg);
-  const eixoPol = Number(cfg?.eixo_polegadas) || escolherEixoAuto(largura, potencia);
+  const eixoPol = Number(cfg?.eixo_polegadas) || escolherEixoAuto(largura, potencia, altura);
   const rolo = calcRoloNum(eixoPol);
   const alturaTotal = altura + rolo;
   let guia_mm_eff = Number(cfg?.guia_mm) || escolherGuiaAuto(largura);
