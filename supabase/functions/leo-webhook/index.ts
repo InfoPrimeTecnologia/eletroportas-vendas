@@ -2686,22 +2686,37 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
   else if (/\bsem\s+trava\b|\bn[ãa]o\s+(?:quero|precis\w*)\s+trava\b|\bdispens\w+\s+trava\b/.test(t)) patch.trava_lamina = false;
 
-  // Pintura (sim/não) reaproveitando inferirPinturaTexto
-  try {
-    const pInf = inferirPinturaTexto(texto);
-    if (pInf) {
-      patch.quer_pintura = pInf.quer_pintura;
-      if (pInf.quer_pintura) {
-        const mapCor: Record<string, string> = { branco_liso: "branco", preta_fosco: "preto", cinza_texturizado: "cinza" };
-        if (pInf.tipo_pintura && mapCor[pInf.tipo_pintura]) {
-          patch.lamina = { ...(patch.lamina || {}), cor: mapCor[pInf.tipo_pintura] };
-        }
-        patch.pintura = "eletrostatica";
-      } else {
-        patch.pintura = null;
+  // Pintura — só infere quando o cliente cita pintura EXPLICITAMENTE.
+  // Regra: cor sozinha ("branca", "preta") é apenas cor da lâmina, NÃO confirma pintura eletrostática.
+  // Apenas palavras-chave de pintura ou negação direta encerram a pendência.
+  const mencPintura = /\b(pintura|pintad[ao]|eletrost[áa]tic\w*|tinta)\b/.test(t);
+  const semPintura = /\b(sem\s+pintura|sem\s+tinta|n[ãa]o\s+(?:quero|preciso|precis\w*|vou)\s+(?:de\s+)?pintura|dispens\w+\s+pintura|natural|galvanizad[ao]|cru|sem\s+acabamento)\b/.test(t);
+  const respostaCurtaNao = /^\s*(n[ãa]o|nao|n)\b\s*[.!]?\s*$/i.test(texto || "");
+  const respostaCurtaSim = /^\s*(sim|s)\b\s*[.!]?\s*$/i.test(texto || "");
+  if (semPintura) {
+    patch.quer_pintura = false;
+    patch.pintura = null;
+  } else if (mencPintura) {
+    if (/\b(sem|n[ãa]o)\b/.test(t)) {
+      patch.quer_pintura = false;
+      patch.pintura = null;
+    } else {
+      patch.quer_pintura = true;
+      patch.pintura = "eletrostatica";
+      const corMatch = t.match(/\b(branc[ao]|pret[ao]|cinza|bege|azul|verde|vermelh[ao]|amarel[ao]|ral\s*\d+|especial)\b/);
+      if (corMatch) {
+        const cor = corMatch[1].replace(/a$/, "o").replace(/\s+/g, "_");
+        patch.lamina = { ...(patch.lamina || {}), cor };
       }
     }
-  } catch { /* noop */ }
+  } else if (respostaCurtaNao) {
+    // Resposta isolada "Não" — assume resposta à última pergunta pendente (geralmente pintura).
+    patch.quer_pintura = false;
+    patch.pintura = null;
+  } else if (respostaCurtaSim) {
+    patch.quer_pintura = true;
+    patch.pintura = "eletrostatica";
+  }
 
   // Trocar guia para X
   const trocaGuia = t.match(/\b(trocar|alterar|mudar)\s+guia\s+(?:para|pra|p\/)\s*(50|60|70|100)\b/);
@@ -2793,7 +2808,9 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
     const q = t.match(/(\d+)\s*soleiras?/);
     intencoes.push({ acao: "add_item", tipo: "soleira", config: { qtd: q ? Number(q[1]) : 1 } });
   }
-  if (/\bl[âa]minas?\s*avulsa?|avulsa?\s*l[âa]mina/.test(t)) {
+  // Lâmina avulsa SOMENTE quando explicitamente "lâmina avulsa".
+  // "1m de transvision" misturado com kit_porta = faixa parcial (combinacao), nunca avulso.
+  if (/\bl[âa]minas?\s*avulsa?|avulsa?\s*l[âa]mina/.test(t) && !parcial && !medida) {
     const q = t.match(/(\d+)\s*l[âa]minas?/);
     intencoes.push({ acao: "add_item", tipo: "lamina", config: { qtd: q ? Number(q[1]) : 1 } });
   }
@@ -2888,6 +2905,9 @@ REGRAS:
   • MOTOR: capacidade (potencia) + modelo (kit_motor: avulso | motor_testeiras | kit_automatizador) + AC/DC.
   Se faltar qualquer um, apenas registre o que o cliente disse — o sistema vai perguntar o restante. Não tente adivinhar.
 - "20 lâminas fechadas" → add_item lamina {qtd:20, modelo:"fechado"} (SEM tamanho — o sistema perguntará).
+- CORES NÃO SÃO PINTURA: "porta branca", "cor branca", "lâmina preta" → APENAS lamina.cor. NUNCA defina pintura:"eletrostatica" nem quer_pintura:true só por causa de cor.
+- Pintura só é confirmada quando o cliente diz "pintura eletrostática", "com pintura", "pintar de X" ou similar. "Sem pintura" / "não quero pintura" / resposta isolada "Não" enquanto pintura está pendente → update_item kit_porta patch {quer_pintura:false, pintura:false}.
+- FAIXA PARCIAL DE LÂMINA: "porta 10x4 lâmina fechada com 1m de transvision" = UM ÚNICO kit_porta com lamina.modelo:"fechado" E lamina.combinacao:[{modelo:"transvision",altura_m:1}]. NUNCA crie add_item lamina avulso para a faixa parcial.
 - Devolva APENAS JSON válido, sem explicação.
 
 PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
@@ -3149,9 +3169,11 @@ function calcPortinholaCortada(largura: number, guia_mm: number, perfil: "baixo"
   return { largura_final: larguraFinal, qtd_laminas: qtdLaminas, soleira_m: larguraFinal };
 }
 
-/** Lâmina parcial: qtd de lâminas para uma faixa de altura (sempre ÷ 0,085). */
-function calcLaminasParcial(alturaM: number): number {
-  return Math.ceil((Number(alturaM) || 0) / 0.085);
+/** Lâmina parcial: qtd de lâminas para uma faixa de altura.
+ *  perfil baixo → ÷ 0,075 / perfil alto → ÷ 0,085. */
+function calcLaminasParcial(alturaM: number, perfil: "baixo" | "alto" = "alto"): number {
+  const passo = perfil === "baixo" ? 0.075 : 0.085;
+  return Math.ceil((Number(alturaM) || 0) / passo);
 }
 
 async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
@@ -3205,7 +3227,7 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
     });
   }
   for (const faixa of combinacao) {
-    const qtdF = calcLaminasParcial(faixa.altura_m);
+    const qtdF = calcLaminasParcial(faixa.altura_m, perfil);
     if (qtdF <= 0) continue;
     const pF = await precoEstoque(`lamina ${String(faixa.modelo).replace("_", " ")} ${perfil}${cor}`);
     linhas.push({
@@ -3651,7 +3673,12 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
         linhas.push(`   Instalação: ${labelInst[String(c.instalacao)] || String(c.instalacao).replace(/_/g, " ")}${c.trava_lamina ? " (com trava de lâminas)" : ""}`);
       }
       if (c?.motor?.ac_dc) linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + "kg" : ""}`);
-      if (c?.lamina?.modelo) linhas.push(`   Lâmina: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
+      if (c?.lamina?.modelo) linhas.push(`   Lâmina principal: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
+      const faixas = Array.isArray(c?.lamina?.combinacao) ? c.lamina.combinacao : [];
+      for (const f of faixas) {
+        if (!f?.altura_m || !f?.modelo) continue;
+        linhas.push(`   Faixa parcial: ${Number(f.altura_m).toFixed(2).replace(".", ",")} m em lâmina ${String(f.modelo).replace("_", " ")}`);
+      }
       if (c?.lamina?.cor) linhas.push(`   Cor: ${c.lamina.cor}`);
       if (c.guia_mm) linhas.push(`   Guia: ${c.guia_mm}mm`);
       if (c.portinhola) {
@@ -3659,7 +3686,8 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
         linhas.push(`   Portinhola: ${portConf ? c.portinhola.toUpperCase() : "_(posição a definir)_"}`);
       }
       if (c.alcapao) linhas.push(`   Alçapão: sim`);
-      if (c.pintura) linhas.push(`   Pintura eletrostática`);
+      if (c.quer_pintura === true) linhas.push(`   Pintura eletrostática: sim`);
+      else if (c.quer_pintura === false) linhas.push(`   Pintura eletrostática: não`);
       if (c.central !== false && c?.motor?.potencia) linhas.push(`   Central de controle inclusa`);
       if ((Number(c.controles) || 0) > 0) linhas.push(`   Controles: ${c.controles}`);
     } else if (it.tipo === "motor") {
@@ -3938,7 +3966,27 @@ async function rodarConfigurador(args: {
   }
 
   // 1) Interpreta intenções técnicas
-  const intencoes = await cfgInterpretar(mensagem, pedido);
+  let intencoes = await cfgInterpretar(mensagem, pedido);
+  // Pós-processamento: faixa parcial misturada com kit_porta NUNCA vira lâmina avulsa.
+  const msgLower = String(mensagem || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const parcialRx = /(\d+(?:[\.,]\d+)?)\s*m(?:t|ts|etros?)?\s+(?:de\s+)?(transvision|oblongo|fechad[ao])/i;
+  const temParcial = parcialRx.test(msgLower);
+  const temKit = intencoes.some((i: any) => i?.tipo === "kit_porta")
+    || pedido.itens.some((it) => it.tipo === "kit_porta");
+  if (temParcial && temKit) {
+    const parc = msgLower.match(parcialRx);
+    const modeloP = parc && parc[2].startsWith("fechad") ? "fechado" : (parc?.[2] || "");
+    const altP = parc ? Number(parc[1].replace(",", ".")) : 0;
+    // remove qualquer add_item lamina que apareça junto
+    intencoes = intencoes.filter((i: any) => !(i?.acao === "add_item" && i?.tipo === "lamina"));
+    if (modeloP && altP > 0) {
+      intencoes.push({
+        acao: "update_item",
+        ref: "kit_porta",
+        patch: { lamina: { combinacao: [{ modelo: modeloP, altura_m: altP }] } },
+      });
+    }
+  }
   console.log("🧠 cfg intencoes:", JSON.stringify(intencoes));
 
   // 2) Aplica (sem explodir BOM ainda — apenas atualiza config)
