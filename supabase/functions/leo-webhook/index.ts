@@ -359,10 +359,7 @@ function validarCapacidadeMotorConfig(config: any): { ok: boolean; erro?: string
   if (lista.includes(pot)) return { ok: true };
   const sugestao = lista.reduce((a, b) => Math.abs(b - pot) < Math.abs(a - pot) ? b : a, lista[0]);
   const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
-  const disponiveis = acdc === "AC" || acdc === "DC"
-    ? `${lista.join(" / ")} kg`
-    : `AC: ${POTENCIAS_AC.join(" / ")} kg · DC: ${POTENCIAS_DC.join(" / ")} kg`;
-  return { ok: false, erro: `Motor${escopo} ${pot} kg não corresponde a uma capacidade cadastrada. Capacidades disponíveis: ${disponiveis}. 👉 Deseja corrigir para *${sugestao} kg*?` };
+  return { ok: false, erro: `Identifiquei um possível erro 👍\n\nMotor${escopo} ${pot} kg não existe no cadastro.\n\n👉 Deseja corrigir para:\n• *${sugestao} kg*\n• Informar outra capacidade` };
 }
 function limparCapacidadesMotorInvalidas(pedido: CfgPedido): { pedido: CfgPedido; avisos: string[] } {
   const avisos: string[] = [];
