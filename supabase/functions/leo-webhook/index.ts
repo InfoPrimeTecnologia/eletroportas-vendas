@@ -3485,15 +3485,11 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
   for (const it of pedido.itens) {
     if (it.tipo === "kit_porta") {
       const c = it.config || {};
-      // Apenas o essencial — motor potência/eixo/guia são automáticos pelas regras.
+      // Fluxo correto: MEDIDA → LÂMINA → PINTURA → OPCIONAIS → MOTOR → MEDIDA DE CORTE → INSTALAÇÃO → TRAVA
       if (!c.largura || !c.altura) return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
-      if (!c.instalacao) return "Qual o tipo de instalação?\n• *entre testeiras*\n• *vão + 1 guia*\n• *vão + guias*\n• *entre paredes*";
-      if ((c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") && !c.guia_mm && !c.guia_mm_esq && !c.guia_mm_dir) {
-        return "Qual a profundidade da *guia* em mm? (50 / 60 / 70 / 100)";
-      }
-      if (!c?.motor?.ac_dc) return "O motor é *AC* ou *DC*?";
-      if (!c?.lamina?.modelo) return "Qual o *modelo da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
-      if (!c?.lamina?.cor) return "Qual a *cor da lâmina/pintura*?";
+      if (!c?.lamina?.modelo) return "Qual o *modelo principal da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
+      if (c.quer_pintura === undefined) return "Deseja *pintura eletrostática*?\n• *Sim*\n• *Não*";
+      if (c.quer_pintura === true && !c?.lamina?.cor) return "Qual a *cor da pintura*?";
       // Portinhola: nunca assumir posição. Se foi pedida sem posição, perguntar.
       if (c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()))) {
         return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
@@ -3502,6 +3498,20 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if ((port === "VILD" || port === "VILE") && c.portinhola_cortada === undefined) {
         return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
       }
+      if (!c?.motor?.ac_dc) return "Qual automatização deseja?\n• *Motor AC*\n• *Motor DC*";
+      if (!c.medida_corte_modo) {
+        return "Como deseja definir a *medida de corte*?\n• *Informar manualmente*\n• *Calcular automaticamente*";
+      }
+      if (c.medida_corte_modo === "manual") {
+        if (!c.medida_eixo_m) return "Informe a *medida do eixo* (em metros).";
+        if (!c.medida_lamina_m) return "Informe a *medida das lâminas* (em metros).";
+        if (!c.medida_soleira_m) return "Informe a *medida da soleira* (em metros).";
+      }
+      if (!c.instalacao) return "Qual o tipo de instalação?\n• *Entre testeiras*\n• *Vão + 1 guia*\n• *Vão + guias*\n• *Entre paredes*";
+      if ((c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") && !c.guia_mm && !c.guia_mm_esq && !c.guia_mm_dir) {
+        return "Qual a profundidade da *guia* em mm? (50 / 60 / 70 / 100)";
+      }
+      if (c.trava_lamina === undefined) return "Deseja incluir *trava de lâminas*?\n• *Sim*\n• *Não*";
     } else if (it.tipo === "motor") {
       const c = it.config || {};
       if (!c.potencia) return "Esse motor é de quantos *kg*? (200/300/400/500/800/1500)";
