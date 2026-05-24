@@ -2808,7 +2808,9 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
     const q = t.match(/(\d+)\s*soleiras?/);
     intencoes.push({ acao: "add_item", tipo: "soleira", config: { qtd: q ? Number(q[1]) : 1 } });
   }
-  if (/\bl[âa]minas?\s*avulsa?|avulsa?\s*l[âa]mina/.test(t)) {
+  // Lâmina avulsa SOMENTE quando explicitamente "lâmina avulsa".
+  // "1m de transvision" misturado com kit_porta = faixa parcial (combinacao), nunca avulso.
+  if (/\bl[âa]minas?\s*avulsa?|avulsa?\s*l[âa]mina/.test(t) && !parcial && !medida) {
     const q = t.match(/(\d+)\s*l[âa]minas?/);
     intencoes.push({ acao: "add_item", tipo: "lamina", config: { qtd: q ? Number(q[1]) : 1 } });
   }
