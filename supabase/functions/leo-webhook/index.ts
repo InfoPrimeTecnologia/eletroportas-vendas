@@ -3156,11 +3156,20 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
 
   // Motor + (kit automatizador | motor+testeiras | avulso)
   const kitMotor = cfg?.kit_motor || "kit_automatizador";
+  const labelFormato: Record<string, string> = {
+    avulso: "avulso",
+    motor_testeiras: "com testeiras",
+    kit_automatizador: "kit automatizador",
+  };
   if (cfg?.motor !== false) {
     const pMot = await precoEstoque(`motor ${potencia}kg ${acdc}`);
+    const baseDesc = pMot?.nome || `Motor ${acdc} ${potencia} kg`;
+    const descMot = kitMotor === "kit_automatizador"
+      ? `Kit automatizador ${acdc} ${potencia} kg (motor, testeiras, central e 2 controles)`
+      : `${baseDesc} ${labelFormato[kitMotor] || ""}`.trim();
     linhas.push({
       sku: pMot?.sku || `MOTOR-${potencia}KG`,
-      descricao: pMot?.nome || `Motor ${acdc} ${potencia}kg`,
+      descricao: descMot,
       und: "UN", qtd: 1,
       valor_unit: pMot?.preco || 0,
       total: pMot?.preco || 0,
