@@ -2604,20 +2604,16 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
 
   if (kgInvalido !== null) {
     const minimo = Math.min(...capacidadesValidas);
-    let texto: string;
-    if (kgInvalido < minimo) {
-      texto =
-        `O menor modelo de motor que trabalhamos hoje é o de *${minimo} kg*, ` +
-        `que atende com folga essa necessidade. 👍\n\n` +
-        `👉 Você deseja:\n• Motor AC\n• Motor DC`;
-    } else {
-      const sugestao = capacidadesValidas.reduce((a, b) => Math.abs(b - kgInvalido!) < Math.abs(a - kgInvalido!) ? b : a);
-      texto = `Imagino que tenha sido um pequeno engano 👍\n\nVocê quis dizer *${sugestao} kg*?`;
-    }
+    const sugestao = kgInvalido < minimo
+      ? minimo
+      : capacidadesValidas.reduce((a, b) => Math.abs(b - kgInvalido!) < Math.abs(a - kgInvalido!) ? b : a);
+    const escopoAcDc = acdc ? ` ${acdc}` : "";
+    let texto = `Consigo te ajudar 👍\n\nO menor modelo${escopoAcDc ? ` de motor${escopoAcDc}` : " que trabalhamos"} hoje é o de *${sugestao} kg*, que atende com folga essa necessidade.`;
+    if (!acdc) texto += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
     intencoes.push({ acao: "duvida", texto });
   } else if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
     const sugDC = POTENCIAS_DC.reduce((a, b) => Math.abs(b - potN) < Math.abs(a - potN) ? b : a);
-    intencoes.push({ acao: "duvida", texto: `Em DC, o mais próximo que temos é *${sugDC} kg* 👍\n\nPosso seguir com ele, ou prefere *AC ${potN} kg*?` });
+    intencoes.push({ acao: "duvida", texto: `Consigo te ajudar 👍\n\nEm DC o mais próximo que temos é *${sugDC} kg*. Posso seguir com ele, ou prefere *AC ${potN} kg*?` });
   } else if ((pot || acdc) && !/\bavulso\b/.test(t)) {
     patch.motor = { ...(patch.motor || {}), ...(potN ? { potencia: potN } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
   }
