@@ -3898,7 +3898,42 @@ function classificarIntencaoConversa(mensagem: string): "saudacao" | "pergunta_p
   return "continuacao";
 }
 
+/**
+ * Detecta mudança CLARA de intenção do cliente no meio do atendimento.
+ * Quando isso acontece, substituímos o contexto ativo em vez de continuar
+ * acumulando itens incompatíveis (ex: cliente estava em "kit porta" e
+ * agora diz "desculpe, quero peças avulsas").
+ */
+function detectarTrocaContexto(mensagem: string, pedido: CfgPedido): { trocou: boolean; novoContexto?: string; aviso?: string } {
+  const t = String(mensagem || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!t.trim() || !pedido?.itens?.length) return { trocou: false };
+
+  const querPecas = /\b(pecas?\s*avuls(a|as)|pecas?\s*soltas?|so\s*pec|apenas\s*pec|somente\s*pec)\b/.test(t)
+    || /\b(quero|preciso|gostaria|prefiro)\s+(de\s+)?(pecas?\s*avuls|avuls)/.test(t);
+  const querKit = /\b(kit\s*porta|porta\s*completa|porta\s*inteira|porta\s*toda|kit\s*completo)\b/.test(t);
+
+  const temKitPorta = pedido.itens.some((it) => it.tipo === "kit_porta");
+  const temAvulsos = pedido.itens.some((it) => it.tipo !== "kit_porta");
+
+  if (querPecas && temKitPorta) {
+    return {
+      trocou: true,
+      novoContexto: "pecas_avulsas",
+      aviso: "Beleza, vamos focar em *peças avulsas* então. 👍\n\nMe diga quais peças e quantidades você precisa (ex: _2 motores AC 300kg, 6m de guia 60_).",
+    };
+  }
+  if (querKit && temAvulsos && !temKitPorta) {
+    return {
+      trocou: true,
+      novoContexto: "kit_porta",
+      aviso: "Beleza, vamos montar o *kit porta completo*. 👍\n\nMe passe a medida (largura x altura) e o tipo de lâmina (fechada, transvision ou oblongo).",
+    };
+  }
+  return { trocou: false };
+}
+
 // --- Orquestrador ---
+
 async function rodarConfigurador(args: {
   conversa: any;
   telefone: string;
