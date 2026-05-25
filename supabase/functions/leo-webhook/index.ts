@@ -3378,7 +3378,7 @@ function cfgInterpretarPorEtapaAtiva(
     return Boolean(qtd && c.mm && !c.comprimento_m);
   });
 
-  if (guiaPendente && numeroSimples && /comprimento.*guia|guia/.test(etapa)) {
+  if (guiaPendente && numeroSimples) {
     return [
       {
         acao: "update_item",
@@ -3926,6 +3926,9 @@ async function cfgInterpretar(
   mensagem: string,
   pedido: CfgPedido,
 ): Promise<any[]> {
+  const porEtapa = cfgInterpretarPorEtapaAtiva(mensagem, pedido);
+  if (porEtapa) return porEtapa;
+
   const sys = `Você é um interpretador de pedidos para uma fábrica de portas de enrolar.
 Receba a MENSAGEM do cliente serralheiro + o PEDIDO_ATUAL e devolva SOMENTE JSON:
 { "intencoes": [...] }
@@ -4021,7 +4024,7 @@ PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
     });
     if (!resp.ok) {
       console.error("cfgInterpretar falhou:", resp.status, await resp.text());
-      return cfgFallbackInterpretar(mensagem);
+      return cfgFallbackInterpretar(mensagem, pedido);
     }
     const j = await resp.json();
     if (
@@ -4031,16 +4034,16 @@ PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
       console.warn(
         "cfgInterpretar truncado por limite de tokens — usando fallback determinístico",
       );
-      return cfgFallbackInterpretar(mensagem);
+      return cfgFallbackInterpretar(mensagem, pedido);
     }
     const content = j?.choices?.[0]?.message?.content || "{}";
     const parsed = JSON.parse(content);
     return Array.isArray(parsed?.intencoes)
       ? parsed.intencoes
-      : cfgFallbackInterpretar(mensagem);
+      : cfgFallbackInterpretar(mensagem, pedido);
   } catch (e) {
     console.error("cfgInterpretar erro:", (e as Error)?.message);
-    return cfgFallbackInterpretar(mensagem);
+    return cfgFallbackInterpretar(mensagem, pedido);
   }
 }
 
