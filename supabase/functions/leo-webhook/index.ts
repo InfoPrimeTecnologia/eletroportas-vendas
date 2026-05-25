@@ -357,16 +357,13 @@ function validarCapacidadeMotorConfig(config: any): { ok: boolean; erro?: string
   const acdc = String(config?.ac_dc || "").toUpperCase();
   const lista = acdc === "DC" ? POTENCIAS_DC : acdc === "AC" ? POTENCIAS_AC : Array.from(new Set([...POTENCIAS_AC, ...POTENCIAS_DC]));
   if (lista.includes(pot)) return { ok: true };
-  const sugestao = lista.reduce((a, b) => Math.abs(b - pot) < Math.abs(a - pot) ? b : a, lista[0]);
-  const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
   const minimo = Math.min(...lista);
-  let msg: string;
-  if (pot < minimo) {
-    msg = `O menor modelo${escopo ? ` de motor${escopo}` : " que trabalhamos"} hoje é o de *${minimo} kg*, que atende com folga essa necessidade. 👍`;
-    if (!escopo) msg += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
-  } else {
-    msg = `Imagino que tenha sido um pequeno engano 👍\n\nVocê quis dizer *${sugestao} kg*?`;
-  }
+  const sugestao = pot < minimo
+    ? minimo
+    : lista.reduce((a, b) => Math.abs(b - pot) < Math.abs(a - pot) ? b : a, lista[0]);
+  const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
+  let msg = `Consigo te ajudar 👍\n\nO menor modelo${escopo ? ` de motor${escopo}` : " que trabalhamos"} hoje é o de *${sugestao} kg*, que atende com folga essa necessidade.`;
+  if (!escopo) msg += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
   return { ok: false, erro: msg };
 }
 function limparCapacidadesMotorInvalidas(pedido: CfgPedido): { pedido: CfgPedido; avisos: string[] } {
