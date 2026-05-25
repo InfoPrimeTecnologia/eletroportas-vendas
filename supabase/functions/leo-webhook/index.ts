@@ -3944,11 +3944,40 @@ function classificarIntencaoConversa(mensagem: string): "saudacao" | "pergunta_p
  */
 function detectarTrocaContexto(mensagem: string, pedido: CfgPedido): { trocou: boolean; novoContexto?: string; aviso?: string } {
   const t = String(mensagem || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (!t.trim() || !pedido?.itens?.length) return { trocou: false };
+  if (!t.trim()) return { trocou: false };
+
+  const contextoMsg = detectarContextoAtivoMensagem(mensagem);
+  const contextoAtual = pedido?.contexto_ativo || (pedido?.itens?.some((it) => it.tipo === "motor") ? "motor" : pedido?.itens?.some((it) => it.tipo === "kit_porta") ? "kit_porta" : pedido?.itens?.length ? "pecas_avulsas" : null);
+  if (contextoMsg && contextoAtual && contextoMsg !== contextoAtual) {
+    if (contextoMsg === "motor") {
+      return {
+        trocou: true,
+        novoContexto: "motor",
+        aviso: "Perfeito 👍\n\nVamos falar só de *motor* então.\n\nMe confirme se você quer:\n• *Motor avulso*\n• *Motor + testeiras*\n• *Kit automatizador*",
+      };
+    }
+    if (contextoMsg === "pecas_avulsas") {
+      return {
+        trocou: true,
+        novoContexto: "pecas_avulsas",
+        aviso: "Beleza 👍\n\nVamos seguir só com *peças avulsas*.\n\nMe diga quais peças e quantidades você precisa.",
+      };
+    }
+    if (contextoMsg === "kit_porta") {
+      return {
+        trocou: true,
+        novoContexto: "kit_porta",
+        aviso: "Perfeito 👍\n\nVamos montar o *kit da porta* do zero.\n\nMe passe a largura x altura para eu seguir.",
+      };
+    }
+  }
+
+  if (!pedido?.itens?.length) return { trocou: false };
 
   const querPecas = /\b(pecas?\s*avuls(a|as)|pecas?\s*soltas?|so\s*pec|apenas\s*pec|somente\s*pec)\b/.test(t)
     || /\b(quero|preciso|gostaria|prefiro)\s+(de\s+)?(pecas?\s*avuls|avuls)/.test(t);
   const querKit = /\b(kit\s*porta|porta\s*completa|porta\s*inteira|porta\s*toda|kit\s*completo)\b/.test(t);
+  const querMotores = /\b(motor(?:es)?|automatizador(?:es)?)\b/.test(t) && !/\bporta\b/.test(t);
 
   const temKitPorta = pedido.itens.some((it) => it.tipo === "kit_porta");
   const temAvulsos = pedido.itens.some((it) => it.tipo !== "kit_porta");
@@ -3965,6 +3994,13 @@ function detectarTrocaContexto(mensagem: string, pedido: CfgPedido): { trocou: b
       trocou: true,
       novoContexto: "kit_porta",
       aviso: "Beleza, vamos montar o *kit porta completo*. 👍\n\nMe passe a medida (largura x altura) e o tipo de lâmina (fechada, transvision ou oblongo).",
+    };
+  }
+  if (querMotores && temKitPorta) {
+    return {
+      trocou: true,
+      novoContexto: "motor",
+      aviso: "Perfeito 👍\n\nVamos focar só em *motores*.\n\nVocê quer *motor avulso*, *motor + testeiras* ou *kit automatizador*?",
     };
   }
   return { trocou: false };
