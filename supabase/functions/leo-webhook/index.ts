@@ -3915,6 +3915,23 @@ async function rodarConfigurador(args: {
     .eq("id", conversa.id)
     .maybeSingle();
   let pedido = carregarPedido((row as any)?.pedido);
+
+  // ====== TROCA DE CONTEXTO (substituição, não soma) ======
+  // Se cliente sinaliza claramente mudança de intenção ("desculpe, quero peças avulsas",
+  // "na verdade prefiro kit completo", etc.), removemos os itens incompatíveis em vez
+  // de continuar acumulando perguntas do fluxo antigo.
+  const trocaCtx = detectarTrocaContexto(mensagem, pedido);
+  if (trocaCtx.trocou) {
+    console.log("🔄 troca de contexto:", trocaCtx.novoContexto);
+    pedido = { itens: [], total: 0, status: "em_andamento" };
+    await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+    if (trocaCtx.aviso) {
+      await salvarMensagem(conversa.id, "assistant", trocaCtx.aviso, { configurador: true, troca_contexto: trocaCtx.novoContexto });
+      await enviarTexto(telefone, trocaCtx.aviso);
+      return { pdfEnviado: false, texto: trocaCtx.aviso };
+    }
+  }
+
   const saneamentoMotor = limparCapacidadesMotorInvalidas(pedido);
   pedido = saneamentoMotor.pedido;
   if (saneamentoMotor.avisos.length) {
