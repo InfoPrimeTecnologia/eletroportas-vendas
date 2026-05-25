@@ -43,7 +43,8 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -62,7 +63,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 
 // Backend legado (onde estão Clientes, estoque, funil)
 const LEGACY_SUPABASE_URL = "https://pdwghmxolqiuyxunglon.supabase.co";
-const LEGACY_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkd2dobXhvbHFpdXl4dW5nbG9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyNjM1NTMsImV4cCI6MjA4NDgzOTU1M30.FmYvMO9HLz-AUUH29TwBbRYA2KMPdyczSjorq3vVDcM";
+const LEGACY_SUPABASE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkd2dobXhvbHFpdXl4dW5nbG9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyNjM1NTMsImV4cCI6MjA4NDgzOTU1M30.FmYvMO9HLz-AUUH29TwBbRYA2KMPdyczSjorq3vVDcM";
 const legacyDb = createClient(LEGACY_SUPABASE_URL, LEGACY_SUPABASE_KEY, {
   auth: { persistSession: false },
 });
@@ -91,7 +93,11 @@ function normalizarTelefone(t: string): string {
 }
 
 function ehPendenteSerralheiro(tipo: unknown): boolean {
-  const t = String(tipo || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const t = String(tipo || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
   return t.includes("pendente") && t.includes("serralheiro");
 }
 
@@ -106,16 +112,28 @@ function telefoneClienteBate(cliFone: unknown, telefone: string): boolean {
   if (!alvo || !fone) return false;
   const alvoSemPais = alvo.startsWith("55") ? alvo.slice(2) : alvo;
   const foneSemPais = fone.startsWith("55") ? fone.slice(2) : fone;
-  return fone === alvo || fone === alvoSemPais || foneSemPais === alvoSemPais || fone.endsWith(alvo.slice(-10)) || alvo.endsWith(fone.slice(-10));
+  return (
+    fone === alvo ||
+    fone === alvoSemPais ||
+    foneSemPais === alvoSemPais ||
+    fone.endsWith(alvo.slice(-10)) ||
+    alvo.endsWith(fone.slice(-10))
+  );
 }
 
 function escolherClienteMaisRelevante(clientes: any[], telefone: string) {
-  const matches = (clientes || []).filter((c) => telefoneClienteBate(c?.CLI_FONE, telefone));
-  const lista = matches.length ? matches : (clientes || []);
-  return lista.find((c) => ehPendenteSerralheiro(c?.tipo_cliente))
-    || lista.find((c) => /revenda|instalada|porta_instalada/i.test(String(c?.tipo_cliente || "")))
-    || lista[0]
-    || null;
+  const matches = (clientes || []).filter((c) =>
+    telefoneClienteBate(c?.CLI_FONE, telefone),
+  );
+  const lista = matches.length ? matches : clientes || [];
+  return (
+    lista.find((c) => ehPendenteSerralheiro(c?.tipo_cliente)) ||
+    lista.find((c) =>
+      /revenda|instalada|porta_instalada/i.test(String(c?.tipo_cliente || "")),
+    ) ||
+    lista[0] ||
+    null
+  );
 }
 
 // Busca cliente no backend legado pelo telefone
@@ -125,14 +143,18 @@ async function buscarClientePorTelefone(telefone: string) {
   // Variações para casar formatos diferentes salvos no banco, mas SEMPRE com match exato
   // (não usar ilike %v% para evitar falso positivo com telefones que contenham os mesmos dígitos)
   const semPais = tel.startsWith("55") ? tel.slice(2) : tel;
-  const variacoes = Array.from(new Set([
-    tel,
-    semPais,
-    tel.slice(-11),
-    tel.slice(-10),
-    `+${tel}`,
-    `+55${semPais}`,
-  ].filter(Boolean)));
+  const variacoes = Array.from(
+    new Set(
+      [
+        tel,
+        semPais,
+        tel.slice(-11),
+        tel.slice(-10),
+        `+${tel}`,
+        `+55${semPais}`,
+      ].filter(Boolean),
+    ),
+  );
 
   // Busca todos os clientes que batem em qualquer uma das variações exatas
   const { data, error } = await legacyDb
@@ -177,10 +199,17 @@ async function cadastrarCliente(input: {
   if (!nome) faltando.push("nome completo");
   if (!documento) faltando.push("CNPJ ou CPF");
   if (faltando.length) {
-    return { ok: false, error: `Dados faltando: ${faltando.join(", ")}. Peça ao cliente educadamente.` };
+    return {
+      ok: false,
+      error: `Dados faltando: ${faltando.join(", ")}. Peça ao cliente educadamente.`,
+    };
   }
   if (!isCPF && !isCNPJ) {
-    return { ok: false, error: "Documento inválido (CPF deve ter 11 dígitos, CNPJ 14). Peça novamente." };
+    return {
+      ok: false,
+      error:
+        "Documento inválido (CPF deve ter 11 dígitos, CNPJ 14). Peça novamente.",
+    };
   }
 
   const payload: Record<string, unknown> = {
@@ -192,7 +221,10 @@ async function cadastrarCliente(input: {
   };
   if (input.tipo_cliente) {
     // Revenda entra como "Pendente Serralheiro" até aprovação humana na dashboard
-    payload.tipo_cliente = input.tipo_cliente === "porta_instalada" ? "Porta Instalada" : "Pendente Serralheiro";
+    payload.tipo_cliente =
+      input.tipo_cliente === "porta_instalada"
+        ? "Porta Instalada"
+        : "Pendente Serralheiro";
   }
 
   // Verifica se já existe pelo CNPJ (PK) — evita duplicate key
@@ -208,9 +240,16 @@ async function cadastrarCliente(input: {
       .eq("CLI_CNPJ", documento);
     if (updErr) {
       console.error("Erro ao atualizar cliente:", updErr);
-      return { ok: false, error: updErr.message || "Falha ao atualizar cadastro." };
+      return {
+        ok: false,
+        error: updErr.message || "Falha ao atualizar cadastro.",
+      };
     }
-    return { ok: true, cliente: { CLI_CNPJ: documento, CLI_NOME: nome }, atualizado: true };
+    return {
+      ok: true,
+      cliente: { CLI_CNPJ: documento, CLI_NOME: nome },
+      atualizado: true,
+    };
   }
 
   const { data, error } = await legacyDb
@@ -226,17 +265,25 @@ async function cadastrarCliente(input: {
 }
 
 // Atualiza o tipo_cliente na tabela legada Clientes (procurando pelo telefone)
-async function atualizarTipoClienteLegado(telefone: string, tipo: "porta_instalada" | "revenda") {
+async function atualizarTipoClienteLegado(
+  telefone: string,
+  tipo: "porta_instalada" | "revenda",
+) {
   const tel = normalizarTelefone(telefone);
   if (!tel) return;
   // Revenda entra como "Pendente Serralheiro" até aprovação humana na dashboard
-  const valor = tipo === "porta_instalada" ? "Porta Instalada" : "Pendente Serralheiro";
-  const variacoes = Array.from(new Set([
-    tel,
-    tel.startsWith("55") ? tel.slice(2) : tel,
-    tel.slice(-11),
-    tel.slice(-10),
-  ].filter(Boolean)));
+  const valor =
+    tipo === "porta_instalada" ? "Porta Instalada" : "Pendente Serralheiro";
+  const variacoes = Array.from(
+    new Set(
+      [
+        tel,
+        tel.startsWith("55") ? tel.slice(2) : tel,
+        tel.slice(-11),
+        tel.slice(-10),
+      ].filter(Boolean),
+    ),
+  );
   for (const v of variacoes) {
     const { data: found } = await legacyDb
       .from("Clientes")
@@ -249,12 +296,21 @@ async function atualizarTipoClienteLegado(telefone: string, tipo: "porta_instala
         .from("Clientes")
         .update({ tipo_cliente: valor })
         .eq("CLI_CNPJ", found.CLI_CNPJ);
-      if (error) console.error("⚠️ Falha ao atualizar tipo_cliente legado:", error.message);
-      else console.log(`✅ tipo_cliente legado atualizado para "${valor}" (CNPJ ${found.CLI_CNPJ})`);
+      if (error)
+        console.error(
+          "⚠️ Falha ao atualizar tipo_cliente legado:",
+          error.message,
+        );
+      else
+        console.log(
+          `✅ tipo_cliente legado atualizado para "${valor}" (CNPJ ${found.CLI_CNPJ})`,
+        );
       return;
     }
   }
-  console.warn(`⚠️ Cliente ${tel} não encontrado no legado para atualizar tipo_cliente`);
+  console.warn(
+    `⚠️ Cliente ${tel} não encontrado no legado para atualizar tipo_cliente`,
+  );
 }
 
 // ===========================
@@ -273,12 +329,12 @@ async function atualizarTipoClienteLegado(telefone: string, tipo: "porta_instala
  */
 function calcRolo(eixoPolegadas?: number): number | null {
   if (!eixoPolegadas || eixoPolegadas <= 0) return null;
-  if (eixoPolegadas <= 5.5) return 0.60;
+  if (eixoPolegadas <= 5.5) return 0.6;
   return 0.75;
 }
 /** Versão "segura" para cálculos internos quando precisamos de um número. */
 function calcRoloNum(eixoPolegadas?: number): number {
-  return calcRolo(eixoPolegadas) ?? 0.60;
+  return calcRolo(eixoPolegadas) ?? 0.6;
 }
 /** Qtd de lâminas: perfil baixo ÷ 0,075; perfil alto ÷ 0,085. Arredonda pra cima. */
 function calcLaminas(alturaTotal: number, perfil: "baixo" | "alto"): number {
@@ -287,7 +343,11 @@ function calcLaminas(alturaTotal: number, perfil: "baixo" | "alto"): number {
   return Math.ceil(alturaTotal / divisor);
 }
 /** Guias por metro linear. 1 par = 2 unidades. total = qtd × (par ? 2 : 1) × comprimento. */
-function calcGuiasMetrosLineares(qtd: number, par: boolean, comprimentoM: number): number {
+function calcGuiasMetrosLineares(
+  qtd: number,
+  par: boolean,
+  comprimentoM: number,
+): number {
   const unidadesPorItem = par ? 2 : 1;
   return Math.max(0, (qtd || 0) * unidadesPorItem * (comprimentoM || 0));
 }
@@ -305,7 +365,12 @@ function calcGuiasMetrosLineares(qtd: number, par: boolean, comprimentoM: number
 function calcMedidaCorte(
   vaoLivre: number,
   instalacao: TipoInstalacao,
-  opts: { guia_mm?: number; guia_mm_esq?: number; guia_mm_dir?: number; trava?: boolean } = {}
+  opts: {
+    guia_mm?: number;
+    guia_mm_esq?: number;
+    guia_mm_dir?: number;
+    trava?: boolean;
+  } = {},
 ): { eixo: number; soleira: number; laminas: number } {
   const v = Number(vaoLivre) || 0;
   if (!v) return { eixo: 0, soleira: 0, laminas: 0 };
@@ -343,82 +408,159 @@ function calcMedidaCorte(
     laminas: round(base + descLam),
   };
 }
-function validarMotor(m: { tipo?: string; ac_dc?: string; potencia?: number }): { ok: boolean; faltando: string[] } {
+function validarMotor(m: {
+  tipo?: string;
+  ac_dc?: string;
+  potencia?: number;
+}): { ok: boolean; faltando: string[] } {
   const faltando: string[] = [];
-  if (!m.tipo || !["avulso", "motor_testeiras", "kit_automatizador"].includes(m.tipo)) faltando.push("tipo (avulso, motor+testeiras ou kit automatizador)");
+  if (
+    !m.tipo ||
+    !["avulso", "motor_testeiras", "kit_automatizador"].includes(m.tipo)
+  )
+    faltando.push("tipo (avulso, motor+testeiras ou kit automatizador)");
   if (!m.ac_dc || !["AC", "DC"].includes(m.ac_dc)) faltando.push("AC ou DC");
   const lista = m.ac_dc === "DC" ? POTENCIAS_DC : POTENCIAS_AC;
-  if (!m.potencia || !lista.includes(m.potencia)) faltando.push(`potência (${lista.join("/")} kg)`);
+  if (!m.potencia || !lista.includes(m.potencia))
+    faltando.push(`potência (${lista.join("/")} kg)`);
   return { ok: faltando.length === 0, faltando };
 }
-function validarCapacidadeMotorConfig(config: any): { ok: boolean; erro?: string } {
+function validarCapacidadeMotorConfig(config: any): {
+  ok: boolean;
+  erro?: string;
+} {
   const pot = Number(config?.potencia);
   if (!Number.isFinite(pot) || pot <= 0) return { ok: true };
   const acdc = String(config?.ac_dc || "").toUpperCase();
-  const lista = acdc === "DC" ? POTENCIAS_DC : acdc === "AC" ? POTENCIAS_AC : Array.from(new Set([...POTENCIAS_AC, ...POTENCIAS_DC]));
+  const lista =
+    acdc === "DC"
+      ? POTENCIAS_DC
+      : acdc === "AC"
+        ? POTENCIAS_AC
+        : Array.from(new Set([...POTENCIAS_AC, ...POTENCIAS_DC]));
   if (lista.includes(pot)) return { ok: true };
   const minimo = Math.min(...lista);
-  const sugestao = pot < minimo
-    ? minimo
-    : lista.reduce((a, b) => Math.abs(b - pot) < Math.abs(a - pot) ? b : a, lista[0]);
+  const sugestao =
+    pot < minimo
+      ? minimo
+      : lista.reduce(
+          (a, b) => (Math.abs(b - pot) < Math.abs(a - pot) ? b : a),
+          lista[0],
+        );
   const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
   let msg = `Consigo te ajudar 👍\n\nO menor modelo${escopo ? ` de motor${escopo}` : " que trabalhamos"} hoje é o de *${sugestao} kg*, que atende com folga essa necessidade.`;
   if (!escopo) msg += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
   return { ok: false, erro: msg };
 }
 
-function resumoEstadoPedido(pedido: CfgPedido): Pick<CfgPedido, "contexto_ativo" | "intencao_ativa" | "etapa_ativa" | "campos_pendentes" | "orcamento_incompleto"> {
+function resumoEstadoPedido(
+  pedido: CfgPedido,
+): Pick<
+  CfgPedido,
+  | "contexto_ativo"
+  | "intencao_ativa"
+  | "etapa_ativa"
+  | "campos_pendentes"
+  | "orcamento_incompleto"
+> {
   return {
     contexto_ativo: pedido.contexto_ativo || null,
     intencao_ativa: pedido.intencao_ativa || null,
     etapa_ativa: pedido.etapa_ativa || null,
-    campos_pendentes: Array.isArray(pedido.campos_pendentes) ? pedido.campos_pendentes : [],
+    campos_pendentes: Array.isArray(pedido.campos_pendentes)
+      ? pedido.campos_pendentes
+      : [],
     orcamento_incompleto: Boolean(pedido.orcamento_incompleto),
   };
 }
 
 function ehMensagemNovoAtendimento(mensagem: string): boolean {
-  const t = String(mensagem || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const t = String(mensagem || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
   if (!t) return false;
-  if (/\b(novo atendimento|novo orcamento|novo orcamento|novo pedido|comecar de novo|recomecar|zerar|do zero|reiniciar)\b/.test(t)) return true;
+  if (
+    /\b(novo atendimento|novo orcamento|novo orcamento|novo pedido|comecar de novo|recomecar|zerar|do zero|reiniciar)\b/.test(
+      t,
+    )
+  )
+    return true;
   if (/^(oi+|ola+|opa+|bom dia|boa tarde|boa noite)$/i.test(t)) return false;
-  return /\b(quero|preciso|gostaria|me passa|me veja|me manda|or[cç]amento)\b/.test(t)
-    && /\b(motor|automatizador|porta|kit|peca|pe[cç]a|acessorio|guia|lamina|controle|central)\b/.test(t)
-    && !/\b(continuar|mesmo orcamento|orcamento anterior|de onde paramos)\b/.test(t);
+  return (
+    /\b(quero|preciso|gostaria|me passa|me veja|me manda|or[cç]amento)\b/.test(
+      t,
+    ) &&
+    /\b(motor|automatizador|porta|kit|peca|pe[cç]a|acessorio|guia|lamina|controle|central)\b/.test(
+      t,
+    ) &&
+    !/\b(continuar|mesmo orcamento|orcamento anterior|de onde paramos)\b/.test(
+      t,
+    )
+  );
 }
 
-function detectarContextoAtivoMensagem(mensagem: string): CfgPedido["contexto_ativo"] {
-  const t = String(mensagem || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+function detectarContextoAtivoMensagem(
+  mensagem: string,
+): CfgPedido["contexto_ativo"] {
+  const t = String(mensagem || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
   if (!t.trim()) return null;
-  if (/\b(motor|automatizador)\b/.test(t) && !/\bporta\b/.test(t)) return "motor";
-  if (/\b(pecas?\s*avuls|guia|lamina|controle|central|eixo|soleira|portinhola|alcapao|acessorio)\b/.test(t) && !/\bporta\b/.test(t)) return "pecas_avulsas";
-  if (/\b(kit\s*porta|porta\s*completa|porta\s*inteira|porta\s*toda|medida\s*\d+(?:[\.,]\d+)?\s*[x×]\s*\d+(?:[\.,]\d+)?)\b/.test(t)) return "kit_porta";
+  if (/\b(motor|automatizador)\b/.test(t) && !/\bporta\b/.test(t))
+    return "motor";
+  if (
+    /\b(pecas?\s*avuls|guia|lamina|controle|central|eixo|soleira|portinhola|alcapao|acessorio)\b/.test(
+      t,
+    ) &&
+    !/\bporta\b/.test(t)
+  )
+    return "pecas_avulsas";
+  if (
+    /\b(kit\s*porta|porta\s*completa|porta\s*inteira|porta\s*toda|medida\s*\d+(?:[\.,]\d+)?\s*[x×]\s*\d+(?:[\.,]\d+)?)\b/.test(
+      t,
+    )
+  )
+    return "kit_porta";
   if (/\b(acessorio|acessorios)\b/.test(t)) return "acessorio";
   return null;
 }
 
-function resetPedidoParaNovoContexto(contexto?: CfgPedido["contexto_ativo"] | null): CfgPedido {
+function resetPedidoParaNovoContexto(
+  contexto?: CfgPedido["contexto_ativo"] | null,
+): CfgPedido {
   return {
     ...JSON.parse(JSON.stringify(PEDIDO_VAZIO)),
     contexto_ativo: contexto ?? null,
     intencao_ativa: contexto ? "novo_contexto" : null,
   };
 }
-function limparCapacidadesMotorInvalidas(pedido: CfgPedido): { pedido: CfgPedido; avisos: string[] } {
+function limparCapacidadesMotorInvalidas(pedido: CfgPedido): {
+  pedido: CfgPedido;
+  avisos: string[];
+} {
   const avisos: string[] = [];
   const itens: CfgItem[] = [];
   for (const it of pedido.itens || []) {
     if (it.tipo === "motor") {
       const validacao = validarCapacidadeMotorConfig(it.config || {});
       if (!validacao.ok) {
-        avisos.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+        avisos.push(
+          validacao.erro ||
+            "Capacidade de motor inválida. Informe uma capacidade cadastrada.",
+        );
         continue;
       }
     }
     if (it.tipo === "kit_porta" && it.config?.motor?.potencia) {
       const validacao = validarCapacidadeMotorConfig(it.config.motor || {});
       if (!validacao.ok) {
-        avisos.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+        avisos.push(
+          validacao.erro ||
+            "Capacidade de motor inválida. Informe uma capacidade cadastrada.",
+        );
         delete it.config.motor.potencia;
       }
     }
@@ -427,19 +569,28 @@ function limparCapacidadesMotorInvalidas(pedido: CfgPedido): { pedido: CfgPedido
   return { pedido: { ...pedido, itens }, avisos };
 }
 /** Portinhola e alçapão não podem coexistir na mesma porta. */
-function validarPortinholaAlcapao(cfg: { portinhola?: boolean; alcapao?: boolean }): { ok: boolean; erro?: string } {
-  if (cfg.portinhola && cfg.alcapao) return { ok: false, erro: "Portinhola e alçapão não podem ser usados juntos na mesma porta." };
+function validarPortinholaAlcapao(cfg: {
+  portinhola?: boolean;
+  alcapao?: boolean;
+}): { ok: boolean; erro?: string } {
+  if (cfg.portinhola && cfg.alcapao)
+    return {
+      ok: false,
+      erro: "Portinhola e alçapão não podem ser usados juntos na mesma porta.",
+    };
   return { ok: true };
 }
-
-
 
 interface OrcamentoInput {
   largura: number;
   altura: number;
   tipo_perfil?: "fechado" | "transvision" | "oblongo";
   tipo_motor?: "200kg" | "300kg" | "400kg" | "500kg" | "800kg" | "1500kg";
-  tipo_pintura?: "branco_liso" | "preta_fosco" | "cinza_texturizado" | "cor_especial";
+  tipo_pintura?:
+    | "branco_liso"
+    | "preta_fosco"
+    | "cinza_texturizado"
+    | "cor_especial";
   incluir_pintura?: boolean;
   tipo_cliente: "porta_instalada" | "revenda";
   cidade?: string;
@@ -454,7 +605,8 @@ function calcularOrcamento(input: OrcamentoInput) {
   const { largura, altura, tipo_cliente } = input;
   const tipo_perfil = input.tipo_perfil || "transvision";
   const tipo_motor = input.tipo_motor || "500kg";
-  const incluir_pintura = input.incluir_pintura !== false && Boolean(input.tipo_pintura);
+  const incluir_pintura =
+    input.incluir_pintura !== false && Boolean(input.tipo_pintura);
   const tipo_pintura = input.tipo_pintura || "branco_liso";
 
   const area = largura * altura;
@@ -463,27 +615,106 @@ function calcularOrcamento(input: OrcamentoInput) {
   const soleiraLen = largura + 0.2;
 
   const itens: any[] = [];
-  const add = (code: string, desc: string, qty: number, unit: string, preco: number) => {
-    itens.push({ code, description: desc, qty, unit, unit_price: preco, subtotal: qty * preco });
+  const add = (
+    code: string,
+    desc: string,
+    qty: number,
+    unit: string,
+    preco: number,
+  ) => {
+    itens.push({
+      code,
+      description: desc,
+      qty,
+      unit,
+      unit_price: preco,
+      subtotal: qty * preco,
+    });
   };
 
-  add("COMP-001", `PERFIL BX ${tipo_perfil.toUpperCase()} - CHAPA 22 (0,75)`, area, "M²", (PRECOS as any)[`perfil_${tipo_perfil}`]);
-  add("COMP-002", `EIXO TUBO 4.5" - AÇO CARBONO`, eixoLen, "MT", PRECOS.eixo_45);
-  add("COMP-003", `GUIA LATERAL 50MM - PERFIL ALUMÍNIO`, guiaLen, "MT", PRECOS.guia_50mm);
-  add("COMP-004", `SOLEIRA EM T - CHAPA 16MM`, soleiraLen, "MT", PRECOS.soleira_t);
-  add("COMP-005", `REFORÇO DA SOLEIRA EM T - 60x40`, soleiraLen, "MT", PRECOS.reforco_soleira);
+  add(
+    "COMP-001",
+    `PERFIL BX ${tipo_perfil.toUpperCase()} - CHAPA 22 (0,75)`,
+    area,
+    "M²",
+    (PRECOS as any)[`perfil_${tipo_perfil}`],
+  );
+  add(
+    "COMP-002",
+    `EIXO TUBO 4.5" - AÇO CARBONO`,
+    eixoLen,
+    "MT",
+    PRECOS.eixo_45,
+  );
+  add(
+    "COMP-003",
+    `GUIA LATERAL 50MM - PERFIL ALUMÍNIO`,
+    guiaLen,
+    "MT",
+    PRECOS.guia_50mm,
+  );
+  add(
+    "COMP-004",
+    `SOLEIRA EM T - CHAPA 16MM`,
+    soleiraLen,
+    "MT",
+    PRECOS.soleira_t,
+  );
+  add(
+    "COMP-005",
+    `REFORÇO DA SOLEIRA EM T - 60x40`,
+    soleiraLen,
+    "MT",
+    PRECOS.reforco_soleira,
+  );
   add("COMP-006", `PONTEIRA PARA SOLEIRA 40X60`, 2, "UN", PRECOS.ponteira);
-  add("COMP-007", `PVC AUTO LUBRIFICANTE PARA GUIAS`, guiaLen, "MT", PRECOS.pvc_guia);
-  add("COMP-008", `ACABAMENTO EM BORRACHA P/ SOLEIRA`, soleiraLen, "MT", PRECOS.borracha_soleira);
+  add(
+    "COMP-007",
+    `PVC AUTO LUBRIFICANTE PARA GUIAS`,
+    guiaLen,
+    "MT",
+    PRECOS.pvc_guia,
+  );
+  add(
+    "COMP-008",
+    `ACABAMENTO EM BORRACHA P/ SOLEIRA`,
+    soleiraLen,
+    "MT",
+    PRECOS.borracha_soleira,
+  );
   if (incluir_pintura) {
-    add("COMP-009", `PINTURA ${tipo_pintura.toUpperCase().replace("_", " ")} (ELETROSTÁTICA)`, area, "M²", (PRECOS as any)[`pintura_${tipo_pintura}`]);
+    add(
+      "COMP-009",
+      `PINTURA ${tipo_pintura.toUpperCase().replace("_", " ")} (ELETROSTÁTICA)`,
+      area,
+      "M²",
+      (PRECOS as any)[`pintura_${tipo_pintura}`],
+    );
   }
-  add("COMP-010", `AUTOMATIZADOR ${tipo_motor.toUpperCase()}`, 1, "UN", (PRECOS as any)[`motor_${tipo_motor}`]);
+  add(
+    "COMP-010",
+    `AUTOMATIZADOR ${tipo_motor.toUpperCase()}`,
+    1,
+    "UN",
+    (PRECOS as any)[`motor_${tipo_motor}`],
+  );
   add("COMP-011", `CONTROLE REMOTO ANALÓGICO`, 2, "UN", PRECOS.controle_remoto);
-  add("COMP-012", `CENTRAL DE COMANDO ANALÓGICO`, 1, "UN", PRECOS.central_comando);
+  add(
+    "COMP-012",
+    `CENTRAL DE COMANDO ANALÓGICO`,
+    1,
+    "UN",
+    PRECOS.central_comando,
+  );
 
   if (input.adicionais?.portinhola) {
-    add("ADIC-001", `PORTINHOLA (porta de acesso integrada)`, 1, "UN", PRECOS.portinhola);
+    add(
+      "ADIC-001",
+      `PORTINHOLA (porta de acesso integrada)`,
+      1,
+      "UN",
+      PRECOS.portinhola,
+    );
   }
   if (input.adicionais?.alcapao) {
     add("ADIC-002", `ALÇAPÃO (acesso na porta)`, 1, "UN", PRECOS.alcapao);
@@ -501,8 +732,14 @@ function calcularOrcamento(input: OrcamentoInput) {
   const total_geral = subtotal_produtos + mao_de_obra + frete;
 
   return {
-    largura, altura, area,
-    tipo_cliente, tipo_perfil, tipo_motor, tipo_pintura, incluir_pintura,
+    largura,
+    altura,
+    area,
+    tipo_cliente,
+    tipo_perfil,
+    tipo_motor,
+    tipo_pintura,
+    incluir_pintura,
     itens,
     subtotal_produtos: +subtotal_produtos.toFixed(2),
     mao_de_obra: +mao_de_obra.toFixed(2),
@@ -527,14 +764,19 @@ function escapeHtml(value: unknown) {
 // ===========================
 function gerarHtmlOrcamento(o: ReturnType<typeof calcularOrcamento>) {
   const fmt = (v: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+    new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(v);
   const data = new Date().toLocaleDateString("pt-BR");
   const desconto5 = o.total_geral * 0.95;
   const parc3x = o.total_geral / 3;
 
   const linhas = o.itens
     .map((i) => {
-      const qtyStr = Number.isInteger(i.qty) ? i.qty : i.qty.toFixed(2).replace(".", ",");
+      const qtyStr = Number.isInteger(i.qty)
+        ? i.qty
+        : i.qty.toFixed(2).replace(".", ",");
       return `<tr>
         <td>${escapeHtml(i.code)}</td>
         <td>${escapeHtml(i.description)}</td>
@@ -616,11 +858,13 @@ td { border-bottom: 1px solid #e6eaf0; padding: 5px; font-size: 8.8px; vertical-
   <div class="col" style="padding-right:0">
     <div class="card">
       <h2>Especificações</h2>
-      ${(o as any).is_pecas_avulsas
-        ? `<strong>Modalidade:</strong> ${o.tipo_cliente === "porta_instalada" ? "Porta instalada" : "Revenda"} — peças avulsas<br/><strong>Itens:</strong> ${o.itens.length} peça(s) selecionada(s)`
-        : `<strong>Dimensões:</strong> ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m<br/>
+      ${
+        (o as any).is_pecas_avulsas
+          ? `<strong>Modalidade:</strong> ${o.tipo_cliente === "porta_instalada" ? "Porta instalada" : "Revenda"} — peças avulsas<br/><strong>Itens:</strong> ${o.itens.length} peça(s) selecionada(s)`
+          : `<strong>Dimensões:</strong> ${o.largura.toFixed(2).replace(".", ",")}m x ${o.altura.toFixed(2).replace(".", ",")}m<br/>
       <strong>Área:</strong> ${o.area.toFixed(2).replace(".", ",")}m²<br/>
-      <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.incluir_pintura ? o.tipo_pintura.replace("_", " ") : "não inclusa")}`}
+      <strong>Perfil:</strong> ${escapeHtml(o.tipo_perfil)} · <strong>Motor:</strong> ${escapeHtml(o.tipo_motor)} · <strong>Pintura:</strong> ${escapeHtml(o.incluir_pintura ? o.tipo_pintura.replace("_", " ") : "não inclusa")}`
+      }
     </div>
   </div>
 </div>
@@ -685,7 +929,12 @@ function base64ToBlob(base64: string, mimeType: string) {
   return new Blob([bytes], { type: mimeType });
 }
 
-async function enviarPdfBase64(numero: string, base64: string, filename: string, caption?: string) {
+async function enviarPdfBase64(
+  numero: string,
+  base64: string,
+  filename: string,
+  caption?: string,
+) {
   const captionTxt = caption || "Segue seu orçamento em PDF.";
 
   // Whaticket/PrimeSync envia mídia como multipart/form-data; JSON com "medias"
@@ -716,7 +965,9 @@ async function enviarPdfBase64(numero: string, base64: string, filename: string,
       });
       const txt = await r.text();
       const ok = r.ok && !/erro|error|invalid|missing/i.test(txt);
-      console.log(`📎 PrimeSync PDF multipart ${idx + 1} (${variant.fileField}/${variant.captionField}): status=${r.status} ok=${ok} bytes=${pdfBlob.size} resp=${txt.substring(0, 300)}`);
+      console.log(
+        `📎 PrimeSync PDF multipart ${idx + 1} (${variant.fileField}/${variant.captionField}): status=${r.status} ok=${ok} bytes=${pdfBlob.size} resp=${txt.substring(0, 300)}`,
+      );
       if (ok) return true;
     } catch (e) {
       console.error(`📎 PrimeSync PDF multipart ${idx + 1} exceção:`, e);
@@ -725,13 +976,41 @@ async function enviarPdfBase64(numero: string, base64: string, filename: string,
   return false;
 }
 
-async function enviarImagemUrl(numero: string, imageUrl: string, caption?: string) {
-  const captionTxt = (caption || "Veja as opções de lâminas disponíveis.").trim();
+async function enviarImagemUrl(
+  numero: string,
+  imageUrl: string,
+  caption?: string,
+) {
+  const captionTxt = (
+    caption || "Veja as opções de lâminas disponíveis."
+  ).trim();
   // Tenta enviar imagem por URL via PrimeSync (vários formatos suportados)
   const variants = [
-    { body: { number: numero, body: captionTxt, mediaUrl: imageUrl, mediaType: "image" } },
-    { body: { number: numero, body: captionTxt, url: imageUrl, mediaType: "image" } },
-    { body: { number: numero, caption: captionTxt, body: captionTxt, mediaUrl: imageUrl, mediaType: "image" } },
+    {
+      body: {
+        number: numero,
+        body: captionTxt,
+        mediaUrl: imageUrl,
+        mediaType: "image",
+      },
+    },
+    {
+      body: {
+        number: numero,
+        body: captionTxt,
+        url: imageUrl,
+        mediaType: "image",
+      },
+    },
+    {
+      body: {
+        number: numero,
+        caption: captionTxt,
+        body: captionTxt,
+        mediaUrl: imageUrl,
+        mediaType: "image",
+      },
+    },
   ];
   for (const [idx, v] of variants.entries()) {
     try {
@@ -745,7 +1024,9 @@ async function enviarImagemUrl(numero: string, imageUrl: string, caption?: strin
       });
       const txt = await r.text();
       const ok = r.ok && !/erro|error|invalid|missing/i.test(txt);
-      console.log(`🖼️ PrimeSync img URL ${idx + 1}: status=${r.status} ok=${ok} resp=${txt.substring(0, 200)}`);
+      console.log(
+        `🖼️ PrimeSync img URL ${idx + 1}: status=${r.status} ok=${ok} resp=${txt.substring(0, 200)}`,
+      );
       if (ok) return true;
     } catch (e) {
       console.error(`🖼️ PrimeSync img URL ${idx + 1} exceção:`, e);
@@ -769,7 +1050,9 @@ async function enviarImagemUrl(numero: string, imageUrl: string, caption?: strin
       body: form,
     });
     const txt = await r.text();
-    console.log(`🖼️ PrimeSync img multipart: status=${r.status} resp=${txt.substring(0, 200)}`);
+    console.log(
+      `🖼️ PrimeSync img multipart: status=${r.status} resp=${txt.substring(0, 200)}`,
+    );
     return r.ok;
   } catch (e) {
     console.error("🖼️ PrimeSync img multipart exceção:", e);
@@ -777,22 +1060,34 @@ async function enviarImagemUrl(numero: string, imageUrl: string, caption?: strin
   }
 }
 
-const LAMINAS_IMAGE_URL = "https://qehuellmpdrimtxcqbxc.supabase.co/storage/v1/object/public/leo-assets/laminas.jpeg";
+const LAMINAS_IMAGE_URL =
+  "https://qehuellmpdrimtxcqbxc.supabase.co/storage/v1/object/public/leo-assets/laminas.jpeg";
 
 function isPerguntaLamina(texto: string): boolean {
-  const t = (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const t = (texto || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
   // Detecta qualquer menção a lâmina/perfil OU aos três modelos juntos (mesmo que reformulada)
-  if (/\blamina|\bperfil\b/.test(t) && /(fechad|transvision|oblongo|lisa|visor|perfurad|1\b|2\b|3\b)/.test(t)) {
+  if (
+    /\blamina|\bperfil\b/.test(t) &&
+    /(fechad|transvision|oblongo|lisa|visor|perfurad|1\b|2\b|3\b)/.test(t)
+  ) {
     return true;
   }
   // Caso clássico: lista os 3 modelos
-  const hits = [/fechad/, /transvision/, /oblongo/].filter((r) => r.test(t)).length;
+  const hits = [/fechad/, /transvision/, /oblongo/].filter((r) =>
+    r.test(t),
+  ).length;
   return hits >= 2;
 }
 
 async function transferirParaHumano(ticketId: number) {
   // PrimeSync: transfere o ticket para fila de atendimento humano
-  const url = PRIMESYNC_URL.replace(/\/external\/.+$/, `/tickets/${ticketId}/transfer`);
+  const url = PRIMESYNC_URL.replace(
+    /\/external\/.+$/,
+    `/tickets/${ticketId}/transfer`,
+  );
   try {
     await fetch(url, {
       method: "POST",
@@ -810,12 +1105,17 @@ async function transferirParaHumano(ticketId: number) {
 // ===========================
 // PDFShift — gerar PDF (substitui Docrya, aceita HTML direto)
 // ===========================
-async function gerarPdfPdfShift(html: string, filename: string): Promise<string | null> {
+async function gerarPdfPdfShift(
+  html: string,
+  filename: string,
+): Promise<string | null> {
   if (!PDFSHIFT_API_KEY) {
     console.error("📄 PDFSHIFT_API_KEY não configurada");
     return null;
   }
-  console.log(`📄 PDFShift: gerando PDF "${filename}" (html ${html.length} chars)`);
+  console.log(
+    `📄 PDFShift: gerando PDF "${filename}" (html ${html.length} chars)`,
+  );
   const auth = "Basic " + btoa(`api:${PDFSHIFT_API_KEY}`);
   const r = await fetch(PDFSHIFT_URL, {
     method: "POST",
@@ -845,7 +1145,10 @@ async function gerarPdfPdfShift(html: string, filename: string): Promise<string 
 }
 
 // Mantém o nome antigo para não quebrar callers
-async function gerarPdfDocrya(html: string, filename: string): Promise<string | null> {
+async function gerarPdfDocrya(
+  html: string,
+  filename: string,
+): Promise<string | null> {
   return gerarPdfPdfShift(html, filename);
 }
 
@@ -1023,14 +1326,36 @@ const TOOLS = [
     type: "function",
     function: {
       name: "gerar_orcamento",
-      description: "Gera o orçamento (PDF, imagem ou ambos) e envia ao cliente via WhatsApp. Lê automaticamente do [ESTADO] e do carrinho. Use 'formato' para escolher pdf | imagem | ambos. Se faltar dado, retorna DADOS_INSUFICIENTES.",
+      description:
+        "Gera o orçamento (PDF, imagem ou ambos) e envia ao cliente via WhatsApp. Lê automaticamente do [ESTADO] e do carrinho. Use 'formato' para escolher pdf | imagem | ambos. Se faltar dado, retorna DADOS_INSUFICIENTES.",
       parameters: {
         type: "object",
         properties: {
-          tipo_motor: { type: "string", enum: ["200kg", "300kg", "400kg", "500kg", "800kg", "1500kg"], description: "Opcional, default 300kg" },
-          tipo_pintura: { type: "string", enum: ["branco_liso", "preta_fosco", "cinza_texturizado", "cor_especial"], description: "Opcional" },
-          formato: { type: "string", enum: ["pdf", "imagem", "ambos"], description: "Formato de saída escolhido pelo cliente no MÓDULO 6. Default: pdf." },
-          observacoes_tecnicas: { type: "string", description: "Resumo técnico completo para o vendedor." },
+          tipo_motor: {
+            type: "string",
+            enum: ["200kg", "300kg", "400kg", "500kg", "800kg", "1500kg"],
+            description: "Opcional, default 300kg",
+          },
+          tipo_pintura: {
+            type: "string",
+            enum: [
+              "branco_liso",
+              "preta_fosco",
+              "cinza_texturizado",
+              "cor_especial",
+            ],
+            description: "Opcional",
+          },
+          formato: {
+            type: "string",
+            enum: ["pdf", "imagem", "ambos"],
+            description:
+              "Formato de saída escolhido pelo cliente no MÓDULO 6. Default: pdf.",
+          },
+          observacoes_tecnicas: {
+            type: "string",
+            description: "Resumo técnico completo para o vendedor.",
+          },
         },
         required: [],
       },
@@ -1040,14 +1365,25 @@ const TOOLS = [
     type: "function",
     function: {
       name: "cadastrar_cliente",
-      description: "Cadastra um novo cliente no banco de dados. Use APENAS quando tiver coletado nome completo e CNPJ (ou CPF). Email é opcional — pode chamar sem se o cliente não quis informar.",
+      description:
+        "Cadastra um novo cliente no banco de dados. Use APENAS quando tiver coletado nome completo e CNPJ (ou CPF). Email é opcional — pode chamar sem se o cliente não quis informar.",
       parameters: {
         type: "object",
         properties: {
           nome: { type: "string", description: "Nome completo do cliente" },
-          email: { type: "string", description: "E-mail do cliente (opcional)" },
-          documento: { type: "string", description: "CNPJ ou CPF (apenas números ou formatado)" },
-          tipo_cliente: { type: "string", enum: ["porta_instalada", "revenda"], description: "Tipo confirmado pelo cliente, se já souber" },
+          email: {
+            type: "string",
+            description: "E-mail do cliente (opcional)",
+          },
+          documento: {
+            type: "string",
+            description: "CNPJ ou CPF (apenas números ou formatado)",
+          },
+          tipo_cliente: {
+            type: "string",
+            enum: ["porta_instalada", "revenda"],
+            description: "Tipo confirmado pelo cliente, se já souber",
+          },
         },
         required: ["nome", "documento"],
       },
@@ -1057,11 +1393,15 @@ const TOOLS = [
     type: "function",
     function: {
       name: "calcular_frete_cep",
-      description: "Calcula o frete a partir do CEP do cliente (apenas para PORTA INSTALADA na Bahia). Retorna o valor do frete em reais e o endereço resumido. Se o CEP for fora da Bahia, retorna fora_da_bahia=true.",
+      description:
+        "Calcula o frete a partir do CEP do cliente (apenas para PORTA INSTALADA na Bahia). Retorna o valor do frete em reais e o endereço resumido. Se o CEP for fora da Bahia, retorna fora_da_bahia=true.",
       parameters: {
         type: "object",
         properties: {
-          cep: { type: "string", description: "CEP informado pelo cliente (com ou sem traço)" },
+          cep: {
+            type: "string",
+            description: "CEP informado pelo cliente (com ou sem traço)",
+          },
         },
         required: ["cep"],
       },
@@ -1071,11 +1411,15 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_tipo_cliente",
-      description: "Registra IMEDIATAMENTE no banco de dados o tipo de atendimento que o cliente escolheu. Chame ASSIM QUE o cliente responder 'porta instalada', 'instalada', 'quero instalar', 'revenda', 'para revender' ou equivalente. NÃO espere coletar mais dados. Esta tool é silenciosa — não envia mensagem ao cliente, apenas grava no banco.",
+      description:
+        "Registra IMEDIATAMENTE no banco de dados o tipo de atendimento que o cliente escolheu. Chame ASSIM QUE o cliente responder 'porta instalada', 'instalada', 'quero instalar', 'revenda', 'para revender' ou equivalente. NÃO espere coletar mais dados. Esta tool é silenciosa — não envia mensagem ao cliente, apenas grava no banco.",
       parameters: {
         type: "object",
         properties: {
-          tipo_cliente: { type: "string", enum: ["porta_instalada", "revenda"] },
+          tipo_cliente: {
+            type: "string",
+            enum: ["porta_instalada", "revenda"],
+          },
         },
         required: ["tipo_cliente"],
       },
@@ -1085,7 +1429,8 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_medidas",
-      description: "Grava no banco a largura e altura da porta informadas pelo cliente. Chame ASSIM QUE o cliente responder o Passo 3 (ex: '4x5', '4 por 3', '4 metros por 3'). Silenciosa — não envia mensagem. Na MESMA rodada já avance para o Passo 4 (lâmina).",
+      description:
+        "Grava no banco a largura e altura da porta informadas pelo cliente. Chame ASSIM QUE o cliente responder o Passo 3 (ex: '4x5', '4 por 3', '4 metros por 3'). Silenciosa — não envia mensagem. Na MESMA rodada já avance para o Passo 4 (lâmina).",
       parameters: {
         type: "object",
         properties: {
@@ -1100,11 +1445,15 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_lamina",
-      description: "Grava no banco o tipo de lâmina escolhido pelo cliente. Chame ASSIM QUE o cliente responder o Passo 4. Silenciosa. Na MESMA rodada avance para o próximo passo (Passo 5 — adicionais).",
+      description:
+        "Grava no banco o tipo de lâmina escolhido pelo cliente. Chame ASSIM QUE o cliente responder o Passo 4. Silenciosa. Na MESMA rodada avance para o próximo passo (Passo 5 — adicionais).",
       parameters: {
         type: "object",
         properties: {
-          tipo_perfil: { type: "string", enum: ["fechado", "transvision", "oblongo"] },
+          tipo_perfil: {
+            type: "string",
+            enum: ["fechado", "transvision", "oblongo"],
+          },
         },
         required: ["tipo_perfil"],
       },
@@ -1114,12 +1463,26 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_pintura",
-      description: "Grava no banco se o cliente quer pintura eletrostática e qual a cor. Chame ASSIM QUE o cliente responder o Passo 5. Se o cliente NÃO quer pintura, chame com quer_pintura=false (sem tipo_pintura). Se quer, chame com quer_pintura=true e o tipo_pintura escolhido. Marca pintura_perguntado=true. Silenciosa.",
+      description:
+        "Grava no banco se o cliente quer pintura eletrostática e qual a cor. Chame ASSIM QUE o cliente responder o Passo 5. Se o cliente NÃO quer pintura, chame com quer_pintura=false (sem tipo_pintura). Se quer, chame com quer_pintura=true e o tipo_pintura escolhido. Marca pintura_perguntado=true. Silenciosa.",
       parameters: {
         type: "object",
         properties: {
-          quer_pintura: { type: "boolean", description: "true se o cliente quer incluir pintura, false se dispensou" },
-          tipo_pintura: { type: "string", enum: ["branco_liso", "preta_fosco", "cinza_texturizado", "cor_especial"], description: "Cor escolhida (apenas se quer_pintura=true)" },
+          quer_pintura: {
+            type: "boolean",
+            description:
+              "true se o cliente quer incluir pintura, false se dispensou",
+          },
+          tipo_pintura: {
+            type: "string",
+            enum: [
+              "branco_liso",
+              "preta_fosco",
+              "cinza_texturizado",
+              "cor_especial",
+            ],
+            description: "Cor escolhida (apenas se quer_pintura=true)",
+          },
         },
         required: ["quer_pintura"],
       },
@@ -1129,12 +1492,19 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_adicionais",
-      description: "Grava no banco se o cliente quer Portinhola e/ou Alçapão. Chame ASSIM QUE o cliente responder o Passo 6 — mesmo que ele diga 'nenhum', 'não quero', 'só portinhola', 'os dois' etc. Marca adicionais_perguntado=true. Silenciosa — siga adiante na mesma rodada (CEP se porta_instalada, ou gerar_orcamento se revenda).",
+      description:
+        "Grava no banco se o cliente quer Portinhola e/ou Alçapão. Chame ASSIM QUE o cliente responder o Passo 6 — mesmo que ele diga 'nenhum', 'não quero', 'só portinhola', 'os dois' etc. Marca adicionais_perguntado=true. Silenciosa — siga adiante na mesma rodada (CEP se porta_instalada, ou gerar_orcamento se revenda).",
       parameters: {
         type: "object",
         properties: {
-          portinhola: { type: "boolean", description: "true se o cliente quer adicionar Portinhola" },
-          alcapao: { type: "boolean", description: "true se o cliente quer adicionar Alçapão" },
+          portinhola: {
+            type: "boolean",
+            description: "true se o cliente quer adicionar Portinhola",
+          },
+          alcapao: {
+            type: "boolean",
+            description: "true se o cliente quer adicionar Alçapão",
+          },
         },
         required: ["portinhola", "alcapao"],
       },
@@ -1144,7 +1514,8 @@ const TOOLS = [
     type: "function",
     function: {
       name: "transferir_humano",
-      description: "Use APENAS em 3 casos: (1) cliente pediu explicitamente falar com vendedor/humano; (2) 5 interações consecutivas sem avançar nenhuma etapa do fluxo (loop infinito real); (3) cliente enviou arquivo não-foto (documento, planilha, áudio longo, vídeo). Em qualquer outra situação, continue conduzindo sozinho.",
+      description:
+        "Use APENAS em 3 casos: (1) cliente pediu explicitamente falar com vendedor/humano; (2) 5 interações consecutivas sem avançar nenhuma etapa do fluxo (loop infinito real); (3) cliente enviou arquivo não-foto (documento, planilha, áudio longo, vídeo). Em qualquer outra situação, continue conduzindo sozinho.",
       parameters: {
         type: "object",
         properties: { motivo: { type: "string" } },
@@ -1156,7 +1527,8 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_subtipo_revenda",
-      description: "Para clientes REVENDA ou PORTA INSTALADA. Grava no banco se o cliente quer um KIT completo de porta de enrolar ('kit') ou apenas PEÇAS AVULSAS ('pecas'). Chame ASSIM QUE o cliente responder. Silenciosa.",
+      description:
+        "Para clientes REVENDA ou PORTA INSTALADA. Grava no banco se o cliente quer um KIT completo de porta de enrolar ('kit') ou apenas PEÇAS AVULSAS ('pecas'). Chame ASSIM QUE o cliente responder. Silenciosa.",
       parameters: {
         type: "object",
         properties: {
@@ -1170,11 +1542,15 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_entrega",
-      description: "Para clientes PORTA INSTALADA. Grava no banco se o cliente quer ENTREGA no local (true) ou se prefere BUSCAR/RETIRAR ele mesmo (false). Quando false, o frete fica zerado e NÃO é necessário CEP. Quando true, em seguida pergunte o CEP e chame calcular_frete_cep. Silenciosa.",
+      description:
+        "Para clientes PORTA INSTALADA. Grava no banco se o cliente quer ENTREGA no local (true) ou se prefere BUSCAR/RETIRAR ele mesmo (false). Quando false, o frete fica zerado e NÃO é necessário CEP. Quando true, em seguida pergunte o CEP e chame calcular_frete_cep. Silenciosa.",
       parameters: {
         type: "object",
         properties: {
-          quer_entrega: { type: "boolean", description: "true = quer entrega, false = vai buscar/retirar" },
+          quer_entrega: {
+            type: "boolean",
+            description: "true = quer entrega, false = vai buscar/retirar",
+          },
         },
         required: ["quer_entrega"],
       },
@@ -1184,11 +1560,16 @@ const TOOLS = [
     type: "function",
     function: {
       name: "listar_pecas_disponiveis",
-      description: "Consulta o catálogo de peças disponíveis no estoque (códigos SKU, nome, preço de venda). Use quando o cliente revendedor de PEÇAS AVULSAS pedir para ver o que tem disponível, ou quando você precisar identificar uma peça que ele citou. Pode passar um termo de busca opcional.",
+      description:
+        "Consulta o catálogo de peças disponíveis no estoque (códigos SKU, nome, preço de venda). Use quando o cliente revendedor de PEÇAS AVULSAS pedir para ver o que tem disponível, ou quando você precisar identificar uma peça que ele citou. Pode passar um termo de busca opcional.",
       parameters: {
         type: "object",
         properties: {
-          busca: { type: "string", description: "Termo opcional para filtrar por nome/sku (ex: 'motor', 'guia', 'controle')" },
+          busca: {
+            type: "string",
+            description:
+              "Termo opcional para filtrar por nome/sku (ex: 'motor', 'guia', 'controle')",
+          },
         },
         required: [],
       },
@@ -1198,7 +1579,8 @@ const TOOLS = [
     type: "function",
     function: {
       name: "definir_pecas_avulsas",
-      description: "Para REVENDA ou PORTA INSTALADA com subtipo=pecas. Grava a lista de peças que o cliente quer comprar. Chame ASSIM QUE o cliente listar peças com quantidade (ex: '5 motores 200kg', '2 controles e 10m de guia') — NÃO peça confirmação adicional antes. Cada item deve ter produto_nome e quantidade; informe codigo_sku quando souber.",
+      description:
+        "Para REVENDA ou PORTA INSTALADA com subtipo=pecas. Grava a lista de peças que o cliente quer comprar. Chame ASSIM QUE o cliente listar peças com quantidade (ex: '5 motores 200kg', '2 controles e 10m de guia') — NÃO peça confirmação adicional antes. Cada item deve ter produto_nome e quantidade; informe codigo_sku quando souber.",
       parameters: {
         type: "object",
         properties: {
@@ -1207,11 +1589,18 @@ const TOOLS = [
             items: {
               type: "object",
               properties: {
-                codigo_sku: { type: "string", description: "SKU do estoque (opcional, mas recomendado)" },
+                codigo_sku: {
+                  type: "string",
+                  description: "SKU do estoque (opcional, mas recomendado)",
+                },
                 produto_nome: { type: "string" },
                 quantidade: { type: "number" },
                 unidade: { type: "string", description: "ex: UN, MT, M²" },
-                preco_unitario: { type: "number", description: "Preço unitário (opcional, será buscado do estoque se omitido)" },
+                preco_unitario: {
+                  type: "number",
+                  description:
+                    "Preço unitário (opcional, será buscado do estoque se omitido)",
+                },
               },
               required: ["produto_nome", "quantidade"],
             },
@@ -1223,7 +1612,10 @@ const TOOLS = [
   },
 ];
 
-async function chamarIA(messages: any[], options: { tools?: any[] | null; temperature?: number } = {}) {
+async function chamarIA(
+  messages: any[],
+  options: { tools?: any[] | null; temperature?: number } = {},
+) {
   // Timeout generoso (30s) para o agente "pensar com calma" sem travar a request
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30_000);
@@ -1246,8 +1638,12 @@ async function chamarIA(messages: any[], options: { tools?: any[] | null; temper
     });
     if (!r.ok) {
       const t = await r.text();
-      if (r.status === 429) throw new Error("Lovable AI: limite de requisições atingido. Tente novamente em instantes.");
-      if (r.status === 402) throw new Error("Lovable AI: créditos insuficientes no workspace.");
+      if (r.status === 429)
+        throw new Error(
+          "Lovable AI: limite de requisições atingido. Tente novamente em instantes.",
+        );
+      if (r.status === 402)
+        throw new Error("Lovable AI: créditos insuficientes no workspace.");
       console.error("IA erro:", r.status, t);
       throw new Error(`IA ${r.status}: ${t}`);
     }
@@ -1290,19 +1686,41 @@ function estadoInicialConversa(telefone: string, nome?: string) {
   };
 }
 
-async function reutilizarConversaComoNovaSessao(conversa: any, telefone: string, nome?: string) {
+async function reutilizarConversaComoNovaSessao(
+  conversa: any,
+  telefone: string,
+  nome?: string,
+) {
   // A constraint UNIQUE(telefone, tipo_cliente) impede criar/atualizar outra conversa
   // para o mesmo telefone/tipo. Por isso consolidamos em uma única conversa ativa
   // quando começa uma nova sessão, evitando loop em "PORTA INSTALADA ou REVENDA?".
   const limparOutras = await withSchemaRetry(() =>
-    supabase.from("leo_conversations").delete().eq("telefone", telefone).neq("id", conversa.id)
+    supabase
+      .from("leo_conversations")
+      .delete()
+      .eq("telefone", telefone)
+      .neq("id", conversa.id),
   );
-  if (limparOutras.error) console.error("⚠️", descreverErroPg(limparOutras.error, "getOuCriarConversa limpar duplicadas: "));
+  if (limparOutras.error)
+    console.error(
+      "⚠️",
+      descreverErroPg(
+        limparOutras.error,
+        "getOuCriarConversa limpar duplicadas: ",
+      ),
+    );
 
   const limparMensagens = await withSchemaRetry(() =>
-    supabase.from("leo_messages").delete().eq("conversation_id", conversa.id)
+    supabase.from("leo_messages").delete().eq("conversation_id", conversa.id),
   );
-  if (limparMensagens.error) console.error("⚠️", descreverErroPg(limparMensagens.error, "getOuCriarConversa limpar mensagens: "));
+  if (limparMensagens.error)
+    console.error(
+      "⚠️",
+      descreverErroPg(
+        limparMensagens.error,
+        "getOuCriarConversa limpar mensagens: ",
+      ),
+    );
 
   const reset = await withSchemaRetry(() =>
     supabase
@@ -1310,7 +1728,7 @@ async function reutilizarConversaComoNovaSessao(conversa: any, telefone: string,
       .update(estadoInicialConversa(telefone, nome))
       .eq("id", conversa.id)
       .select()
-      .single()
+      .single(),
   );
   if (reset.error) throw reset.error;
   return { conversa: reset.data, isNova: true };
@@ -1325,13 +1743,19 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
       .eq("status", "ativa")
       .order("ultima_mensagem_at", { ascending: false })
       .limit(1)
-      .maybeSingle()
+      .maybeSingle(),
   );
-  if (existingRes.error) console.error("⚠️", descreverErroPg(existingRes.error, "getOuCriarConversa leitura: "));
+  if (existingRes.error)
+    console.error(
+      "⚠️",
+      descreverErroPg(existingRes.error, "getOuCriarConversa leitura: "),
+    );
   const existing = existingRes.data;
 
   if (existing) {
-    const ultima = new Date(existing.ultima_mensagem_at || existing.created_at).getTime();
+    const ultima = new Date(
+      existing.ultima_mensagem_at || existing.created_at,
+    ).getTime();
     const inativaHaMuito = Date.now() - ultima > SESSION_GAP_MS;
     if (!inativaHaMuito) return { conversa: existing, isNova: false };
 
@@ -1346,17 +1770,29 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
       .eq("telefone", telefone)
       .order("ultima_mensagem_at", { ascending: false })
       .limit(1)
-      .maybeSingle()
+      .maybeSingle(),
   );
-  if (qualquerRes.error) console.error("⚠️", descreverErroPg(qualquerRes.error, "getOuCriarConversa leitura qualquer: "));
-  if (qualquerRes.data) return await reutilizarConversaComoNovaSessao(qualquerRes.data, telefone, nome);
+  if (qualquerRes.error)
+    console.error(
+      "⚠️",
+      descreverErroPg(
+        qualquerRes.error,
+        "getOuCriarConversa leitura qualquer: ",
+      ),
+    );
+  if (qualquerRes.data)
+    return await reutilizarConversaComoNovaSessao(
+      qualquerRes.data,
+      telefone,
+      nome,
+    );
 
   const criar = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
       .insert(estadoInicialConversa(telefone, nome))
       .select()
-      .single()
+      .single(),
   );
   if (criar.error) throw criar.error;
   return { conversa: criar.data, isNova: true };
@@ -1366,13 +1802,20 @@ async function getOuCriarConversa(telefone: string, nome?: string) {
 // FRETE — Cálculo por CEP (Haversine a partir da Eletroportas em Salvador-BA)
 // ===========================
 
-function getDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+function getDistanceInKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+) {
   const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) ** 2;
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -1383,10 +1826,16 @@ async function calcularFretePorCep(cepRaw: string) {
     return { ok: false, error: "CEP inválido. Peça novamente, com 8 dígitos." };
   }
   const cepNumero = Number(cep);
-  const cepPareceBahia = Number.isFinite(cepNumero) && cepNumero >= 40000000 && cepNumero <= 48999999;
+  const cepPareceBahia =
+    Number.isFinite(cepNumero) &&
+    cepNumero >= 40000000 &&
+    cepNumero <= 48999999;
   const freteFallback = 350;
   // 1) ViaCEP — endereço + UF
-  let uf = "", localidade = "", bairro = "", logradouro = "";
+  let uf = "",
+    localidade = "",
+    bairro = "",
+    logradouro = "";
   try {
     const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
     if (r.ok) {
@@ -1402,7 +1851,9 @@ async function calcularFretePorCep(cepRaw: string) {
     console.error("viacep erro:", e);
   }
   if (!uf && cepPareceBahia) {
-    console.warn(`⚠️ ViaCEP indisponível/sem UF para CEP ${cep}; usando fallback BA R$${freteFallback}`);
+    console.warn(
+      `⚠️ ViaCEP indisponível/sem UF para CEP ${cep}; usando fallback BA R$${freteFallback}`,
+    );
     return {
       ok: true,
       cep,
@@ -1415,13 +1866,25 @@ async function calcularFretePorCep(cepRaw: string) {
       observacao: "Frete estimado por faixa de CEP da Bahia.",
     };
   }
-  if (!uf) return { ok: false, fora_da_bahia: true, error: "Não consegui confirmar que esse CEP é da Bahia." };
+  if (!uf)
+    return {
+      ok: false,
+      fora_da_bahia: true,
+      error: "Não consegui confirmar que esse CEP é da Bahia.",
+    };
   if (uf !== "BA") {
-    return { ok: false, fora_da_bahia: true, uf, localidade, error: `CEP é de ${localidade}/${uf}. PORTA INSTALADA atendemos apenas na Bahia.` };
+    return {
+      ok: false,
+      fora_da_bahia: true,
+      uf,
+      localidade,
+      error: `CEP é de ${localidade}/${uf}. PORTA INSTALADA atendemos apenas na Bahia.`,
+    };
   }
 
   // 2) AwesomeAPI — lat/lng do CEP
-  let lat: number | null = null, lng: number | null = null;
+  let lat: number | null = null,
+    lng: number | null = null;
   try {
     const r = await fetch(`https://cep.awesomeapi.com.br/json/${cep}`);
     if (r.ok) {
@@ -1437,11 +1900,16 @@ async function calcularFretePorCep(cepRaw: string) {
 
   if (lat == null || lng == null) {
     // Fallback conservador: cobra um valor médio quando não temos coordenadas
-    console.warn(`⚠️ Sem coordenadas para CEP ${cep}, usando frete fallback R$${freteFallback}`);
+    console.warn(
+      `⚠️ Sem coordenadas para CEP ${cep}, usando frete fallback R$${freteFallback}`,
+    );
     return {
       ok: true,
       cep,
-      uf, localidade, bairro, logradouro,
+      uf,
+      localidade,
+      bairro,
+      logradouro,
       distancia_km: null,
       frete: freteFallback,
       observacao: "Frete estimado (sem coordenadas precisas).",
@@ -1454,14 +1922,20 @@ async function calcularFretePorCep(cepRaw: string) {
   return {
     ok: true,
     cep,
-    uf, localidade, bairro, logradouro,
+    uf,
+    localidade,
+    bairro,
+    logradouro,
     distancia_km: Math.round(distanciaKm * 100) / 100,
     frete,
   };
 }
 
 /** Tenta novamente quando o PostgREST está recarregando o schema cache (erro vem com tudo vazio). */
-async function withSchemaRetry<T extends { error: any }>(fn: () => Promise<T>, tentativas = 4): Promise<T> {
+async function withSchemaRetry<T extends { error: any }>(
+  fn: () => Promise<T>,
+  tentativas = 4,
+): Promise<T> {
   let ultimo: T | undefined;
   for (let i = 0; i < tentativas; i++) {
     let r: T;
@@ -1469,7 +1943,12 @@ async function withSchemaRetry<T extends { error: any }>(fn: () => Promise<T>, t
       r = await fn();
     } catch (e: any) {
       const msg = String(e?.message || e || "");
-      if (/schema cache|Could not query the database|JWT|fetch failed|network|timeout/i.test(msg) && i < tentativas - 1) {
+      if (
+        /schema cache|Could not query the database|JWT|fetch failed|network|timeout/i.test(
+          msg,
+        ) &&
+        i < tentativas - 1
+      ) {
         await new Promise((res) => setTimeout(res, 300 * (i + 1)));
         continue;
       }
@@ -1480,7 +1959,8 @@ async function withSchemaRetry<T extends { error: any }>(fn: () => Promise<T>, t
     const msg = String(err?.message || "");
     const code = String(err?.code || "");
     const semInfo = !msg && !code && err?.details == null && err?.hint == null;
-    const schemaIssue = /schema cache|Could not query the database|JWT|fetch failed/i.test(msg);
+    const schemaIssue =
+      /schema cache|Could not query the database|JWT|fetch failed/i.test(msg);
     if (semInfo || schemaIssue) {
       ultimo = r;
       await new Promise((res) => setTimeout(res, 250 * (i + 1)));
@@ -1500,12 +1980,23 @@ function descreverErroPg(err: any, prefixo = ""): string {
     err?.code ? `code=${err.code}` : null,
     err?.status ? `status=${err.status}` : null,
   ].filter(Boolean);
-  return prefixo + (partes.join(" | ") || "PostgrestError vazio (provável recarga de schema cache)");
+  return (
+    prefixo +
+    (partes.join(" | ") ||
+      "PostgrestError vazio (provável recarga de schema cache)")
+  );
 }
 
-async function salvarMensagem(conversation_id: string, role: string, content: string, metadata: any = {}) {
+async function salvarMensagem(
+  conversation_id: string,
+  role: string,
+  content: string,
+  metadata: any = {},
+) {
   const r = await withSchemaRetry(() =>
-    supabase.from("leo_messages").insert({ conversation_id, role, content, metadata })
+    supabase
+      .from("leo_messages")
+      .insert({ conversation_id, role, content, metadata }),
   );
   if (r.error) {
     // Não joga para o catch global — não queremos derrubar o turno inteiro só porque
@@ -1514,15 +2005,17 @@ async function salvarMensagem(conversation_id: string, role: string, content: st
   }
 }
 
-
 function aplicarInferenciasEmEstado(base: any, textos: string[]) {
   const estado = { ...(base || {}) };
   let subtipoTravadoPorTexto = false;
   for (const txt of textos) {
     const tipo = inferirTipoClienteTexto(txt);
-    if (tipo && (!estado.tipo_cliente || estado.tipo_cliente === "indefinido")) estado.tipo_cliente = tipo;
+    if (tipo && (!estado.tipo_cliente || estado.tipo_cliente === "indefinido"))
+      estado.tipo_cliente = tipo;
 
-    const tipoDef = estado.tipo_cliente === "revenda" || estado.tipo_cliente === "porta_instalada";
+    const tipoDef =
+      estado.tipo_cliente === "revenda" ||
+      estado.tipo_cliente === "porta_instalada";
     if (tipoDef) {
       const sub = inferirSubtipoRevendaTexto(txt);
       if (sub && !subtipoTravadoPorTexto && sub !== estado.subtipo_revenda) {
@@ -1557,25 +2050,41 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
 
     if (ehPecas) {
       const pecas = inferirPecasAvulsasTexto(txt);
-      const atuais = Array.isArray(estado.pecas_avulsas) ? estado.pecas_avulsas : [];
+      const atuais = Array.isArray(estado.pecas_avulsas)
+        ? estado.pecas_avulsas
+        : [];
       if (pecas.length > 0) {
         // Se ainda não há peças, ou as atuais são inválidas (qty absurda / preço 0 / sem produto conhecido),
         // substitui pelas peças recém-extraídas. Caso contrário, mescla (adiciona novas).
-        const PRODUTOS_VALIDOS_RE = /\b(motor|automatizador|controle|central|guia|lamina|lâmina|portinhola|alcapao|alçapão|fechadura|trava|eixo|mola|cabo|kit|porta)\b/i;
-        const atuaisInvalidas = atuais.length === 0 || atuais.some((p: any) => {
-          const q = Number(p?.quantidade);
-          const nome = String(p?.produto_nome || p?.descricao || "").toLowerCase();
-          return !Number.isFinite(q) || q <= 0 || q > 9999 || !PRODUTOS_VALIDOS_RE.test(nome);
-        });
+        const PRODUTOS_VALIDOS_RE =
+          /\b(motor|automatizador|controle|central|guia|lamina|lâmina|portinhola|alcapao|alçapão|fechadura|trava|eixo|mola|cabo|kit|porta)\b/i;
+        const atuaisInvalidas =
+          atuais.length === 0 ||
+          atuais.some((p: any) => {
+            const q = Number(p?.quantidade);
+            const nome = String(
+              p?.produto_nome || p?.descricao || "",
+            ).toLowerCase();
+            return (
+              !Number.isFinite(q) ||
+              q <= 0 ||
+              q > 9999 ||
+              !PRODUTOS_VALIDOS_RE.test(nome)
+            );
+          });
         if (atuaisInvalidas) {
           estado.pecas_avulsas = pecas;
         } else {
           // mescla — soma quantidades por produto_nome
           const mapa = new Map<string, any>();
           for (const it of [...atuais, ...pecas]) {
-            const k = String(it.produto_nome || "").toLowerCase().trim();
+            const k = String(it.produto_nome || "")
+              .toLowerCase()
+              .trim();
             if (!k) continue;
-            if (mapa.has(k)) mapa.get(k).quantidade = Number(mapa.get(k).quantidade) + Number(it.quantidade);
+            if (mapa.has(k))
+              mapa.get(k).quantidade =
+                Number(mapa.get(k).quantidade) + Number(it.quantidade);
             else mapa.set(k, { ...it });
           }
           estado.pecas_avulsas = Array.from(mapa.values());
@@ -1598,7 +2107,6 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
         estado.adicionais = adicionais;
         estado.adicionais_perguntado = true;
       }
-
     }
 
     const cep = inferirCepTexto(txt);
@@ -1616,15 +2124,28 @@ function aplicarInferenciasEmEstado(base: any, textos: string[]) {
   return estado;
 }
 
-async function aplicarExtracaoDeterministica(conversaId: string, telefone: string, texto: string) {
+async function aplicarExtracaoDeterministica(
+  conversaId: string,
+  telefone: string,
+  texto: string,
+) {
   const estadoRes = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
+      .select(
+        "tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega",
+      )
       .eq("id", conversaId)
-      .maybeSingle()
+      .maybeSingle(),
   );
-  if (estadoRes.error) console.error("⚠️", descreverErroPg(estadoRes.error, "leitura estado determinístico falhou: "));
+  if (estadoRes.error)
+    console.error(
+      "⚠️",
+      descreverErroPg(
+        estadoRes.error,
+        "leitura estado determinístico falhou: ",
+      ),
+    );
 
   const histRes = await withSchemaRetry(() =>
     supabase
@@ -1633,16 +2154,31 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
       .eq("conversation_id", conversaId)
       .eq("role", "user")
       .order("created_at", { ascending: false })
-      .limit(12)
+      .limit(12),
   );
-  if (histRes.error) console.error("⚠️", descreverErroPg(histRes.error, "leitura histórico determinístico falhou: "));
+  if (histRes.error)
+    console.error(
+      "⚠️",
+      descreverErroPg(
+        histRes.error,
+        "leitura histórico determinístico falhou: ",
+      ),
+    );
 
   const baseEstado = estadoRes.data || {};
-  const textos = [texto, ...((histRes.data || []) as any[]).map((m) => String(m?.content || ""))].filter(Boolean);
+  const textos = [
+    texto,
+    ...((histRes.data || []) as any[]).map((m) => String(m?.content || "")),
+  ].filter(Boolean);
   const estado = aplicarInferenciasEmEstado(baseEstado, textos);
 
   const ehPecas = estado.subtipo_revenda === "pecas";
-  if (!ehPecas && estado.tipo_perfil && baseEstado?.pintura_perguntado && !baseEstado?.adicionais_perguntado) {
+  if (
+    !ehPecas &&
+    estado.tipo_perfil &&
+    baseEstado?.pintura_perguntado &&
+    !baseEstado?.adicionais_perguntado
+  ) {
     const adicionaisDaRespostaAtual = inferirAdicionaisTexto(texto, true);
     if (adicionaisDaRespostaAtual) {
       estado.adicionais = adicionaisDaRespostaAtual;
@@ -1651,9 +2187,15 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
   }
 
   const patch: Record<string, unknown> = {};
-  if (estado.tipo_cliente && (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")) patch.tipo_cliente = estado.tipo_cliente;
+  if (
+    estado.tipo_cliente &&
+    (!baseEstado?.tipo_cliente || baseEstado.tipo_cliente === "indefinido")
+  )
+    patch.tipo_cliente = estado.tipo_cliente;
   const subtipoAtual = baseEstado?.subtipo_revenda || null;
-  const mudouSubtipo = Boolean(estado.subtipo_revenda && estado.subtipo_revenda !== subtipoAtual);
+  const mudouSubtipo = Boolean(
+    estado.subtipo_revenda && estado.subtipo_revenda !== subtipoAtual,
+  );
   if (estado.subtipo_revenda && (!subtipoAtual || mudouSubtipo)) {
     patch.subtipo_revenda = estado.subtipo_revenda;
     if (estado.subtipo_revenda === "kit") {
@@ -1675,15 +2217,41 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
     }
   }
 
-  if (ehPecas && (!Array.isArray(baseEstado?.pecas_avulsas) || baseEstado.pecas_avulsas.length === 0)) {
-    const pecas = Array.isArray(estado.pecas_avulsas) ? estado.pecas_avulsas : [];
-    if (pecas.length > 0) patch.pecas_avulsas = await enriquecerPecasComEstoque(pecas);
+  if (
+    ehPecas &&
+    (!Array.isArray(baseEstado?.pecas_avulsas) ||
+      baseEstado.pecas_avulsas.length === 0)
+  ) {
+    const pecas = Array.isArray(estado.pecas_avulsas)
+      ? estado.pecas_avulsas
+      : [];
+    if (pecas.length > 0)
+      patch.pecas_avulsas = await enriquecerPecasComEstoque(pecas);
   }
 
   if (!ehPecas) {
-    if (estado.largura != null && (mudouSubtipo || baseEstado?.largura == null || Number(baseEstado?.largura) !== Number(estado.largura))) patch.largura = estado.largura;
-    if (estado.altura != null && (mudouSubtipo || baseEstado?.altura == null || Number(baseEstado?.altura) !== Number(estado.altura))) patch.altura = estado.altura;
-    if (estado.tipo_perfil && (mudouSubtipo || !baseEstado?.tipo_perfil || String(baseEstado?.tipo_perfil).toLowerCase() !== String(estado.tipo_perfil).toLowerCase())) patch.tipo_perfil = estado.tipo_perfil;
+    if (
+      estado.largura != null &&
+      (mudouSubtipo ||
+        baseEstado?.largura == null ||
+        Number(baseEstado?.largura) !== Number(estado.largura))
+    )
+      patch.largura = estado.largura;
+    if (
+      estado.altura != null &&
+      (mudouSubtipo ||
+        baseEstado?.altura == null ||
+        Number(baseEstado?.altura) !== Number(estado.altura))
+    )
+      patch.altura = estado.altura;
+    if (
+      estado.tipo_perfil &&
+      (mudouSubtipo ||
+        !baseEstado?.tipo_perfil ||
+        String(baseEstado?.tipo_perfil).toLowerCase() !==
+          String(estado.tipo_perfil).toLowerCase())
+    )
+      patch.tipo_perfil = estado.tipo_perfil;
 
     // Pintura: só infere após o perfil estar definido
     if (estado.tipo_perfil && !baseEstado?.pintura_perguntado) {
@@ -1691,32 +2259,45 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
       if (pint) {
         patch.pintura_perguntado = true;
         patch.quer_pintura = pint.quer_pintura;
-        patch.tipo_pintura = pint.quer_pintura ? (pint.tipo_pintura || null) : null;
+        patch.tipo_pintura = pint.quer_pintura
+          ? pint.tipo_pintura || null
+          : null;
         if (pint.quer_pintura && !pint.tipo_pintura) {
           patch.pintura_perguntado = false;
         }
       }
     }
 
-    if (estado.adicionais_perguntado && (mudouSubtipo || !baseEstado?.adicionais_perguntado)) {
-      patch.adicionais = estado.adicionais || { portinhola: false, alcapao: false };
+    if (
+      estado.adicionais_perguntado &&
+      (mudouSubtipo || !baseEstado?.adicionais_perguntado)
+    ) {
+      patch.adicionais = estado.adicionais || {
+        portinhola: false,
+        alcapao: false,
+      };
       patch.adicionais_perguntado = true;
     }
-
   }
 
   const cep = textos.map(inferirCepTexto).find(Boolean) as string | null;
-  const querEntregaInferido = estado?.quer_entrega === true || patch.quer_entrega === true || Boolean(cep && !estado?.entrega_perguntado);
+  const querEntregaInferido =
+    estado?.quer_entrega === true ||
+    patch.quer_entrega === true ||
+    Boolean(cep && !estado?.entrega_perguntado);
   if (cep && !baseEstado?.cep && querEntregaInferido) {
     const frete: any = await calcularFretePorCep(cep);
     if (frete.ok) {
       patch.cep = frete.cep;
       patch.frete = frete.frete;
-      patch.endereco_instalacao = [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
-        .filter((x: any) => x && String(x).trim())
-        .join(", ") || null;
+      patch.endereco_instalacao =
+        [frete.logradouro, frete.bairro, frete.localidade, frete.uf]
+          .filter((x: any) => x && String(x).trim())
+          .join(", ") || null;
     } else if (!frete.fora_da_bahia) {
-      console.warn(`⚠️ CEP ${cep} aceito com fallback para evitar loop: ${frete.error || "consulta indisponível"}`);
+      console.warn(
+        `⚠️ CEP ${cep} aceito com fallback para evitar loop: ${frete.error || "consulta indisponível"}`,
+      );
       patch.cep = cep;
       patch.frete = 350;
       patch.endereco_instalacao = null;
@@ -1737,11 +2318,26 @@ async function aplicarExtracaoDeterministica(conversaId: string, telefone: strin
 
   if (Object.keys(patch).length > 0) {
     patch.ultima_mensagem_at = new Date().toISOString();
-    const { error } = await withSchemaRetry(() => supabase.from("leo_conversations").update(patch).eq("id", conversaId));
-    if (error) console.error("⚠️", descreverErroPg(error, "Falha na extração determinística: "));
-    else console.log("✅ Estado atualizado por extração determinística:", JSON.stringify(patch));
-    if (patch.tipo_cliente === "porta_instalada" || patch.tipo_cliente === "revenda") {
-      try { await atualizarTipoClienteLegado(telefone, patch.tipo_cliente as any); } catch (_) {}
+    const { error } = await withSchemaRetry(() =>
+      supabase.from("leo_conversations").update(patch).eq("id", conversaId),
+    );
+    if (error)
+      console.error(
+        "⚠️",
+        descreverErroPg(error, "Falha na extração determinística: "),
+      );
+    else
+      console.log(
+        "✅ Estado atualizado por extração determinística:",
+        JSON.stringify(patch),
+      );
+    if (
+      patch.tipo_cliente === "porta_instalada" ||
+      patch.tipo_cliente === "revenda"
+    ) {
+      try {
+        await atualizarTipoClienteLegado(telefone, patch.tipo_cliente as any);
+      } catch (_) {}
     }
   }
 
@@ -1752,12 +2348,17 @@ async function carregarEstadoConversa(conversaId: string) {
   const { data, error } = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
+      .select(
+        "tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega",
+      )
       .eq("id", conversaId)
-      .maybeSingle()
+      .maybeSingle(),
   );
   if (error) {
-    console.error("⚠️", descreverErroPg(error, "carregarEstadoConversa falhou: "));
+    console.error(
+      "⚠️",
+      descreverErroPg(error, "carregarEstadoConversa falhou: "),
+    );
     return null;
   }
   return data;
@@ -1767,7 +2368,8 @@ function proximaPerguntaDeterministica(estado: any): string | null {
   const tipo = String(estado?.tipo_cliente || "").toLowerCase();
   const tipoValido = tipo === "porta_instalada" || tipo === "revenda";
 
-  if (!tipoValido) return "Antes de seguirmos, me diga: qual delas melhor representa você?\n\n🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento\n\n🔹 Sou serralheiro – vou revender para meus clientes";
+  if (!tipoValido)
+    return "Antes de seguirmos, me diga: qual delas melhor representa você?\n\n🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento\n\n🔹 Sou serralheiro – vou revender para meus clientes";
 
   // Subtipo (kit/pecas) vale tanto para revenda quanto para porta_instalada
   if (!estado?.subtipo_revenda) {
@@ -1777,7 +2379,9 @@ function proximaPerguntaDeterministica(estado: any): string | null {
   const ehPecas = estado?.subtipo_revenda === "pecas";
 
   if (ehPecas) {
-    const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
+    const pecas = Array.isArray(estado?.pecas_avulsas)
+      ? estado.pecas_avulsas
+      : [];
     if (pecas.length === 0) {
       return "Perfeito. Quais *peças* você precisa e em qual *quantidade*? Pode me mandar a lista (ex: 2 motores 500kg, 10m de guia lateral, 1 controle remoto).";
     }
@@ -1785,7 +2389,12 @@ function proximaPerguntaDeterministica(estado: any): string | null {
     // Fluxo padrão (kit)
     const largura = Number(estado?.largura);
     const altura = Number(estado?.altura);
-    if (!Number.isFinite(largura) || largura <= 0 || !Number.isFinite(altura) || altura <= 0) {
+    if (
+      !Number.isFinite(largura) ||
+      largura <= 0 ||
+      !Number.isFinite(altura) ||
+      altura <= 0
+    ) {
       return "Qual a *largura e altura* da porta, em metros? (ex: 4x3)";
     }
     if (!estado?.tipo_perfil) {
@@ -1823,17 +2432,31 @@ function estadoProntoParaOrcamento(estado: any): boolean {
   const ehPecas = estado?.subtipo_revenda === "pecas";
 
   if (ehPecas) {
-    const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
+    const pecas = Array.isArray(estado?.pecas_avulsas)
+      ? estado.pecas_avulsas
+      : [];
     if (pecas.length === 0) return false;
   } else {
     const largura = Number(estado?.largura);
     const altura = Number(estado?.altura);
     const perfil = String(estado?.tipo_perfil || "").toLowerCase();
     const perfilValido = ["fechado", "transvision", "oblongo"].includes(perfil);
-    const pinturaOk = Boolean(estado?.pintura_perguntado) && (!estado?.quer_pintura || Boolean(estado?.tipo_pintura));
-    if (!(Number.isFinite(largura) && largura > 0 && largura <= 20 &&
-        Number.isFinite(altura) && altura > 0 && altura <= 20 &&
-        perfilValido && pinturaOk && Boolean(estado?.adicionais_perguntado))) {
+    const pinturaOk =
+      Boolean(estado?.pintura_perguntado) &&
+      (!estado?.quer_pintura || Boolean(estado?.tipo_pintura));
+    if (
+      !(
+        Number.isFinite(largura) &&
+        largura > 0 &&
+        largura <= 20 &&
+        Number.isFinite(altura) &&
+        altura > 0 &&
+        altura <= 20 &&
+        perfilValido &&
+        pinturaOk &&
+        Boolean(estado?.adicionais_perguntado)
+      )
+    ) {
       return false;
     }
   }
@@ -1853,7 +2476,9 @@ async function pdfJaEnviadoConversa(conversation_id: string) {
     .eq("role", "assistant")
     .order("created_at", { ascending: false })
     .limit(20);
-  return Boolean((data || []).some((m: any) => m?.metadata?.pdf_enviado === true));
+  return Boolean(
+    (data || []).some((m: any) => m?.metadata?.pdf_enviado === true),
+  );
 }
 
 /** Retorna o snapshot (largura/altura/perfil/cliente/cep) do ÚLTIMO PDF enviado, ou null. */
@@ -1865,7 +2490,7 @@ async function ultimoPdfSnapshot(conversation_id: string): Promise<any | null> {
     .eq("role", "assistant")
     .order("created_at", { ascending: false })
     .limit(20);
-  for (const m of (data || [])) {
+  for (const m of data || []) {
     if (m?.metadata?.pdf_enviado === true) return m?.metadata?.snapshot || null;
   }
   return null;
@@ -1874,25 +2499,41 @@ async function ultimoPdfSnapshot(conversation_id: string): Promise<any | null> {
 /** Compara estado atual da conversa com o snapshot do último PDF — se algo mudou, é OUTRO orçamento. */
 function normalizarPecasParaComparacao(pecas: any): string {
   if (!Array.isArray(pecas)) return "[]";
-  const arr = pecas.map((p: any) => ({
-    nome: String(p?.produto_nome || p?.descricao || "").trim().toLowerCase(),
-    qtd: Number(p?.quantidade || p?.qty || 0),
-    sku: String(p?.codigo_sku || "").trim().toLowerCase(),
-  })).filter((p) => p.nome || p.sku);
+  const arr = pecas
+    .map((p: any) => ({
+      nome: String(p?.produto_nome || p?.descricao || "")
+        .trim()
+        .toLowerCase(),
+      qtd: Number(p?.quantidade || p?.qty || 0),
+      sku: String(p?.codigo_sku || "")
+        .trim()
+        .toLowerCase(),
+    }))
+    .filter((p) => p.nome || p.sku);
   arr.sort((a, b) => (a.sku + a.nome).localeCompare(b.sku + b.nome));
   return JSON.stringify(arr);
 }
 
-async function medidasMudaramDesdeUltimoPdf(conversation_id: string): Promise<boolean> {
+async function medidasMudaramDesdeUltimoPdf(
+  conversation_id: string,
+): Promise<boolean> {
   const snap = await ultimoPdfSnapshot(conversation_id);
   if (!snap) return true; // nenhum PDF salvo com snapshot → tratar como mudança/permitir
   const { data: c } = await supabase
     .from("leo_conversations")
-    .select("tipo_cliente, largura, altura, tipo_perfil, cep, adicionais, pecas_avulsas, subtipo_revenda")
+    .select(
+      "tipo_cliente, largura, altura, tipo_perfil, cep, adicionais, pecas_avulsas, subtipo_revenda",
+    )
     .eq("id", conversation_id)
     .maybeSingle();
   if (!c) return false;
-  const eq = (a: any, b: any) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+  const eq = (a: any, b: any) =>
+    String(a ?? "")
+      .trim()
+      .toLowerCase() ===
+    String(b ?? "")
+      .trim()
+      .toLowerCase();
   const num = (a: any, b: any) => Number(a) === Number(b);
   const bool = (v: any) => Boolean(v);
   const adAtual = (c.adicionais as any) || {};
@@ -1913,7 +2554,10 @@ async function medidasMudaramDesdeUltimoPdf(conversation_id: string): Promise<bo
 }
 
 /** Conta quantas mensagens user chegaram após `since` — usado para debounce de buffer. */
-async function contarMensagensUserApos(conversation_id: string, sinceIso: string): Promise<number> {
+async function contarMensagensUserApos(
+  conversation_id: string,
+  sinceIso: string,
+): Promise<number> {
   const { count } = await supabase
     .from("leo_messages")
     .select("id", { count: "exact", head: true })
@@ -1937,39 +2581,57 @@ function normalizarBuscaEstoque(valor: unknown): string {
 }
 
 function pontuarEstoqueParaPeca(row: any, item: any): number {
-  const alvo = normalizarBuscaEstoque(`${item?.produto_nome || ""} ${item?.descricao || ""}`);
-  const texto = normalizarBuscaEstoque(`${row?.produto_nome || ""} ${row?.descricao || ""}`);
+  const alvo = normalizarBuscaEstoque(
+    `${item?.produto_nome || ""} ${item?.descricao || ""}`,
+  );
+  const texto = normalizarBuscaEstoque(
+    `${row?.produto_nome || ""} ${row?.descricao || ""}`,
+  );
   let score = 0;
   const kgAlvo = alvo.match(/\b(\d{2,4})\s*kg?\b/)?.[1];
   if (alvo && texto.includes(alvo)) score += 50;
   if (kgAlvo && new RegExp(`\\b${kgAlvo}\\s*kg?\\b`).test(texto)) score += 40;
-  if (/\bmotor\b/.test(alvo) && /\b(motor|automatizador)\b/.test(texto)) score += 25;
+  if (/\bmotor\b/.test(alvo) && /\b(motor|automatizador)\b/.test(texto))
+    score += 25;
   if (/\bcontrole\b/.test(alvo) && /\bcontrole\b/.test(texto)) score += 20;
   if (/\bcentral\b/.test(alvo) && /\bcentral\b/.test(texto)) score += 20;
   if (/\bguia\b/.test(alvo) && /\bguia\b/.test(texto)) score += 30;
-  if (/\b(lamina|perfil)\b/.test(alvo) && /\b(lamina|perfil)\b/.test(texto)) score += 25;
-  if (/\b(eixo|tubo)\b/.test(alvo) && /\b(eixo|tubo)\b/.test(texto)) score += 20;
+  if (/\b(lamina|perfil)\b/.test(alvo) && /\b(lamina|perfil)\b/.test(texto))
+    score += 25;
+  if (/\b(eixo|tubo)\b/.test(alvo) && /\b(eixo|tubo)\b/.test(texto))
+    score += 20;
   if (/\bsoleira\b/.test(alvo) && /\bsoleira\b/.test(texto)) score += 20;
   if (/\bportinhola\b/.test(alvo) && /\bportinhola\b/.test(texto)) score += 30;
-  if (/\b(alcapao|alcapa)\b/.test(alvo) && /\b(alcapao|alcapa)\b/.test(texto)) score += 30;
+  if (/\b(alcapao|alcapa)\b/.test(alvo) && /\b(alcapao|alcapa)\b/.test(texto))
+    score += 30;
   // Discriminação de variantes de lâmina (fechado/transvision/oblongo) quando informado
   if (/\bfechad/.test(alvo) && /\bfechad/.test(texto)) score += 15;
-  if (/\btransvision\b/.test(alvo) && /\btransvision\b/.test(texto)) score += 15;
+  if (/\btransvision\b/.test(alvo) && /\btransvision\b/.test(texto))
+    score += 15;
   if (/\boblong/.test(alvo) && /\boblong/.test(texto)) score += 15;
   // Discriminação por DIMENSÃO (mm) — crucial pra distinguir variantes (ex.: guia 50mm vs 60mm)
-  const mmAlvo = Array.from(alvo.matchAll(/\b(\d{2,4})\s*mm\b/g)).map((m) => m[1]);
-  const mmTexto = Array.from(texto.matchAll(/\b(\d{2,4})\s*mm\b/g)).map((m) => m[1]);
+  const mmAlvo = Array.from(alvo.matchAll(/\b(\d{2,4})\s*mm\b/g)).map(
+    (m) => m[1],
+  );
+  const mmTexto = Array.from(texto.matchAll(/\b(\d{2,4})\s*mm\b/g)).map(
+    (m) => m[1],
+  );
   // Também aceita número solto perto da palavra-chave (ex.: "guia de 60") quando no alvo não veio "mm"
   if (mmAlvo.length === 0) {
-    const numSolto = alvo.match(/\b(?:guia|perfil|lamina|tubo|eixo)[^\d]*?(\d{2,4})\b/)?.[1];
+    const numSolto = alvo.match(
+      /\b(?:guia|perfil|lamina|tubo|eixo)[^\d]*?(\d{2,4})\b/,
+    )?.[1];
     if (numSolto) mmAlvo.push(numSolto);
   }
   if (mmAlvo.length && mmTexto.length) {
     const bate = mmAlvo.some((n) => mmTexto.includes(n));
-    if (bate) score += 35; else score -= 25; // penaliza variante de dimensão diferente
+    if (bate) score += 35;
+    else score -= 25; // penaliza variante de dimensão diferente
   }
   // Token overlap genérico (palavras com 4+ chars)
-  const tokensAlvo = Array.from(new Set(alvo.split(/\s+/).filter((t) => t.length >= 4)));
+  const tokensAlvo = Array.from(
+    new Set(alvo.split(/\s+/).filter((t) => t.length >= 4)),
+  );
   const tokensTexto = new Set(texto.split(/\s+/));
   const overlap = tokensAlvo.filter((t) => tokensTexto.has(t)).length;
   score += overlap * 6;
@@ -1977,18 +2639,35 @@ function pontuarEstoqueParaPeca(row: any, item: any): number {
   return score;
 }
 
-function precoFallbackPeca(item: any): { preco: number; codigo: string; nome: string } | null {
-  const alvo = normalizarBuscaEstoque(`${item?.produto_nome || ""} ${item?.descricao || ""}`);
+function precoFallbackPeca(
+  item: any,
+): { preco: number; codigo: string; nome: string } | null {
+  const alvo = normalizarBuscaEstoque(
+    `${item?.produto_nome || ""} ${item?.descricao || ""}`,
+  );
   const kg = alvo.match(/\b(\d{2,4})\s*kg?\b/)?.[1];
   if (/\b(motor|automatizador)\b/.test(alvo) && kg) {
     const chave = `motor_${kg}kg`;
     const preco = Number((PRECOS as any)[chave] || 0);
-    if (preco > 0) return { preco, codigo: `MOTOR-${kg}KG`, nome: `Motor ${kg}kg` };
+    if (preco > 0)
+      return { preco, codigo: `MOTOR-${kg}KG`, nome: `Motor ${kg}kg` };
   }
-  if (/\bcontrole\b/.test(alvo)) return { preco: PRECOS.controle_remoto, codigo: "CONTROLE-REMOTO", nome: "Controle remoto" };
-  if (/\bcentral\b/.test(alvo)) return { preco: PRECOS.central_comando, codigo: "CENTRAL-COMANDO", nome: "Central de comando" };
-  if (/\bportinhola\b/.test(alvo)) return { preco: PRECOS.portinhola, codigo: "ADIC-001", nome: "Portinhola" };
-  if (/\b(alcapao|alcapa)\b/.test(alvo)) return { preco: PRECOS.alcapao, codigo: "ADIC-002", nome: "Alçapão" };
+  if (/\bcontrole\b/.test(alvo))
+    return {
+      preco: PRECOS.controle_remoto,
+      codigo: "CONTROLE-REMOTO",
+      nome: "Controle remoto",
+    };
+  if (/\bcentral\b/.test(alvo))
+    return {
+      preco: PRECOS.central_comando,
+      codigo: "CENTRAL-COMANDO",
+      nome: "Central de comando",
+    };
+  if (/\bportinhola\b/.test(alvo))
+    return { preco: PRECOS.portinhola, codigo: "ADIC-001", nome: "Portinhola" };
+  if (/\b(alcapao|alcapa)\b/.test(alvo))
+    return { preco: PRECOS.alcapao, codigo: "ADIC-002", nome: "Alçapão" };
   return null;
 }
 
@@ -1996,40 +2675,57 @@ async function buscarEstoqueParaPeca(item: any) {
   if (item.codigo_sku && item.codigo_sku !== "AVULSA") {
     const { data } = await dashboardDb
       .from("estoque")
-      .select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida")
+      .select(
+        "codigo_sku, produto_nome, descricao, preco_venda, unidade_medida",
+      )
       .eq("codigo_sku", item.codigo_sku)
       .maybeSingle();
     if (data) return data;
   }
 
-  const nome = normalizarBuscaEstoque(item.produto_nome || item.descricao || "");
+  const nome = normalizarBuscaEstoque(
+    item.produto_nome || item.descricao || "",
+  );
   if (!nome) return null;
   const kg = nome.match(/\b(\d{2,4})\s*kg?\b/)?.[1];
   // Tokens significativos da peça pedida (motor, guia, lamina, eixo, soleira, etc.)
   const tokensSignificativos = nome
     .split(/\s+/)
     .filter((t) => t.length >= 4 && !/^\d/.test(t));
-  const termos = Array.from(new Set([
-    nome,
-    kg && nome.includes("motor") ? `motor ${kg}` : null,
-    kg && nome.includes("motor") ? `motor ${kg}kg` : null,
-    kg && nome.includes("motor") ? `automatizador ${kg}` : null,
-    kg && nome.includes("motor") ? `automatizador ${kg}kg` : null,
-    kg ? `${kg}kg` : null,
-    ...tokensSignificativos,
-  ].filter(Boolean) as string[]));
+  const termos = Array.from(
+    new Set(
+      [
+        nome,
+        kg && nome.includes("motor") ? `motor ${kg}` : null,
+        kg && nome.includes("motor") ? `motor ${kg}kg` : null,
+        kg && nome.includes("motor") ? `automatizador ${kg}` : null,
+        kg && nome.includes("motor") ? `automatizador ${kg}kg` : null,
+        kg ? `${kg}kg` : null,
+        ...tokensSignificativos,
+      ].filter(Boolean) as string[],
+    ),
+  );
 
   const candidatos: any[] = [];
   for (const termo of termos) {
     const { data } = await dashboardDb
       .from("estoque")
-      .select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida")
+      .select(
+        "codigo_sku, produto_nome, descricao, preco_venda, unidade_medida",
+      )
       .or(`produto_nome.ilike.%${termo}%,descricao.ilike.%${termo}%`)
       .limit(10);
     if (data?.length) candidatos.push(...data);
   }
 
-  const unicos = Array.from(new Map(candidatos.map((c) => [c.codigo_sku || `${c.produto_nome}-${c.descricao}`, c])).values());
+  const unicos = Array.from(
+    new Map(
+      candidatos.map((c) => [
+        c.codigo_sku || `${c.produto_nome}-${c.descricao}`,
+        c,
+      ]),
+    ).values(),
+  );
   const ranqueado = unicos
     .map((row) => ({ row, score: pontuarEstoqueParaPeca(row, item) }))
     .sort((a, b) => b.score - a.score);
@@ -2042,29 +2738,50 @@ async function buscarEstoqueParaPeca(item: any) {
 /** Resolve preço/SKU/unidade no estoque para uma lista de peças (busca por sku, nome e descrição). */
 async function enriquecerPecasComEstoque(itens: any[]): Promise<any[]> {
   const out: any[] = [];
-  for (const raw of (itens || [])) {
+  for (const raw of itens || []) {
     const item = { ...raw };
     const row: any = await buscarEstoqueParaPeca(item);
-    const fallback = Number(row?.preco_venda) > 0 ? null : precoFallbackPeca(item);
+    const fallback =
+      Number(row?.preco_venda) > 0 ? null : precoFallbackPeca(item);
     const precoInformado = Number(item.preco_unitario);
     const precoEstoque = Number(row?.preco_venda);
     const precoFallback = Number(fallback?.preco);
     const skuInformado = String(item.codigo_sku || "").trim();
-    const skuValido = skuInformado && skuInformado !== "AVULSA" ? skuInformado : null;
+    const skuValido =
+      skuInformado && skuInformado !== "AVULSA" ? skuInformado : null;
     out.push({
       codigo_sku: skuValido || row?.codigo_sku || fallback?.codigo || "AVULSA",
       produto_nome: row?.produto_nome || fallback?.nome || item.produto_nome,
-      descricao: row?.descricao || row?.produto_nome || fallback?.nome || item.produto_nome,
+      descricao:
+        row?.descricao ||
+        row?.produto_nome ||
+        fallback?.nome ||
+        item.produto_nome,
       quantidade: Number(item.quantidade) || 0,
       unidade: item.unidade || row?.unidade_medida || "UN",
-      preco_unitario: precoInformado > 0 ? precoInformado : precoEstoque > 0 ? precoEstoque : precoFallback > 0 ? precoFallback : 0,
+      preco_unitario:
+        precoInformado > 0
+          ? precoInformado
+          : precoEstoque > 0
+            ? precoEstoque
+            : precoFallback > 0
+              ? precoFallback
+              : 0,
     });
   }
   return out;
 }
 
 /** Monta um "orçamento" no mesmo formato de calcularOrcamento, mas só com peças avulsas. */
-function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string, opts: { tipo_cliente?: "revenda" | "porta_instalada"; frete?: number; cliente_endereco?: string } = {}) {
+function montarOrcamentoPecas(
+  itensRaw: any[],
+  cliente_nome?: string,
+  opts: {
+    tipo_cliente?: "revenda" | "porta_instalada";
+    frete?: number;
+    cliente_endereco?: string;
+  } = {},
+) {
   const itens = (itensRaw || []).map((i) => {
     const qty = Number(i.quantidade) || 0;
     const preco = Number(i.preco_unitario) || 0;
@@ -2099,16 +2816,25 @@ function montarOrcamentoPecas(itensRaw: any[], cliente_nome?: string, opts: { ti
   } as any;
 }
 
-async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone: string, nome: string) {
+async function gerarEEnviarOrcamentoDeterministico(
+  conversaId: string,
+  telefone: string,
+  nome: string,
+) {
   const r = await withSchemaRetry(() =>
     supabase
       .from("leo_conversations")
-      .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
+      .select(
+        "tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega",
+      )
       .eq("id", conversaId)
-      .maybeSingle()
+      .maybeSingle(),
   );
   if (r.error) {
-    console.error("⚠️", descreverErroPg(r.error, "gerarEEnviarOrcamento - leitura conversa: "));
+    console.error(
+      "⚠️",
+      descreverErroPg(r.error, "gerarEEnviarOrcamento - leitura conversa: "),
+    );
     return { ok: false, error: descreverErroPg(r.error) };
   }
   const estado: any = r.data;
@@ -2117,16 +2843,26 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   const ehPorta = tipoCliente === "porta_instalada";
   const freteEstado = estado?.frete != null ? Number(estado.frete) : 0;
   // Frete só conta se for porta instalada E cliente quer entrega
-  const freteFinal = (ehPorta && estado?.quer_entrega === true && Number.isFinite(freteEstado) && freteEstado > 0) ? freteEstado : 0;
+  const freteFinal =
+    ehPorta &&
+    estado?.quer_entrega === true &&
+    Number.isFinite(freteEstado) &&
+    freteEstado > 0
+      ? freteEstado
+      : 0;
 
   let orcamento: any;
 
   // Branch peças avulsas (revenda OU porta instalada)
   if (estado?.subtipo_revenda === "pecas") {
-    const pecas = Array.isArray(estado?.pecas_avulsas) ? estado.pecas_avulsas : [];
+    const pecas = Array.isArray(estado?.pecas_avulsas)
+      ? estado.pecas_avulsas
+      : [];
     if (pecas.length === 0) return { ok: false, faltando: ["pecas_avulsas"] };
-    if (ehPorta && !estado?.entrega_perguntado) return { ok: false, faltando: ["entrega"] };
-    if (ehPorta && estado?.quer_entrega === true && !estado?.cep) return { ok: false, faltando: ["cep"] };
+    if (ehPorta && !estado?.entrega_perguntado)
+      return { ok: false, faltando: ["entrega"] };
+    if (ehPorta && estado?.quer_entrega === true && !estado?.cep)
+      return { ok: false, faltando: ["cep"] };
     const enriquecidas = await enriquecerPecasComEstoque(pecas);
     orcamento = montarOrcamentoPecas(enriquecidas, nome, {
       tipo_cliente: ehPorta ? "porta_instalada" : "revenda",
@@ -2139,16 +2875,22 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
     const tipoPerfil = String(estado?.tipo_perfil || "").toLowerCase();
 
     const faltando: string[] = [];
-    if (tipoCliente !== "porta_instalada" && tipoCliente !== "revenda") faltando.push("tipo_cliente");
+    if (tipoCliente !== "porta_instalada" && tipoCliente !== "revenda")
+      faltando.push("tipo_cliente");
     if (!estado?.subtipo_revenda) faltando.push("subtipo_revenda");
-    if (!Number.isFinite(largura) || largura <= 0 || largura > 20) faltando.push("largura");
-    if (!Number.isFinite(altura) || altura <= 0 || altura > 20) faltando.push("altura");
-    if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil)) faltando.push("tipo_perfil");
+    if (!Number.isFinite(largura) || largura <= 0 || largura > 20)
+      faltando.push("largura");
+    if (!Number.isFinite(altura) || altura <= 0 || altura > 20)
+      faltando.push("altura");
+    if (!["fechado", "transvision", "oblongo"].includes(tipoPerfil))
+      faltando.push("tipo_perfil");
     if (!estado?.pintura_perguntado) faltando.push("pintura");
-    if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
+    if (estado?.quer_pintura && !estado?.tipo_pintura)
+      faltando.push("tipo_pintura");
     if (!estado?.adicionais_perguntado) faltando.push("adicionais");
     if (ehPorta && !estado?.entrega_perguntado) faltando.push("entrega");
-    if (ehPorta && estado?.quer_entrega === true && !estado?.cep) faltando.push("cep");
+    if (ehPorta && estado?.quer_entrega === true && !estado?.cep)
+      faltando.push("cep");
     if (faltando.length) return { ok: false, faltando };
 
     orcamento = calcularOrcamento({
@@ -2168,9 +2910,14 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
     });
   }
 
-  const itensSemPreco = (orcamento?.itens || []).filter((i: any) => Number(i?.qty) > 0 && !(Number(i?.unit_price) > 0));
+  const itensSemPreco = (orcamento?.itens || []).filter(
+    (i: any) => Number(i?.qty) > 0 && !(Number(i?.unit_price) > 0),
+  );
   if (itensSemPreco.length > 0 || !(Number(orcamento?.total_geral) > 0)) {
-    console.warn("🚫 Orçamento bloqueado: item sem preço no estoque", JSON.stringify(itensSemPreco));
+    console.warn(
+      "🚫 Orçamento bloqueado: item sem preço no estoque",
+      JSON.stringify(itensSemPreco),
+    );
     return {
       ok: false,
       error: `Não encontrei preço no estoque para: ${itensSemPreco.map((i: any) => i.description).join(", ") || "itens solicitados"}`,
@@ -2182,9 +2929,18 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
   const pdfB64 = await gerarPdfDocrya(gerarHtmlOrcamento(orcamento), filename);
   if (!pdfB64) return { ok: false, error: "Falha ao gerar PDF" };
 
-  const caption = "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
+  const caption =
+    "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
   const pdfEnviado = await enviarPdfBase64(telefone, pdfB64, filename, caption);
-  return { ok: pdfEnviado, pdf_enviado: pdfEnviado, caption, error: pdfEnviado ? null : "Falha ao enviar PDF", pdfBase64: pdfB64, filename, orcamento };
+  return {
+    ok: pdfEnviado,
+    pdf_enviado: pdfEnviado,
+    caption,
+    error: pdfEnviado ? null : "Falha ao enviar PDF",
+    pdfBase64: pdfB64,
+    filename,
+    orcamento,
+  };
 }
 
 // ===========================
@@ -2192,7 +2948,10 @@ async function gerarEEnviarOrcamentoDeterministico(conversaId: string, telefone:
 // ===========================
 
 /** Cria/atualiza o lead no funil em "contato_inicial" assim que abre uma conversa nova. */
-async function registrarLeadContatoInicial(telefone: string, nomeBruto: string) {
+async function registrarLeadContatoInicial(
+  telefone: string,
+  nomeBruto: string,
+) {
   try {
     const nome = (nomeBruto || "").trim() || `Contato ${telefone}`;
     // Tenta enriquecer com o cliente legado (se existir)
@@ -2209,7 +2968,11 @@ async function registrarLeadContatoInicial(telefone: string, nomeBruto: string) 
       .maybeSingle();
 
     if (existente?.id) {
-      console.log("ℹ️ Lead já existe no funil — não duplica:", existente.id, existente.etapa_key);
+      console.log(
+        "ℹ️ Lead já existe no funil — não duplica:",
+        existente.id,
+        existente.etapa_key,
+      );
       return existente.id as string;
     }
 
@@ -2262,7 +3025,14 @@ async function registrarOrcamentoEAvancarFunil(params: {
   filename: string;
   observacoes_tecnicas?: string;
 }) {
-  const { telefone, nome, orcamento, pdfBase64, filename, observacoes_tecnicas } = params;
+  const {
+    telefone,
+    nome,
+    orcamento,
+    pdfBase64,
+    filename,
+    observacoes_tecnicas,
+  } = params;
   try {
     const itensJson = orcamento.itens.map((i: any) => ({
       codigo_sku: i.code,
@@ -2280,8 +3050,12 @@ async function registrarOrcamentoEAvancarFunil(params: {
       `Medidas: ${orcamento.largura}m x ${orcamento.altura}m`,
       `Lâmina: ${orcamento.tipo_perfil}`,
       orcamento.frete ? `Frete: R$ ${orcamento.frete.toFixed(2)}` : null,
-      orcamento.mao_de_obra ? `Mão de obra: R$ ${orcamento.mao_de_obra.toFixed(2)}` : null,
-    ].filter(Boolean).join(" | ");
+      orcamento.mao_de_obra
+        ? `Mão de obra: R$ ${orcamento.mao_de_obra.toFixed(2)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" | ");
     const resumoTecnico = (observacoes_tecnicas || "").trim();
     const observacoes = resumoTecnico
       ? `${linhasBase}\n\n=== RESUMO TÉCNICO PARA O VENDEDOR ===\n${resumoTecnico}`
@@ -2325,7 +3099,12 @@ async function registrarOrcamentoEAvancarFunil(params: {
           observacoes: obsLead,
         })
         .eq("id", lead.id);
-      console.log("✅ Lead movido para orcamento_enviado:", lead.id, "nome:", nomeFinal);
+      console.log(
+        "✅ Lead movido para orcamento_enviado:",
+        lead.id,
+        "nome:",
+        nomeFinal,
+      );
     } else {
       // cria direto na etapa orcamento_enviado caso não exista
       await dashboardDb.from("funil_leads").insert({
@@ -2350,48 +3129,70 @@ async function registrarOrcamentoEAvancarFunil(params: {
 function pareceAceite(texto: string): boolean {
   const t = (texto || "").toLowerCase().trim();
   if (!t) return false;
-  if (/^(fechada|fechado|lisa|liso|meia cana|transvision|oblongo|perfurada|perfurado|1|2|3)$/i.test(t)) {
+  if (
+    /^(fechada|fechado|lisa|liso|meia cana|transvision|oblongo|perfurada|perfurado|1|2|3)$/i.test(
+      t,
+    )
+  ) {
     return false;
   }
   // Frases curtas claras de aceite
   const padroes = [
-    /\baceito\b/, /\baceitar\b/, /\baceita?do\b/,
-    /\b(fechar|fechado|fechada) (o )?(orcamento|orçamento|pedido|negocio|negócio)\b/, /\bpode (fechar|seguir)\b/,
-    /\bpode (gerar|emitir) (o )?pedido\b/, /\bquero (fechar|comprar)\b/,
-    /\bconfirmo( o)? (orcamento|orçamento|pedido)\b/, /\bconcordo( com)? (o )?(orcamento|orçamento|pedido)\b/,
-    /\baprovad[oa]\b/, /\baprovar( o)? (orcamento|orçamento)\b/,
+    /\baceito\b/,
+    /\baceitar\b/,
+    /\baceita?do\b/,
+    /\b(fechar|fechado|fechada) (o )?(orcamento|orçamento|pedido|negocio|negócio)\b/,
+    /\bpode (fechar|seguir)\b/,
+    /\bpode (gerar|emitir) (o )?pedido\b/,
+    /\bquero (fechar|comprar)\b/,
+    /\bconfirmo( o)? (orcamento|orçamento|pedido)\b/,
+    /\bconcordo( com)? (o )?(orcamento|orçamento|pedido)\b/,
+    /\baprovad[oa]\b/,
+    /\baprovar( o)? (orcamento|orçamento)\b/,
     /\bok( pode (fechar|seguir))\b/,
   ];
   return padroes.some((re) => re.test(t));
 }
 
-async function interpretarAceiteContextual(params: { texto: string; historico: any[]; estado: any }) {
+async function interpretarAceiteContextual(params: {
+  texto: string;
+  historico: any[];
+  estado: any;
+}) {
   const respostaLamina = inferirLaminaTexto(params.texto);
   if (respostaLamina && !params.estado?.cep) return false;
 
   try {
-    const ai = await chamarIA([
-      {
-        role: "system",
-        content:
-          "Classifique se a ÚLTIMA mensagem do cliente é um aceite comercial inequívoco de um orçamento JÁ ENVIADO. " +
-          "Responda somente JSON válido no formato {\"aceitou\":boolean,\"confianca\":0..1}. " +
-          "Não marque aceite para escolha de produto/lâmina/medida/CEP, mesmo que use palavras como fechado/fechada.",
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          estado: params.estado,
-          historico_recente: params.historico.slice(-12),
-          ultima_mensagem: params.texto,
-        }),
-      },
-    ], { tools: null, temperature: 0 });
+    const ai = await chamarIA(
+      [
+        {
+          role: "system",
+          content:
+            "Classifique se a ÚLTIMA mensagem do cliente é um aceite comercial inequívoco de um orçamento JÁ ENVIADO. " +
+            'Responda somente JSON válido no formato {"aceitou":boolean,"confianca":0..1}. ' +
+            "Não marque aceite para escolha de produto/lâmina/medida/CEP, mesmo que use palavras como fechado/fechada.",
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            estado: params.estado,
+            historico_recente: params.historico.slice(-12),
+            ultima_mensagem: params.texto,
+          }),
+        },
+      ],
+      { tools: null, temperature: 0 },
+    );
     const raw = (ai.choices?.[0]?.message?.content || "").trim();
-    const parsed = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/```$/i, ""));
+    const parsed = JSON.parse(
+      raw.replace(/^```json\s*/i, "").replace(/```$/i, ""),
+    );
     return parsed?.aceitou === true && Number(parsed?.confianca || 0) >= 0.75;
   } catch (e: any) {
-    console.error("⚠️ interpretarAceiteContextual falhou, fallback seguro:", e?.message || e);
+    console.error(
+      "⚠️ interpretarAceiteContextual falhou, fallback seguro:",
+      e?.message || e,
+    );
     return pareceAceite(params.texto);
   }
 }
@@ -2401,14 +3202,19 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
   try {
     const { data: orc } = await dashboardDb
       .from("orcamentos")
-      .select("id, numero, cliente_nome, valor_total, itens, observacoes, status")
+      .select(
+        "id, numero, cliente_nome, valor_total, itens, observacoes, status",
+      )
       .eq("origem", "leo_agent")
       .ilike("observacoes", `%Telefone: ${telefone}%`)
       .order("data_criacao", { ascending: false })
       .limit(1)
       .maybeSingle();
     if (!orc) {
-      console.warn("⚠️ aceitarOrcamento: nenhum orçamento encontrado para", telefone);
+      console.warn(
+        "⚠️ aceitarOrcamento: nenhum orçamento encontrado para",
+        telefone,
+      );
       return null;
     }
     if (orc.status === "aceito") {
@@ -2426,7 +3232,8 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
         status: "pendente",
         origem: "leo_agent",
         itens: orc.itens,
-        observacoes: `Gerado a partir do orçamento ${orc.numero || orc.id}. ${orc.observacoes || ""}`.trim(),
+        observacoes:
+          `Gerado a partir do orçamento ${orc.numero || orc.id}. ${orc.observacoes || ""}`.trim(),
         orcamento_id: orc.id,
       })
       .select("id, numero")
@@ -2435,7 +3242,10 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
       console.error("⚠️ Falha ao criar pedido_venda:", pedErr.message);
       return null;
     }
-    await dashboardDb.from("orcamentos").update({ status: "aceito" }).eq("id", orc.id);
+    await dashboardDb
+      .from("orcamentos")
+      .update({ status: "aceito" })
+      .eq("id", orc.id);
 
     // Move o lead para "Pedido de Venda" (cliente aceitou e o pedido foi gerado)
     const lead = await buscarLeadAberto(telefone);
@@ -2469,7 +3279,12 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
       });
       console.log("✅ Lead criado em pedido_venda para pedido", ped?.numero);
     }
-    console.log("✅ Pedido de venda criado:", ped?.numero, "a partir de", orc.numero);
+    console.log(
+      "✅ Pedido de venda criado:",
+      ped?.numero,
+      "a partir de",
+      orc.numero,
+    );
     return { orcamento_numero: orc.numero, pedido_numero: ped?.numero };
   } catch (e: any) {
     console.error("⚠️ aceitarOrcamentoEGerarPedido falhou:", e?.message);
@@ -2477,7 +3292,10 @@ async function aceitarOrcamentoEGerarPedido(telefone: string) {
   }
 }
 
-async function mensagemJaProcessada(conversation_id: string, messageId?: string) {
+async function mensagemJaProcessada(
+  conversation_id: string,
+  messageId?: string,
+) {
   if (!messageId) return false;
   const { data } = await supabase
     .from("leo_messages")
@@ -2489,7 +3307,10 @@ async function mensagemJaProcessada(conversation_id: string, messageId?: string)
   return Boolean(data);
 }
 
-async function mensagemForaDeOrdem(conversation_id: string, rawTimestamp?: string | number | null) {
+async function mensagemForaDeOrdem(
+  conversation_id: string,
+  rawTimestamp?: string | number | null,
+) {
   const incomingTs = Number(rawTimestamp || 0);
   if (!Number.isFinite(incomingTs) || incomingTs <= 0) return false;
 
@@ -2500,7 +3321,7 @@ async function mensagemForaDeOrdem(conversation_id: string, rawTimestamp?: strin
       .eq("conversation_id", conversation_id)
       .eq("role", "user")
       .order("created_at", { ascending: false })
-      .limit(20)
+      .limit(20),
   );
 
   if (error) {
@@ -2524,7 +3345,9 @@ async function carregarHistorico(conversation_id: string) {
     .eq("conversation_id", conversation_id)
     .order("created_at", { ascending: false })
     .limit(40);
-  return (data || []).reverse().map((m) => ({ role: m.role, content: m.content }));
+  return (data || [])
+    .reverse()
+    .map((m) => ({ role: m.role, content: m.content }));
 }
 
 // ============================================================
@@ -2536,24 +3359,37 @@ async function carregarHistorico(conversation_id: string) {
 // é a próxima pergunta. A resposta sai como UMA mensagem com
 // resumo parcial + pergunta única.
 
-
-
 function cfgPedidoLeve(pedido: CfgPedido) {
   return {
-    itens: (pedido.itens || []).map((it) => ({ id: it.id, tipo: it.tipo, config: it.config || {} })),
+    itens: (pedido.itens || []).map((it) => ({
+      id: it.id,
+      tipo: it.tipo,
+      config: it.config || {},
+    })),
     total: pedido.total || 0,
     status: pedido.status || "em_andamento",
   };
 }
 
-
 function cfgFallbackInterpretar(mensagem: string): any[] {
   const original = mensagem || "";
-  const t = original.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const t = original
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
   const intencoes: any[] = [];
-  if (/\b(zerar|limpar|recomecar|recomeçar|novo pedido|comecar de novo)\b/.test(t)) return [{ acao: "zerar" }];
-  if (/\b(gerar|fechar|emitir|mandar|enviar)\b.*\b(orcamento|orçamento|pdf)\b|\borcamento\b$|\bfechar pedido\b/.test(t)) return [{ acao: "gerar_orcamento" }];
-  if (/\b(resumo|revisar|conferir)\b/.test(t)) intencoes.push({ acao: "resumo" });
+  if (
+    /\b(zerar|limpar|recomecar|recomeçar|novo pedido|comecar de novo)\b/.test(t)
+  )
+    return [{ acao: "zerar" }];
+  if (
+    /\b(gerar|fechar|emitir|mandar|enviar)\b.*\b(orcamento|orçamento|pdf)\b|\borcamento\b$|\bfechar pedido\b/.test(
+      t,
+    )
+  )
+    return [{ acao: "gerar_orcamento" }];
+  if (/\b(resumo|revisar|conferir)\b/.test(t))
+    intencoes.push({ acao: "resumo" });
 
   // Remoções/alterações no kit
   const removeFlagMap: Array<[RegExp, string]> = [
@@ -2564,32 +3400,64 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
     [/\b(retirar|remover|tirar|sem)\s+trava\b/, "trava_lamina"],
   ];
   for (const [rx, alvo] of removeFlagMap) {
-    if (rx.test(t)) intencoes.push({ acao: "update_item", ref: "kit_porta", patch: { [alvo]: false } });
+    if (rx.test(t))
+      intencoes.push({
+        acao: "update_item",
+        ref: "kit_porta",
+        patch: { [alvo]: false },
+      });
   }
-  if (/\b(retirar|remover|tirar)\s+motor\b/.test(t)) intencoes.push({ acao: "remove_item", ref: "motor" });
-  if (/\b(retirar|remover|tirar)\s+controles?\b/.test(t)) intencoes.push({ acao: "remove_item", ref: "controle" });
+  if (/\b(retirar|remover|tirar)\s+motor\b/.test(t))
+    intencoes.push({ acao: "remove_item", ref: "motor" });
+  if (/\b(retirar|remover|tirar)\s+controles?\b/.test(t))
+    intencoes.push({ acao: "remove_item", ref: "controle" });
 
   const patch: any = {};
   const contextoMsg = detectarContextoAtivoMensagem(original);
-  const contextoMotor = contextoMsg === "motor" || /\b(motor|automatizador)\b/.test(t);
-  const medida = t.match(/(\d+(?:[\.,]\d+)?)\s*(?:m)?\s*[x×]\s*(\d+(?:[\.,]\d+)?)/);
+  const contextoMotor =
+    contextoMsg === "motor" || /\b(motor|automatizador)\b/.test(t);
+  const medida = t.match(
+    /(\d+(?:[\.,]\d+)?)\s*(?:m)?\s*[x×]\s*(\d+(?:[\.,]\d+)?)/,
+  );
   if (medida) {
     patch.largura = Number(medida[1].replace(",", "."));
     patch.altura = Number(medida[2].replace(",", "."));
   }
   if (/\bentre\s+paredes\b/.test(t)) patch.instalacao = "entre_paredes";
-  else if (/\bentre\s+testeiras\b/.test(t)) patch.instalacao = "entre_testeiras";
-  else if (/\bv[ãa]o\s*\+\s*1\s*guia\b|\bvao\s*\+\s*1\s*guia\b|\b1\s*guia\b/.test(t)) patch.instalacao = "vao_1guia";
-  else if (/\bv[ãa]o\s*\+\s*guias?\b|\bvao\s*\+\s*guias?\b|\b2\s*guias?\b|\bduas\s*guias?\b/.test(t)) patch.instalacao = "vao_guias";
-  if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t)) patch.trava_lamina = true;
-  else if (/\bsem\s+trava\b|\bn[ãa]o\s+(?:quero|precis\w*)\s+trava\b|\bdispens\w+\s+trava\b/.test(t)) patch.trava_lamina = false;
+  else if (/\bentre\s+testeiras\b/.test(t))
+    patch.instalacao = "entre_testeiras";
+  else if (
+    /\bv[ãa]o\s*\+\s*1\s*guia\b|\bvao\s*\+\s*1\s*guia\b|\b1\s*guia\b/.test(t)
+  )
+    patch.instalacao = "vao_1guia";
+  else if (
+    /\bv[ãa]o\s*\+\s*guias?\b|\bvao\s*\+\s*guias?\b|\b2\s*guias?\b|\bduas\s*guias?\b/.test(
+      t,
+    )
+  )
+    patch.instalacao = "vao_guias";
+  if (/\btrava\s*(de\s*)?l[âa]minas?\b|\btrava[- ]?l[âa]mina\b/.test(t))
+    patch.trava_lamina = true;
+  else if (
+    /\bsem\s+trava\b|\bn[ãa]o\s+(?:quero|precis\w*)\s+trava\b|\bdispens\w+\s+trava\b/.test(
+      t,
+    )
+  )
+    patch.trava_lamina = false;
 
   // Pintura — só infere quando o cliente cita pintura EXPLICITAMENTE.
   // Regra: cor sozinha ("branca", "preta") é apenas cor da lâmina, NÃO confirma pintura eletrostática.
   // Apenas palavras-chave de pintura ou negação direta encerram a pendência.
-  const mencPintura = /\b(pintura|pintad[ao]|eletrost[áa]tic\w*|tinta)\b/.test(t);
-  const semPintura = /\b(sem\s+pintura|sem\s+tinta|n[ãa]o\s+(?:quero|preciso|precis\w*|vou)\s+(?:de\s+)?pintura|dispens\w+\s+pintura|natural|galvanizad[ao]|cru|sem\s+acabamento)\b/.test(t);
-  const respostaCurtaNao = /^\s*(n[ãa]o|nao|n)\b\s*[.!]?\s*$/i.test(texto || "");
+  const mencPintura = /\b(pintura|pintad[ao]|eletrost[áa]tic\w*|tinta)\b/.test(
+    t,
+  );
+  const semPintura =
+    /\b(sem\s+pintura|sem\s+tinta|n[ãa]o\s+(?:quero|preciso|precis\w*|vou)\s+(?:de\s+)?pintura|dispens\w+\s+pintura|natural|galvanizad[ao]|cru|sem\s+acabamento)\b/.test(
+      t,
+    );
+  const respostaCurtaNao = /^\s*(n[ãa]o|nao|n)\b\s*[.!]?\s*$/i.test(
+    texto || "",
+  );
   const respostaCurtaSim = /^\s*(sim|s)\b\s*[.!]?\s*$/i.test(texto || "");
   if (semPintura) {
     patch.quer_pintura = false;
@@ -2601,7 +3469,9 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
     } else {
       patch.quer_pintura = true;
       patch.pintura = "eletrostatica";
-      const corMatch = t.match(/\b(branc[ao]|pret[ao]|cinza|bege|azul|verde|vermelh[ao]|amarel[ao]|ral\s*\d+|especial)\b/);
+      const corMatch = t.match(
+        /\b(branc[ao]|pret[ao]|cinza|bege|azul|verde|vermelh[ao]|amarel[ao]|ral\s*\d+|especial)\b/,
+      );
       if (corMatch) {
         const cor = corMatch[1].replace(/a$/, "o").replace(/\s+/g, "_");
         patch.lamina = { ...(patch.lamina || {}), cor };
@@ -2617,15 +3487,23 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   }
 
   // Trocar guia para X
-  const trocaGuia = t.match(/\b(trocar|alterar|mudar)\s+guia\s+(?:para|pra|p\/)\s*(50|60|70|100)\b/);
+  const trocaGuia = t.match(
+    /\b(trocar|alterar|mudar)\s+guia\s+(?:para|pra|p\/)\s*(50|60|70|100)\b/,
+  );
   if (trocaGuia) patch.guia_mm = Number(trocaGuia[2]);
   else if (!/\bpares?\b/.test(t)) {
     const guia = t.match(/\bguia\s*(?:de|para)?\s*(50|60|70|100)\b/);
     if (guia) patch.guia_mm = Number(guia[1]);
   }
   // Trocar motor para AC/DC
-  const trocaMotor = t.match(/\b(trocar|alterar|mudar)\s+motor\s+(?:para|pra|p\/)\s*(AC|DC)\b/i);
-  if (trocaMotor) patch.motor = { ...(patch.motor || {}), ac_dc: trocaMotor[2].toUpperCase() };
+  const trocaMotor = t.match(
+    /\b(trocar|alterar|mudar)\s+motor\s+(?:para|pra|p\/)\s*(AC|DC)\b/i,
+  );
+  if (trocaMotor)
+    patch.motor = {
+      ...(patch.motor || {}),
+      ac_dc: trocaMotor[2].toUpperCase(),
+    };
 
   const pot = t.match(/\b(200|300|400|500|800|1000|1500)\s*kg\b/);
   const acdc = t.match(/\b(AC|DC)\b/i)?.[1]?.toUpperCase();
@@ -2635,7 +3513,9 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   // no cadastro. Ex.: "motor 20kg" → não é válido, sugerir 200kg e NÃO criar item.
   const kgGenericoMatch = t.match(/\b(\d{1,4})\s*kg\b/);
   const mencionaMotor = /\b(motor|automatizador|kit)\b/.test(t);
-  const capacidadesValidas = Array.from(new Set([...POTENCIAS_AC, ...POTENCIAS_DC])).sort((a, b) => a - b);
+  const capacidadesValidas = Array.from(
+    new Set([...POTENCIAS_AC, ...POTENCIAS_DC]),
+  ).sort((a, b) => a - b);
   let kgInvalido: number | null = null;
   if (kgGenericoMatch && mencionaMotor) {
     const v = Number(kgGenericoMatch[1]);
@@ -2644,150 +3524,306 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
 
   if (kgInvalido !== null) {
     const minimo = Math.min(...capacidadesValidas);
-    const sugestao = kgInvalido < minimo
-      ? minimo
-      : capacidadesValidas.reduce((a, b) => Math.abs(b - kgInvalido!) < Math.abs(a - kgInvalido!) ? b : a);
+    const sugestao =
+      kgInvalido < minimo
+        ? minimo
+        : capacidadesValidas.reduce((a, b) =>
+            Math.abs(b - kgInvalido!) < Math.abs(a - kgInvalido!) ? b : a,
+          );
     const escopoAcDc = acdc ? ` ${acdc}` : "";
     let texto = `Consigo te ajudar 👍\n\nO menor modelo${escopoAcDc ? ` de motor${escopoAcDc}` : " que trabalhamos"} hoje é o de *${sugestao} kg*, que atende com folga essa necessidade.`;
     if (!acdc) texto += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
     intencoes.push({ acao: "duvida", texto });
     return intencoes;
   } else if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
-    const sugDC = POTENCIAS_DC.reduce((a, b) => Math.abs(b - potN) < Math.abs(a - potN) ? b : a);
-    intencoes.push({ acao: "duvida", texto: `Consigo te ajudar 👍\n\nEm DC o mais próximo que temos é *${sugDC} kg*. Posso seguir com ele, ou prefere *AC ${potN} kg*?` });
+    const sugDC = POTENCIAS_DC.reduce((a, b) =>
+      Math.abs(b - potN) < Math.abs(a - potN) ? b : a,
+    );
+    intencoes.push({
+      acao: "duvida",
+      texto: `Consigo te ajudar 👍\n\nEm DC o mais próximo que temos é *${sugDC} kg*. Posso seguir com ele, ou prefere *AC ${potN} kg*?`,
+    });
     return intencoes;
   } else if ((pot || acdc) && !/\bavulso\b/.test(t) && !contextoMotor) {
-    patch.motor = { ...(patch.motor || {}), ...(potN ? { potencia: potN } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
+    patch.motor = {
+      ...(patch.motor || {}),
+      ...(potN ? { potencia: potN } : {}),
+      ...(acdc ? { ac_dc: acdc } : {}),
+    };
   }
 
   if (/\btradicional\b/.test(t) && contextoMotor && !acdc) {
-    intencoes.push({ acao: "duvida", texto: "Perfeito 👍\n\nQuando você fala *tradicional*, está pensando em *motor AC*?" });
+    intencoes.push({
+      acao: "duvida",
+      texto:
+        "Perfeito 👍\n\nQuando você fala *tradicional*, está pensando em *motor AC*?",
+    });
     return intencoes;
   }
 
-  if (/\b(ainda\s+nao\s+sei\s+a\s+cor|ainda\s+não\s+sei\s+a\s+cor|cor\s+depois|deixo\s+a\s+cor\s+pra\s+depois)\b/.test(t)) {
+  if (
+    /\b(ainda\s+nao\s+sei\s+a\s+cor|ainda\s+não\s+sei\s+a\s+cor|cor\s+depois|deixo\s+a\s+cor\s+pra\s+depois)\b/.test(
+      t,
+    )
+  ) {
     patch.quer_pintura = true;
     patch.cor_pendente = true;
   }
 
   // Formato de venda do motor (avulso | motor+testeiras | kit automatizador)
   if (/\bkit\s*automatizador\b/.test(t)) patch.kit_motor = "kit_automatizador";
-  else if (/\bmotor\s*\+?\s*testeiras?\b|\bcom\s+testeiras?\b/.test(t)) patch.kit_motor = "motor_testeiras";
-  else if (/\b(automatizador|motor)\s+avulso\b/.test(t)) patch.kit_motor = "avulso";
+  else if (/\bmotor\s*\+?\s*testeiras?\b|\bcom\s+testeiras?\b/.test(t))
+    patch.kit_motor = "motor_testeiras";
+  else if (/\b(automatizador|motor)\s+avulso\b/.test(t))
+    patch.kit_motor = "avulso";
 
   // Modelo de lâmina (Fechada/Transvision/Oblongo + legado meia cana)
-  if (/\btransvision\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "transvision" };
-  else if (/\boblongo\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "oblongo" };
-  else if (/\bfechad[ao]\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "fechado" };
-  else if (/\bmeia\s*cana\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), modelo: "meia_cana" };
-  if (/\bperfil\s+alto\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), perfil: "alto" };
-  else if (/\bperfil\s+baixo\b/.test(t)) patch.lamina = { ...(patch.lamina || {}), perfil: "baixo" };
+  if (/\btransvision\b/.test(t))
+    patch.lamina = { ...(patch.lamina || {}), modelo: "transvision" };
+  else if (/\boblongo\b/.test(t))
+    patch.lamina = { ...(patch.lamina || {}), modelo: "oblongo" };
+  else if (/\bfechad[ao]\b/.test(t))
+    patch.lamina = { ...(patch.lamina || {}), modelo: "fechado" };
+  else if (/\bmeia\s*cana\b/.test(t))
+    patch.lamina = { ...(patch.lamina || {}), modelo: "meia_cana" };
+  if (/\bperfil\s+alto\b/.test(t))
+    patch.lamina = { ...(patch.lamina || {}), perfil: "alto" };
+  else if (/\bperfil\s+baixo\b/.test(t))
+    patch.lamina = { ...(patch.lamina || {}), perfil: "baixo" };
 
   // Combinação de lâmina parcial: "1m de transvision" / "0,8m de oblongo"
-  const parcial = t.match(/(\d+(?:[\.,]\d+)?)\s*m\s+(?:de\s+)?(transvision|oblongo|fechad[ao])/);
+  const parcial = t.match(
+    /(\d+(?:[\.,]\d+)?)\s*m\s+(?:de\s+)?(transvision|oblongo|fechad[ao])/,
+  );
   if (parcial) {
     const modeloP = parcial[2].startsWith("fechad") ? "fechado" : parcial[2];
     const altP = Number(parcial[1].replace(",", "."));
     const lamCur = patch.lamina || {};
     const combAtual = Array.isArray(lamCur.combinacao) ? lamCur.combinacao : [];
-    patch.lamina = { ...lamCur, combinacao: [...combAtual, { modelo: modeloP, altura_m: altP }] };
+    patch.lamina = {
+      ...lamCur,
+      combinacao: [...combAtual, { modelo: modeloP, altura_m: altP }],
+    };
   }
 
-  const cor = t.match(/\b(branca?|preta?|cinza|bege|azul|verde|vermelha?|amarela?)\b/);
-  if (cor) patch.lamina = { ...(patch.lamina || {}), cor: cor[1].replace(/a$/, "o") };
+  const cor = t.match(
+    /\b(branca?|preta?|cinza|bege|azul|verde|vermelha?|amarela?)\b/,
+  );
+  if (cor)
+    patch.lamina = { ...(patch.lamina || {}), cor: cor[1].replace(/a$/, "o") };
   const port = t.match(/\bportinhola\s*(vild|vile|centro)?\b/i);
   // Nunca assumir posição: só grava VILD/VILE/CENTRO se o cliente disse explicitamente.
   // Caso contrário marca como `true` (indefinido) para o validador perguntar.
-  if (port) { patch.portinhola = port[1] ? port[1].toUpperCase() : true; patch.opcionais_perguntado = true; }
+  if (port) {
+    patch.portinhola = port[1] ? port[1].toUpperCase() : true;
+    patch.opcionais_perguntado = true;
+  }
   // Portinhola cortada vs inteira — aceita respostas naturais, inclusive isoladas quando esta é a pendência atual.
   const respPortCorte = inferirRespostaPortinholaCorte(t);
-  if (respPortCorte !== undefined && (port || !Object.keys(patch).length)) patch.portinhola_cortada = respPortCorte;
+  if (respPortCorte !== undefined && (port || !Object.keys(patch).length))
+    patch.portinhola_cortada = respPortCorte;
 
-  if (/\balcap[ãa]o\b|\balcapao\b/.test(t) && !port) { patch.alcapao = true; patch.opcionais_perguntado = true; }
+  if (/\balcap[ãa]o\b|\balcapao\b/.test(t) && !port) {
+    patch.alcapao = true;
+    patch.opcionais_perguntado = true;
+  }
   // "Nenhum" opcional / "sem opcionais" → encerra etapa sem portinhola nem alçapão
-  if (/\b(nenhum|nenhuma|sem\s+opcionais?|sem\s+(?:portinhola|alcap[ãa]o)|n[ãa]o\s+(?:quero|preciso)\s+(?:opcional|portinhola|alcap[ãa]o))\b/.test(t)) {
+  if (
+    /\b(nenhum|nenhuma|sem\s+opcionais?|sem\s+(?:portinhola|alcap[ãa]o)|n[ãa]o\s+(?:quero|preciso)\s+(?:opcional|portinhola|alcap[ãa]o))\b/.test(
+      t,
+    )
+  ) {
     patch.opcionais_perguntado = true;
     if (!port && !patch.portinhola) patch.portinhola = false;
     if (!patch.alcapao) patch.alcapao = false;
   }
   // Central de controle mencionada sem quantidade → inclusa no kit (não pergunta de novo)
-  if (/\bcentral(\s+de\s+(comando|controle))?\b/.test(t) && !/\d+\s*centrais?\b|\d+\s*central\b/.test(t)) {
+  if (
+    /\bcentral(\s+de\s+(comando|controle))?\b/.test(t) &&
+    !/\d+\s*centrais?\b|\d+\s*central\b/.test(t)
+  ) {
     patch.central = true;
   }
-  if (/\bpintura\s+eletrostatica\b|\bcom\s+pintura\b/.test(t) && !/sem\s+pintura/.test(t)) patch.pintura = "eletrostatica";
+  if (
+    /\bpintura\s+eletrostatica\b|\bcom\s+pintura\b/.test(t) &&
+    !/sem\s+pintura/.test(t)
+  )
+    patch.pintura = "eletrostatica";
 
   // Medida de corte: manual vs automática
-  if (/\b(informar|manual|manualmente|eu\s+(?:que\s+)?(?:vou\s+)?(?:passo|informo|coloco)|tenho\s+(?:as\s+)?medidas|j[áa]\s+tenho\s+(?:as\s+)?medidas)\b/.test(t)
-      && /\b(corte|medida)/.test(t)) {
+  if (
+    /\b(informar|manual|manualmente|eu\s+(?:que\s+)?(?:vou\s+)?(?:passo|informo|coloco)|tenho\s+(?:as\s+)?medidas|j[áa]\s+tenho\s+(?:as\s+)?medidas)\b/.test(
+      t,
+    ) &&
+    /\b(corte|medida)/.test(t)
+  ) {
     patch.medida_corte_modo = "manual";
-  } else if (/\b(autom[áa]tic\w*|calcul\w*\s+(?:auto|sozinho|pra\s+mim|por\s+mim)|sistema\s+calcul\w*|voc[êe]\s+calcul\w*|calcula\s+(?:tudo|por\s+mim))\b/.test(t)) {
+  } else if (
+    /\b(autom[áa]tic\w*|calcul\w*\s+(?:auto|sozinho|pra\s+mim|por\s+mim)|sistema\s+calcul\w*|voc[êe]\s+calcul\w*|calcula\s+(?:tudo|por\s+mim))\b/.test(
+      t,
+    )
+  ) {
     patch.medida_corte_modo = "auto";
   }
 
   // Avulsos
   const ctrl = t.match(/(?:\+\s*)?(\d+)\s*controles?\b/);
-  if (ctrl) intencoes.push({ acao: "add_item", tipo: "controle", config: { qtd: Number(ctrl[1]) } });
+  if (ctrl)
+    intencoes.push({
+      acao: "add_item",
+      tipo: "controle",
+      config: { qtd: Number(ctrl[1]) },
+    });
 
-  const cent = t.match(/(?:\+\s*)?(\d+)\s*centrais?\b|(?:\+\s*)?(\d+)\s*central\b/);
-  if (cent) intencoes.push({ acao: "add_item", tipo: "central", config: { qtd: Number(cent[1] || cent[2]) } });
+  const cent = t.match(
+    /(?:\+\s*)?(\d+)\s*centrais?\b|(?:\+\s*)?(\d+)\s*central\b/,
+  );
+  if (cent)
+    intencoes.push({
+      acao: "add_item",
+      tipo: "central",
+      config: { qtd: Number(cent[1] || cent[2]) },
+    });
 
-  const paresGuia = t.match(/(?:\+\s*)?(\d+)\s*pares?\s*(?:de\s*)?guias?\s*(?:de\s*)?(50|60|70|80|90|100)?\b/);
+  const paresGuia = t.match(
+    /(?:\+\s*)?(\d+)\s*pares?\s*(?:de\s*)?guias?\s*(?:de\s*)?(50|60|70|80|90|100)?\b/,
+  );
   if (paresGuia) {
     const compr = t.match(/(\d+(?:[\.,]\d+)?)\s*m\b/);
-    intencoes.push({ acao: "add_item", tipo: "guia", config: { mm: Number(paresGuia[2]) || undefined, qtd: Number(paresGuia[1]), tipo_unidade: "par", comprimento_m: compr ? Number(compr[1].replace(",", ".")) : 0 } });
+    intencoes.push({
+      acao: "add_item",
+      tipo: "guia",
+      config: {
+        mm: Number(paresGuia[2]) || undefined,
+        qtd: Number(paresGuia[1]),
+        tipo_unidade: "par",
+        comprimento_m: compr ? Number(compr[1].replace(",", ".")) : 0,
+      },
+    });
   } else {
     // "10 guias de 60 mm", "4 guias 70", "guias 50mm" — quantidade conhecida, tipo (par/unidade) ainda não
-    const guiaSimples = t.match(/(?:\+\s*)?(\d+)\s*guias?\s*(?:de\s*)?(50|60|70|80|90|100)?\s*(?:mm)?\b/);
-    const guiaSemQtd = !guiaSimples && t.match(/\bguias?\s*(?:de\s*)?(50|60|70|80|90|100)\s*mm\b/);
+    const guiaSimples = t.match(
+      /(?:\+\s*)?(\d+)\s*guias?\s*(?:de\s*)?(50|60|70|80|90|100)?\s*(?:mm)?\b/,
+    );
+    const guiaSemQtd =
+      !guiaSimples &&
+      t.match(/\bguias?\s*(?:de\s*)?(50|60|70|80|90|100)\s*mm\b/);
     if (guiaSimples) {
       const compr = t.match(/(\d+(?:[\.,]\d+)?)\s*m(?!m)\b/);
-      intencoes.push({ acao: "add_item", tipo: "guia", config: { mm: Number(guiaSimples[2]) || undefined, qtd: Number(guiaSimples[1]), comprimento_m: compr ? Number(compr[1].replace(",", ".")) : 0 } });
+      intencoes.push({
+        acao: "add_item",
+        tipo: "guia",
+        config: {
+          mm: Number(guiaSimples[2]) || undefined,
+          qtd: Number(guiaSimples[1]),
+          comprimento_m: compr ? Number(compr[1].replace(",", ".")) : 0,
+        },
+      });
     } else if (guiaSemQtd) {
-      intencoes.push({ acao: "add_item", tipo: "guia", config: { mm: Number(guiaSemQtd[1]) } });
+      intencoes.push({
+        acao: "add_item",
+        tipo: "guia",
+        config: { mm: Number(guiaSemQtd[1]) },
+      });
     }
   }
 
-  if (/\bmotor\s+avulso\b|\bavulso\b.*\bmotor\b|\bmotor\s*\+?\s*testeiras?\b|\bkit\s*automatizador\b/.test(t)) {
+  if (
+    /\bmotor\s+avulso\b|\bavulso\b.*\bmotor\b|\bmotor\s*\+?\s*testeiras?\b|\bkit\s*automatizador\b/.test(
+      t,
+    )
+  ) {
     const q = t.match(/(\d+)\s*motores?/);
     const invalidoDC = potN && acdc === "DC" && !POTENCIAS_DC.includes(potN);
     // Não criar item se capacidade mencionada for inválida (ex.: "motor 20kg").
     if (!invalidoDC && kgInvalido === null) {
-      const kitMotor = /\bkit\s*automatizador\b/.test(t) ? "kit_automatizador"
-        : /\bmotor\s*\+?\s*testeiras?\b|\bcom\s+testeiras?\b/.test(t) ? "motor_testeiras"
-        : "avulso";
-      intencoes.push({ acao: "add_item", tipo: "motor", config: { qtd: q ? Number(q[1]) : 1, ac_dc: acdc || undefined, potencia: potN || undefined, kit_motor: kitMotor } });
+      const kitMotor = /\bkit\s*automatizador\b/.test(t)
+        ? "kit_automatizador"
+        : /\bmotor\s*\+?\s*testeiras?\b|\bcom\s+testeiras?\b/.test(t)
+          ? "motor_testeiras"
+          : "avulso";
+      intencoes.push({
+        acao: "add_item",
+        tipo: "motor",
+        config: {
+          qtd: q ? Number(q[1]) : 1,
+          ac_dc: acdc || undefined,
+          potencia: potN || undefined,
+          kit_motor: kitMotor,
+        },
+      });
     }
   }
 
-  if (contextoMotor && !intencoes.some((i) => i?.tipo === "motor") && !Object.keys(patch).length && !/\b(guia|lamina|porta|medida)\b/.test(t)) {
-    intencoes.push({ acao: "add_item", tipo: "motor", config: { qtd: 1, ...(acdc ? { ac_dc: acdc } : {}), ...(potN ? { potencia: potN } : {}) } });
+  if (
+    contextoMotor &&
+    !intencoes.some((i) => i?.tipo === "motor") &&
+    !Object.keys(patch).length &&
+    !/\b(guia|lamina|porta|medida)\b/.test(t)
+  ) {
+    intencoes.push({
+      acao: "add_item",
+      tipo: "motor",
+      config: {
+        qtd: 1,
+        ...(acdc ? { ac_dc: acdc } : {}),
+        ...(potN ? { potencia: potN } : {}),
+      },
+    });
   }
   if (/\bsoleiras?\s*avulsa?|avulsa?\s*soleira/.test(t)) {
     const q = t.match(/(\d+)\s*soleiras?/);
-    intencoes.push({ acao: "add_item", tipo: "soleira", config: { qtd: q ? Number(q[1]) : 1 } });
+    intencoes.push({
+      acao: "add_item",
+      tipo: "soleira",
+      config: { qtd: q ? Number(q[1]) : 1 },
+    });
   }
   // Lâmina avulsa SOMENTE quando explicitamente "lâmina avulsa".
   // "1m de transvision" misturado com kit_porta = faixa parcial (combinacao), nunca avulso.
-  if (/\bl[âa]minas?\s*avulsa?|avulsa?\s*l[âa]mina/.test(t) && !parcial && !medida) {
+  if (
+    /\bl[âa]minas?\s*avulsa?|avulsa?\s*l[âa]mina/.test(t) &&
+    !parcial &&
+    !medida
+  ) {
     const q = t.match(/(\d+)\s*l[âa]minas?/);
-    intencoes.push({ acao: "add_item", tipo: "lamina", config: { qtd: q ? Number(q[1]) : 1 } });
+    intencoes.push({
+      acao: "add_item",
+      tipo: "lamina",
+      config: { qtd: q ? Number(q[1]) : 1 },
+    });
   }
   if (/\beixos?\s*avulso?|avulso?\s*eixo/.test(t)) {
     const q = t.match(/(\d+)\s*eixos?/);
-    intencoes.push({ acao: "add_item", tipo: "eixo", config: { qtd: q ? Number(q[1]) : 1 } });
+    intencoes.push({
+      acao: "add_item",
+      tipo: "eixo",
+      config: { qtd: q ? Number(q[1]) : 1 },
+    });
   }
 
   if (Object.keys(patch).length) {
     const destino = contextoMotor && !medida ? "motor" : "kit_porta";
-    intencoes.unshift({ acao: medida ? "add_item" : "update_item", tipo: destino, ref: destino, config: patch, patch });
+    intencoes.unshift({
+      acao: medida ? "add_item" : "update_item",
+      tipo: destino,
+      ref: destino,
+      config: patch,
+      patch,
+    });
   }
-  const parecePergunta = /\?|\b(qual|quais|como|onde|quando|porque|por que|pra que|para que|voc[eê]s|trabalha|serve|pode|tem|faz)\b/.test(t);
-  if (!intencoes.length && parecePergunta) intencoes.push({ acao: "duvida", texto: original });
+  const parecePergunta =
+    /\?|\b(qual|quais|como|onde|quando|porque|por que|pra que|para que|voc[eê]s|trabalha|serve|pode|tem|faz)\b/.test(
+      t,
+    );
+  if (!intencoes.length && parecePergunta)
+    intencoes.push({ acao: "duvida", texto: original });
   return intencoes;
 }
 
 function carregarPedido(raw: any): CfgPedido {
-  if (!raw || typeof raw !== "object") return JSON.parse(JSON.stringify(PEDIDO_VAZIO));
+  if (!raw || typeof raw !== "object")
+    return JSON.parse(JSON.stringify(PEDIDO_VAZIO));
   const itens = Array.isArray(raw.itens) ? raw.itens : [];
   return {
     itens: itens.map((it: any) => ({
@@ -2804,13 +3840,18 @@ function carregarPedido(raw: any): CfgPedido {
     contexto_ativo: raw.contexto_ativo || null,
     intencao_ativa: raw.intencao_ativa || null,
     etapa_ativa: raw.etapa_ativa || null,
-    campos_pendentes: Array.isArray(raw.campos_pendentes) ? raw.campos_pendentes : [],
+    campos_pendentes: Array.isArray(raw.campos_pendentes)
+      ? raw.campos_pendentes
+      : [],
     orcamento_incompleto: Boolean(raw.orcamento_incompleto),
   };
 }
 
 // --- Interpretador (LLM JSON-only) ---
-async function cfgInterpretar(mensagem: string, pedido: CfgPedido): Promise<any[]> {
+async function cfgInterpretar(
+  mensagem: string,
+  pedido: CfgPedido,
+): Promise<any[]> {
   const sys = `Você é um interpretador de pedidos para uma fábrica de portas de enrolar.
 Receba a MENSAGEM do cliente serralheiro + o PEDIDO_ATUAL e devolva SOMENTE JSON:
 { "intencoes": [...] }
@@ -2889,10 +3930,16 @@ PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
   try {
     const resp = await fetch(AI_GATEWAY_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${LOVABLE_API_KEY}` },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      },
       body: JSON.stringify({
         model: AI_MODEL,
-        messages: [{ role: "system", content: sys }, { role: "user", content: mensagem }],
+        messages: [
+          { role: "system", content: sys },
+          { role: "user", content: mensagem },
+        ],
         response_format: { type: "json_object" },
         temperature: 0.1,
         max_tokens: 2048,
@@ -2903,13 +3950,20 @@ PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
       return cfgFallbackInterpretar(mensagem);
     }
     const j = await resp.json();
-    if (j?.choices?.[0]?.finish_reason === "length" || j?.choices?.[0]?.finish_reason === "MAX_TOKENS") {
-      console.warn("cfgInterpretar truncado por limite de tokens — usando fallback determinístico");
+    if (
+      j?.choices?.[0]?.finish_reason === "length" ||
+      j?.choices?.[0]?.finish_reason === "MAX_TOKENS"
+    ) {
+      console.warn(
+        "cfgInterpretar truncado por limite de tokens — usando fallback determinístico",
+      );
       return cfgFallbackInterpretar(mensagem);
     }
     const content = j?.choices?.[0]?.message?.content || "{}";
     const parsed = JSON.parse(content);
-    return Array.isArray(parsed?.intencoes) ? parsed.intencoes : cfgFallbackInterpretar(mensagem);
+    return Array.isArray(parsed?.intencoes)
+      ? parsed.intencoes
+      : cfgFallbackInterpretar(mensagem);
   } catch (e) {
     console.error("cfgInterpretar erro:", (e as Error)?.message);
     return cfgFallbackInterpretar(mensagem);
@@ -2930,13 +3984,16 @@ function mergeDeep(a: any, b: any): any {
 function acharItem(pedido: CfgPedido, ref: string): CfgItem | undefined {
   if (!ref) return pedido.itens[pedido.itens.length - 1];
   const r = String(ref).toLowerCase();
-  if (r === "ultimo" || r === "último") return pedido.itens[pedido.itens.length - 1];
+  if (r === "ultimo" || r === "último")
+    return pedido.itens[pedido.itens.length - 1];
   let found = pedido.itens.find((i) => i.id === ref);
   if (found) return found;
   found = pedido.itens.find((i) => i.tipo === r);
   if (found) return found;
   return pedido.itens.find((i) =>
-    (i.explosao || []).some((e) => (e.descricao || "").toLowerCase().includes(r))
+    (i.explosao || []).some((e) =>
+      (e.descricao || "").toLowerCase().includes(r),
+    ),
   );
 }
 
@@ -2951,7 +4008,11 @@ function normalizarKitConfig(c: any): void {
   if (!c || typeof c !== "object") return;
   if (c.quer_pintura === undefined) {
     if (c.pintura === false || c.pintura === null) c.quer_pintura = false;
-    else if (c.pintura === true || (typeof c.pintura === "string" && c.pintura.trim())) c.quer_pintura = true;
+    else if (
+      c.pintura === true ||
+      (typeof c.pintura === "string" && c.pintura.trim())
+    )
+      c.quer_pintura = true;
   }
   // Se cliente disse "sem pintura" (pintura=false), garante coerência
   if (c.quer_pintura === false) c.pintura = false;
@@ -2959,14 +4020,28 @@ function normalizarKitConfig(c: any): void {
   // (cfgProximaPergunta já checa lamina.cor, então nada mais a fazer aqui.)
   // Trava de lâminas: aceita true/false explícitos vindos do extrator/LLM.
   if (c.trava_lamina === "sim") c.trava_lamina = true;
-  else if (c.trava_lamina === "nao" || c.trava_lamina === "não") c.trava_lamina = false;
+  else if (c.trava_lamina === "nao" || c.trava_lamina === "não")
+    c.trava_lamina = false;
   if (typeof c.portinhola_cortada === "string") {
-    const v = inferirRespostaPortinholaCorte(c.portinhola_cortada.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+    const v = inferirRespostaPortinholaCorte(
+      c.portinhola_cortada
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, ""),
+    );
     if (v !== undefined) c.portinhola_cortada = v;
   }
 }
 
-function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; quer_gerar: boolean; quer_resumo: boolean; duvidas: string[] } {
+function cfgAplicar(
+  pedido: CfgPedido,
+  intencoes: any[],
+): {
+  pedido: CfgPedido;
+  quer_gerar: boolean;
+  quer_resumo: boolean;
+  duvidas: string[];
+} {
   let p: CfgPedido = JSON.parse(JSON.stringify(pedido));
   let quer_gerar = false;
   let quer_resumo = false;
@@ -2981,7 +4056,10 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
       if (tipo === "motor") {
         const validacao = validarCapacidadeMotorConfig(ix.config || {});
         if (!validacao.ok) {
-          duvidas.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+          duvidas.push(
+            validacao.erro ||
+              "Capacidade de motor inválida. Informe uma capacidade cadastrada.",
+          );
           continue;
         }
       }
@@ -2997,7 +4075,10 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
       const novoItem = {
         id: novoId(),
         tipo,
-        config: { ...(ix.config || {}), qtd: Number(ix.qtd) || Number(ix.config?.qtd) || 1 },
+        config: {
+          ...(ix.config || {}),
+          qtd: Number(ix.qtd) || Number(ix.config?.qtd) || 1,
+        },
         explosao: [],
         subtotal: 0,
       };
@@ -3011,7 +4092,10 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
         if (it.tipo === "motor") {
           const validacao = validarCapacidadeMotorConfig(novaConfig);
           if (!validacao.ok) {
-            duvidas.push(validacao.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.");
+            duvidas.push(
+              validacao.erro ||
+                "Capacidade de motor inválida. Informe uma capacidade cadastrada.",
+            );
             continue;
           }
         }
@@ -3035,28 +4119,58 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
     } else if (acao === "escolher_menu") {
       const op = Number(ix.opcao);
       // Pré-popula um item placeholder do tipo correspondente para indicar foco
-      const tipoMap: Record<number, CfgItemTipo> = { 1: "kit_porta", 2: "acessorio", 3: "motor", 4: "acessorio" };
+      const tipoMap: Record<number, CfgItemTipo> = {
+        1: "kit_porta",
+        2: "acessorio",
+        3: "motor",
+        4: "acessorio",
+      };
       const t = tipoMap[op];
       if (t && !p.itens.find((i) => i.tipo === t)) {
-        p.itens.push({ id: novoId(), tipo: t, config: {}, explosao: [], subtotal: 0 });
+        p.itens.push({
+          id: novoId(),
+          tipo: t,
+          config: {},
+          explosao: [],
+          subtotal: 0,
+        });
         ultimoTipoTocado = t;
       }
     }
   }
 
   if (ultimoTipoTocado === "motor") p.contexto_ativo = "motor";
-  else if (p.itens.some((it) => it.tipo === "kit_porta")) p.contexto_ativo = "kit_porta";
-  else if (p.itens.some((it) => it.tipo !== "kit_porta")) p.contexto_ativo = "pecas_avulsas";
+  else if (p.itens.some((it) => it.tipo === "kit_porta"))
+    p.contexto_ativo = "kit_porta";
+  else if (p.itens.some((it) => it.tipo !== "kit_porta"))
+    p.contexto_ativo = "pecas_avulsas";
   else p.contexto_ativo = p.contexto_ativo || null;
 
-  p.intencao_ativa = duvidas.length ? "duvida" : (p.contexto_ativo ? "cotacao" : p.intencao_ativa || null);
+  p.intencao_ativa = duvidas.length
+    ? "duvida"
+    : p.contexto_ativo
+      ? "cotacao"
+      : p.intencao_ativa || null;
   return { pedido: p, quer_gerar, quer_resumo, duvidas };
 }
 
 // --- Explosão + preço ---
-async function precoEstoque(termo: string, item: any = {}): Promise<{ sku: string; nome: string; preco: number; und: string } | null> {
-  const r = await buscarEstoqueParaPeca({ produto_nome: termo, descricao: termo, ...item });
-  if (r) return { sku: r.codigo_sku, nome: r.produto_nome, preco: Number(r.preco_venda) || 0, und: r.unidade_medida || "UN" };
+async function precoEstoque(
+  termo: string,
+  item: any = {},
+): Promise<{ sku: string; nome: string; preco: number; und: string } | null> {
+  const r = await buscarEstoqueParaPeca({
+    produto_nome: termo,
+    descricao: termo,
+    ...item,
+  });
+  if (r)
+    return {
+      sku: r.codigo_sku,
+      nome: r.produto_nome,
+      preco: Number(r.preco_venda) || 0,
+      und: r.unidade_medida || "UN",
+    };
   return null;
 }
 
@@ -3065,7 +4179,10 @@ async function precoEstoque(termo: string, item: any = {}): Promise<{ sku: strin
 // ===========================================================
 
 /** Peso estimado da porta: m² × 12 kg, com margem (35% padrão, 70% se porta grande L≥9 ou A≥4). */
-function estimarPesoPorta(largura: number, altura: number): { peso_kg: number; margem: number; grande: boolean } {
+function estimarPesoPorta(
+  largura: number,
+  altura: number,
+): { peso_kg: number; margem: number; grande: boolean } {
   const base = (Number(largura) || 0) * (Number(altura) || 0) * 12;
   const grande = (Number(largura) || 0) >= 9 || (Number(altura) || 0) >= 4;
   const margem = grande ? 0.7 : 0.35;
@@ -3093,7 +4210,7 @@ function escolherMotorPorPeso(pesoKg: number): number {
  */
 
 function _roloPorPol(pol: number): number {
-  return pol <= 5.5 ? 0.60 : 0.75;
+  return pol <= 5.5 ? 0.6 : 0.75;
 }
 
 function _inerciaTubo_mm4(D: number, e: number): number {
@@ -3101,7 +4218,10 @@ function _inerciaTubo_mm4(D: number, e: number): number {
   return (Math.PI / 64) * (Math.pow(D, 4) - Math.pow(d, 4));
 }
 
-function calcularEixoEstrutural(largura_m: number, altura_m: number): {
+function calcularEixoEstrutural(
+  largura_m: number,
+  altura_m: number,
+): {
   pol: number;
   peso_kg: number;
   rolo: number;
@@ -3109,11 +4229,21 @@ function calcularEixoEstrutural(largura_m: number, altura_m: number): {
   flecha_mm: number;
   flecha_max_mm: number;
   aprovado: boolean;
-  tentativas: Array<{ pol: number; flecha_mm: number; flecha_max_mm: number; aprovado: boolean }>;
+  tentativas: Array<{
+    pol: number;
+    flecha_mm: number;
+    flecha_max_mm: number;
+    aprovado: boolean;
+  }>;
 } {
   const L_mm = (Number(largura_m) || 0) * 1000;
   const E = 200000; // N/mm²
-  const tentativas: Array<{ pol: number; flecha_mm: number; flecha_max_mm: number; aprovado: boolean }> = [];
+  const tentativas: Array<{
+    pol: number;
+    flecha_mm: number;
+    flecha_max_mm: number;
+    aprovado: boolean;
+  }> = [];
 
   for (const eixo of EIXOS_TABELA) {
     const rolo = _roloPorPol(eixo.pol);
@@ -3123,10 +4253,16 @@ function calcularEixoEstrutural(largura_m: number, altura_m: number): {
     const peso_N = peso_kg * 9.81;
     const w = L_mm > 0 ? peso_N / L_mm : 0; // N/mm
     const I = _inerciaTubo_mm4(eixo.D, eixo.e);
-    const flecha = I > 0 ? (5 * w * Math.pow(L_mm, 4)) / (384 * E * I) : Infinity;
+    const flecha =
+      I > 0 ? (5 * w * Math.pow(L_mm, 4)) / (384 * E * I) : Infinity;
     const flechaMax = L_mm / 300;
     const aprovado = flecha <= flechaMax;
-    tentativas.push({ pol: eixo.pol, flecha_mm: +flecha.toFixed(2), flecha_max_mm: +flechaMax.toFixed(2), aprovado });
+    tentativas.push({
+      pol: eixo.pol,
+      flecha_mm: +flecha.toFixed(2),
+      flecha_max_mm: +flechaMax.toFixed(2),
+      aprovado,
+    });
     if (aprovado) {
       return {
         pol: eixo.pol,
@@ -3159,7 +4295,11 @@ function calcularEixoEstrutural(largura_m: number, altura_m: number): {
 }
 
 /** Escolha do eixo: cálculo estrutural (substitui regra empírica por largura/motor). */
-function escolherEixoAuto(largura: number, _motorKg: number, altura?: number): number {
+function escolherEixoAuto(
+  largura: number,
+  _motorKg: number,
+  altura?: number,
+): number {
   const alt = Number(altura) || 0;
   if (!largura || !alt) {
     // sem altura ainda, fallback conservador pela largura
@@ -3176,7 +4316,6 @@ function escolherGuiaAuto(largura: number): 50 | 70 | 100 {
   return 100;
 }
 
-
 /** @deprecated mantido por compatibilidade — usar calcularEixoEstrutural. */
 function eixoPorAltura(alturaTotal: number): number {
   if (alturaTotal <= 3.5) return 4.5;
@@ -3186,16 +4325,27 @@ function eixoPorAltura(alturaTotal: number): number {
 
 /** Portinhola cortada: largura final = largura porta - (0,64 + profundidade da guia em m).
  *  18 lâminas perfil baixo, 19 lâminas perfil alto. */
-function calcPortinholaCortada(largura: number, guia_mm: number, perfil: "baixo" | "alto") {
+function calcPortinholaCortada(
+  largura: number,
+  guia_mm: number,
+  perfil: "baixo" | "alto",
+) {
   const gM = (Number(guia_mm) || 0) / 1000;
   const larguraFinal = Math.max(0, +(Number(largura) - (0.64 + gM)).toFixed(2));
   const qtdLaminas = perfil === "alto" ? 19 : 18;
-  return { largura_final: larguraFinal, qtd_laminas: qtdLaminas, soleira_m: larguraFinal };
+  return {
+    largura_final: larguraFinal,
+    qtd_laminas: qtdLaminas,
+    soleira_m: larguraFinal,
+  };
 }
 
 /** Lâmina parcial: qtd de lâminas para uma faixa de altura.
  *  perfil baixo → ÷ 0,075 / perfil alto → ÷ 0,085. */
-function calcLaminasParcial(alturaM: number, perfil: "baixo" | "alto" = "alto"): number {
+function calcLaminasParcial(
+  alturaM: number,
+  perfil: "baixo" | "alto" = "alto",
+): number {
   const passo = perfil === "baixo" ? 0.075 : 0.085;
   return Math.ceil((Number(alturaM) || 0) / passo);
 }
@@ -3207,17 +4357,21 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   if (!largura || !altura) return linhas;
 
   const modeloLam: string = String(cfg?.lamina?.modelo || "fechado");
-  const perfil: "baixo" | "alto" = (cfg?.lamina?.perfil === "alto" ? "alto" : "baixo");
+  const perfil: "baixo" | "alto" =
+    cfg?.lamina?.perfil === "alto" ? "alto" : "baixo";
 
   // Auto: motor, eixo, guia
   const acdc = cfg?.motor?.ac_dc || "AC";
   const pesoInfo = estimarPesoPorta(largura, altura);
-  const potencia = Number(cfg?.motor?.potencia) || escolherMotorPorPeso(pesoInfo.peso_kg);
-  const eixoPol = Number(cfg?.eixo_polegadas) || escolherEixoAuto(largura, potencia, altura);
+  const potencia =
+    Number(cfg?.motor?.potencia) || escolherMotorPorPeso(pesoInfo.peso_kg);
+  const eixoPol =
+    Number(cfg?.eixo_polegadas) || escolherEixoAuto(largura, potencia, altura);
   const rolo = calcRoloNum(eixoPol);
   const alturaTotal = altura + rolo;
   let guia_mm_eff = Number(cfg?.guia_mm) || escolherGuiaAuto(largura);
-  if (!GUIAS_VALIDAS.includes(guia_mm_eff as any)) guia_mm_eff = escolherGuiaAuto(largura);
+  if (!GUIAS_VALIDAS.includes(guia_mm_eff as any))
+    guia_mm_eff = escolherGuiaAuto(largura);
 
   const instalacao = (cfg?.instalacao || "entre_paredes") as TipoInstalacao;
   const corte = calcMedidaCorte(largura, instalacao, {
@@ -3231,18 +4385,28 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const cortarLamina = corte.laminas || largura;
 
   // Lâmina principal + faixas parciais (combinação)
-  const combinacao: Array<{ modelo: string; altura_m: number }> = Array.isArray(cfg?.lamina?.combinacao)
-    ? cfg.lamina.combinacao : [];
-  const alturaParcial = combinacao.reduce((s, c) => s + (Number(c.altura_m) || 0), 0);
+  const combinacao: Array<{ modelo: string; altura_m: number }> = Array.isArray(
+    cfg?.lamina?.combinacao,
+  )
+    ? cfg.lamina.combinacao
+    : [];
+  const alturaParcial = combinacao.reduce(
+    (s, c) => s + (Number(c.altura_m) || 0),
+    0,
+  );
   const alturaPrincipal = Math.max(0, alturaTotal - alturaParcial);
   const qtdLamPrincipal = calcLaminas(alturaPrincipal, perfil);
 
   const cor = cfg?.lamina?.cor ? ` ${cfg.lamina.cor}` : "";
-  const pLam = await precoEstoque(`lamina ${modeloLam.replace("_", " ")} ${perfil}${cor}`);
+  const pLam = await precoEstoque(
+    `lamina ${modeloLam.replace("_", " ")} ${perfil}${cor}`,
+  );
   if (qtdLamPrincipal > 0) {
     linhas.push({
       sku: pLam?.sku || "LAMINA",
-      descricao: pLam?.nome || `Lâmina ${modeloLam.replace("_", " ")}${cor} — corte ${cortarLamina.toFixed(2)}m`,
+      descricao:
+        pLam?.nome ||
+        `Lâmina ${modeloLam.replace("_", " ")}${cor} — corte ${cortarLamina.toFixed(2)}m`,
       und: pLam?.und || "UN",
       qtd: qtdLamPrincipal * cortarLamina,
       valor_unit: pLam?.preco || 0,
@@ -3253,10 +4417,14 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   for (const faixa of combinacao) {
     const qtdF = calcLaminasParcial(faixa.altura_m, perfil);
     if (qtdF <= 0) continue;
-    const pF = await precoEstoque(`lamina ${String(faixa.modelo).replace("_", " ")} ${perfil}${cor}`);
+    const pF = await precoEstoque(
+      `lamina ${String(faixa.modelo).replace("_", " ")} ${perfil}${cor}`,
+    );
     linhas.push({
       sku: pF?.sku || "LAMINA",
-      descricao: pF?.nome || `Lâmina ${String(faixa.modelo).replace("_", " ")}${cor} — faixa ${faixa.altura_m}m — corte ${cortarLamina.toFixed(2)}m`,
+      descricao:
+        pF?.nome ||
+        `Lâmina ${String(faixa.modelo).replace("_", " ")}${cor} — faixa ${faixa.altura_m}m — corte ${cortarLamina.toFixed(2)}m`,
       und: pF?.und || "UN",
       qtd: qtdF * cortarLamina,
       valor_unit: pF?.preco || 0,
@@ -3267,12 +4435,15 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
 
   // Guia lateral
   const pGuia = await precoEstoque(`guia lateral ${guia_mm_eff}mm`);
-  const guiasNec = instalacao === "entre_testeiras" ? 0 : instalacao === "vao_1guia" ? 1 : 2;
+  const guiasNec =
+    instalacao === "entre_testeiras" ? 0 : instalacao === "vao_1guia" ? 1 : 2;
   const mlGuia = guiasNec > 0 ? guiasNec * altura : 0;
   if (mlGuia > 0) {
     linhas.push({
       sku: pGuia?.sku || "GUIA",
-      descricao: pGuia?.nome || `Guia lateral ${guia_mm_eff}mm (${guiasNec === 1 ? "1 un" : "par"})`,
+      descricao:
+        pGuia?.nome ||
+        `Guia lateral ${guia_mm_eff}mm (${guiasNec === 1 ? "1 un" : "par"})`,
       und: pGuia?.und || "M",
       qtd: mlGuia,
       valor_unit: pGuia?.preco || 0,
@@ -3285,8 +4456,10 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const pEixo = await precoEstoque(`eixo ${eixoPol}`);
   linhas.push({
     sku: pEixo?.sku || "EIXO",
-    descricao: pEixo?.nome || `Eixo ${eixoPol}" — corte ${cortarEixo.toFixed(2)}m`,
-    und: pEixo?.und || "M", qtd: cortarEixo,
+    descricao:
+      pEixo?.nome || `Eixo ${eixoPol}" — corte ${cortarEixo.toFixed(2)}m`,
+    und: pEixo?.und || "M",
+    qtd: cortarEixo,
     valor_unit: pEixo?.preco || 0,
     total: (pEixo?.preco || 0) * cortarEixo,
     sob_consulta: !pEixo,
@@ -3296,8 +4469,10 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   const pSol = await precoEstoque("soleira");
   linhas.push({
     sku: pSol?.sku || "SOLEIRA",
-    descricao: pSol?.nome || `Soleira em T — corte ${cortarSoleira.toFixed(2)}m`,
-    und: pSol?.und || "M", qtd: cortarSoleira,
+    descricao:
+      pSol?.nome || `Soleira em T — corte ${cortarSoleira.toFixed(2)}m`,
+    und: pSol?.und || "M",
+    qtd: cortarSoleira,
     valor_unit: pSol?.preco || 0,
     total: (pSol?.preco || 0) * cortarSoleira,
     sob_consulta: !pSol,
@@ -3313,13 +4488,15 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   if (cfg?.motor !== false) {
     const pMot = await precoEstoque(`motor ${potencia}kg ${acdc}`);
     const baseDesc = pMot?.nome || `Motor ${acdc} ${potencia} kg`;
-    const descMot = kitMotor === "kit_automatizador"
-      ? `Kit automatizador ${acdc} ${potencia} kg (motor, testeiras, central e 2 controles)`
-      : `${baseDesc} ${labelFormato[kitMotor] || ""}`.trim();
+    const descMot =
+      kitMotor === "kit_automatizador"
+        ? `Kit automatizador ${acdc} ${potencia} kg (motor, testeiras, central e 2 controles)`
+        : `${baseDesc} ${labelFormato[kitMotor] || ""}`.trim();
     linhas.push({
       sku: pMot?.sku || `MOTOR-${potencia}KG`,
       descricao: descMot,
-      und: "UN", qtd: 1,
+      und: "UN",
+      qtd: 1,
       valor_unit: pMot?.preco || 0,
       total: pMot?.preco || 0,
       sob_consulta: !pMot,
@@ -3329,7 +4506,8 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
       linhas.push({
         sku: pTest?.sku || "TESTEIRA",
         descricao: pTest?.nome || "Testeiras (par)",
-        und: "PAR", qtd: 1,
+        und: "PAR",
+        qtd: 1,
         valor_unit: pTest?.preco || 0,
         total: pTest?.preco || 0,
         sob_consulta: !pTest,
@@ -3340,7 +4518,8 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
       linhas.push({
         sku: pCen?.sku || "CENTRAL",
         descricao: pCen?.nome || "Central de comando",
-        und: "UN", qtd: 1,
+        und: "UN",
+        qtd: 1,
         valor_unit: pCen?.preco || 0,
         total: pCen?.preco || 0,
         sob_consulta: !pCen,
@@ -3350,7 +4529,8 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
       linhas.push({
         sku: pCtrl?.sku || "CONTROLE",
         descricao: pCtrl?.nome || "Controle remoto",
-        und: "UN", qtd: qtdCtrl,
+        und: "UN",
+        qtd: qtdCtrl,
         valor_unit: pCtrl?.preco || 0,
         total: (pCtrl?.preco || 0) * qtdCtrl,
         sob_consulta: !pCtrl,
@@ -3359,15 +4539,20 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
   }
 
   // Portinhola — só explode se a posição foi confirmada pelo cliente (VILD/VILE/CENTRO).
-  const portStr = typeof cfg?.portinhola === "string" ? cfg.portinhola.toUpperCase() : "";
+  const portStr =
+    typeof cfg?.portinhola === "string" ? cfg.portinhola.toUpperCase() : "";
   if (portStr === "VILD" || portStr === "VILE" || portStr === "CENTRO") {
     const modelo = portStr;
-    const cortada = modelo === "CENTRO" ? true : (cfg?.portinhola_cortada !== false);
+    const cortada =
+      modelo === "CENTRO" ? true : cfg?.portinhola_cortada !== false;
     const pPort = await precoEstoque(`portinhola ${modelo}`);
     linhas.push({
       sku: pPort?.sku || "PORTINHOLA",
-      descricao: pPort?.nome || `Portinhola ${modelo}${cortada ? " (cortada)" : " (inteira p/ ajuste local)"}`,
-      und: "UN", qtd: 1,
+      descricao:
+        pPort?.nome ||
+        `Portinhola ${modelo}${cortada ? " (cortada)" : " (inteira p/ ajuste local)"}`,
+      und: "UN",
+      qtd: 1,
       valor_unit: pPort?.preco || 0,
       total: pPort?.preco || 0,
       sob_consulta: !pPort,
@@ -3378,12 +4563,15 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
       linhas.push({
         sku: (pSolP?.sku || "SOLEIRA") + "-P",
         descricao: `Soleira portinhola — corte ${calc.largura_final.toFixed(2)}m`,
-        und: pSolP?.und || "M", qtd: calc.soleira_m,
+        und: pSolP?.und || "M",
+        qtd: calc.soleira_m,
         valor_unit: pSolP?.preco || 0,
         total: (pSolP?.preco || 0) * calc.soleira_m,
         sob_consulta: !pSolP,
       });
-      const pLamP = await precoEstoque(`lamina ${modeloLam.replace("_", " ")} ${perfil}${cor}`);
+      const pLamP = await precoEstoque(
+        `lamina ${modeloLam.replace("_", " ")} ${perfil}${cor}`,
+      );
       linhas.push({
         sku: (pLamP?.sku || "LAMINA") + "-P",
         descricao: `Lâminas portinhola (${calc.qtd_laminas} un) — corte ${calc.largura_final.toFixed(2)}m`,
@@ -3401,7 +4589,8 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
     linhas.push({
       sku: pAlc?.sku || "ALCAPAO",
       descricao: pAlc?.nome || "Alçapão emergencial",
-      und: "UN", qtd: 1,
+      und: "UN",
+      qtd: 1,
       valor_unit: pAlc?.preco || 0,
       total: pAlc?.preco || 0,
       sob_consulta: !pAlc,
@@ -3415,7 +4604,8 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
     linhas.push({
       sku: pPint?.sku || "PINTURA",
       descricao: pPint?.nome || `Pintura eletrostática ${corP}`,
-      und: pPint?.und || "M2", qtd: area,
+      und: pPint?.und || "M2",
+      qtd: area,
       valor_unit: pPint?.preco || 0,
       total: (pPint?.preco || 0) * area,
       sob_consulta: !pPint,
@@ -3427,7 +4617,8 @@ async function explodirKitPorta(cfg: any): Promise<CfgLinha[]> {
     linhas.push({
       sku: pTr?.sku || "TRAVA",
       descricao: pTr?.nome || "Trava-lâmina",
-      und: "UN", qtd: 1,
+      und: "UN",
+      qtd: 1,
       valor_unit: pTr?.preco || 0,
       total: pTr?.preco || 0,
       sob_consulta: !pTr,
@@ -3449,20 +4640,54 @@ async function explodirItem(item: CfgItem): Promise<CfgLinha[]> {
     const qtd = Number(cfg.qtd) || 1;
     const linhasMot: CfgLinha[] = [];
     const baseDesc = p?.nome || `Motor ${acdcM} ${pot} kg`;
-    const descPrincipal = kitM === "kit_automatizador"
-      ? `Kit automatizador ${acdcM} ${pot} kg (motor, testeiras, central e 2 controles)`
-      : kitM === "motor_testeiras" ? `${baseDesc} com testeiras`
-      : `${baseDesc} avulso`;
-    linhasMot.push({ sku: p?.sku || `MOTOR-${pot}KG`, descricao: descPrincipal, und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p });
+    const descPrincipal =
+      kitM === "kit_automatizador"
+        ? `Kit automatizador ${acdcM} ${pot} kg (motor, testeiras, central e 2 controles)`
+        : kitM === "motor_testeiras"
+          ? `${baseDesc} com testeiras`
+          : `${baseDesc} avulso`;
+    linhasMot.push({
+      sku: p?.sku || `MOTOR-${pot}KG`,
+      descricao: descPrincipal,
+      und: "UN",
+      qtd,
+      valor_unit: p?.preco || 0,
+      total: (p?.preco || 0) * qtd,
+      sob_consulta: !p,
+    });
     if (kitM === "kit_automatizador" || kitM === "motor_testeiras") {
       const pTest = await precoEstoque("testeira");
-      linhasMot.push({ sku: pTest?.sku || "TESTEIRA", descricao: pTest?.nome || "Testeiras (par)", und: "PAR", qtd, valor_unit: pTest?.preco || 0, total: (pTest?.preco || 0) * qtd, sob_consulta: !pTest });
+      linhasMot.push({
+        sku: pTest?.sku || "TESTEIRA",
+        descricao: pTest?.nome || "Testeiras (par)",
+        und: "PAR",
+        qtd,
+        valor_unit: pTest?.preco || 0,
+        total: (pTest?.preco || 0) * qtd,
+        sob_consulta: !pTest,
+      });
     }
     if (kitM === "kit_automatizador") {
       const pCen = await precoEstoque("central de comando");
-      linhasMot.push({ sku: pCen?.sku || "CENTRAL", descricao: pCen?.nome || "Central de comando", und: "UN", qtd, valor_unit: pCen?.preco || 0, total: (pCen?.preco || 0) * qtd, sob_consulta: !pCen });
+      linhasMot.push({
+        sku: pCen?.sku || "CENTRAL",
+        descricao: pCen?.nome || "Central de comando",
+        und: "UN",
+        qtd,
+        valor_unit: pCen?.preco || 0,
+        total: (pCen?.preco || 0) * qtd,
+        sob_consulta: !pCen,
+      });
       const pCtrl = await precoEstoque("controle remoto");
-      linhasMot.push({ sku: pCtrl?.sku || "CONTROLE", descricao: pCtrl?.nome || "Controle remoto", und: "UN", qtd: 2 * qtd, valor_unit: pCtrl?.preco || 0, total: (pCtrl?.preco || 0) * 2 * qtd, sob_consulta: !pCtrl });
+      linhasMot.push({
+        sku: pCtrl?.sku || "CONTROLE",
+        descricao: pCtrl?.nome || "Controle remoto",
+        und: "UN",
+        qtd: 2 * qtd,
+        valor_unit: pCtrl?.preco || 0,
+        total: (pCtrl?.preco || 0) * 2 * qtd,
+        sob_consulta: !pCtrl,
+      });
     }
     return linhasMot;
   }
@@ -3478,22 +4703,62 @@ async function explodirItem(item: CfgItem): Promise<CfgLinha[]> {
     const totalMl = calcGuiasMetrosLineares(qtd, isPar, compr);
     if (!totalMl) return [];
     const p = await precoEstoque(`guia lateral ${mm}mm`);
-    return [{ sku: p?.sku || "GUIA", descricao: p?.nome || `Guia lateral ${mm}mm${isPar ? " (par)" : ""}`, und: p?.und || "M", qtd: totalMl, valor_unit: p?.preco || 0, total: (p?.preco || 0) * totalMl, sob_consulta: !p }];
+    return [
+      {
+        sku: p?.sku || "GUIA",
+        descricao: p?.nome || `Guia lateral ${mm}mm${isPar ? " (par)" : ""}`,
+        und: p?.und || "M",
+        qtd: totalMl,
+        valor_unit: p?.preco || 0,
+        total: (p?.preco || 0) * totalMl,
+        sob_consulta: !p,
+      },
+    ];
   }
   if (item.tipo === "controle") {
     const qtd = Number(cfg.qtd) || 1;
     const p = await precoEstoque("controle remoto");
-    return [{ sku: p?.sku || "CONTROLE", descricao: p?.nome || "Controle remoto", und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+    return [
+      {
+        sku: p?.sku || "CONTROLE",
+        descricao: p?.nome || "Controle remoto",
+        und: "UN",
+        qtd,
+        valor_unit: p?.preco || 0,
+        total: (p?.preco || 0) * qtd,
+        sob_consulta: !p,
+      },
+    ];
   }
   if (item.tipo === "central") {
     const qtd = Number(cfg.qtd) || 1;
     const p = await precoEstoque("central de comando");
-    return [{ sku: p?.sku || "CENTRAL", descricao: p?.nome || "Central de comando", und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+    return [
+      {
+        sku: p?.sku || "CENTRAL",
+        descricao: p?.nome || "Central de comando",
+        und: "UN",
+        qtd,
+        valor_unit: p?.preco || 0,
+        total: (p?.preco || 0) * qtd,
+        sob_consulta: !p,
+      },
+    ];
   }
   if (item.tipo === "trava_lamina") {
     const qtd = Number(cfg.qtd) || 1;
     const p = await precoEstoque("trava lamina");
-    return [{ sku: p?.sku || "TRAVA", descricao: p?.nome || "Trava-lâmina", und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+    return [
+      {
+        sku: p?.sku || "TRAVA",
+        descricao: p?.nome || "Trava-lâmina",
+        und: "UN",
+        qtd,
+        valor_unit: p?.preco || 0,
+        total: (p?.preco || 0) * qtd,
+        sob_consulta: !p,
+      },
+    ];
   }
   if (item.tipo === "lamina") {
     const qtd = Number(cfg.qtd) || 1;
@@ -3503,14 +4768,36 @@ async function explodirItem(item: CfgItem): Promise<CfgLinha[]> {
     const perfil = cfg.perfil || "baixo";
     const p = await precoEstoque(`lamina ${modelo} ${perfil}${cor}`);
     const total = (p?.preco || 0) * qtd * (compr || 1);
-    return [{ sku: p?.sku || "LAMINA", descricao: p?.nome || `Lâmina ${modelo} perfil ${perfil}${cor}${compr ? ` ${compr}m` : ""}`, und: p?.und || "UN", qtd: compr ? qtd * compr : qtd, valor_unit: p?.preco || 0, total, sob_consulta: !p }];
+    return [
+      {
+        sku: p?.sku || "LAMINA",
+        descricao:
+          p?.nome ||
+          `Lâmina ${modelo} perfil ${perfil}${cor}${compr ? ` ${compr}m` : ""}`,
+        und: p?.und || "UN",
+        qtd: compr ? qtd * compr : qtd,
+        valor_unit: p?.preco || 0,
+        total,
+        sob_consulta: !p,
+      },
+    ];
   }
   if (item.tipo === "soleira") {
     const qtd = Number(cfg.qtd) || 1;
     const compr = Number(cfg.comprimento_m) || 0;
     const p = await precoEstoque("soleira");
     const total = (p?.preco || 0) * qtd * (compr || 1);
-    return [{ sku: p?.sku || "SOLEIRA", descricao: p?.nome || `Soleira em T${compr ? ` ${compr}m` : ""}`, und: p?.und || "M", qtd: compr ? qtd * compr : qtd, valor_unit: p?.preco || 0, total, sob_consulta: !p }];
+    return [
+      {
+        sku: p?.sku || "SOLEIRA",
+        descricao: p?.nome || `Soleira em T${compr ? ` ${compr}m` : ""}`,
+        und: p?.und || "M",
+        qtd: compr ? qtd * compr : qtd,
+        valor_unit: p?.preco || 0,
+        total,
+        sob_consulta: !p,
+      },
+    ];
   }
   if (item.tipo === "eixo") {
     const qtd = Number(cfg.qtd) || 1;
@@ -3518,36 +4805,90 @@ async function explodirItem(item: CfgItem): Promise<CfgLinha[]> {
     const pol = Number(cfg.polegadas) || 4.5;
     const p = await precoEstoque(`eixo ${pol}`);
     const total = (p?.preco || 0) * qtd * (compr || 1);
-    return [{ sku: p?.sku || "EIXO", descricao: p?.nome || `Eixo ${pol}"${compr ? ` ${compr}m` : ""}`, und: p?.und || "M", qtd: compr ? qtd * compr : qtd, valor_unit: p?.preco || 0, total, sob_consulta: !p }];
+    return [
+      {
+        sku: p?.sku || "EIXO",
+        descricao: p?.nome || `Eixo ${pol}"${compr ? ` ${compr}m` : ""}`,
+        und: p?.und || "M",
+        qtd: compr ? qtd * compr : qtd,
+        valor_unit: p?.preco || 0,
+        total,
+        sob_consulta: !p,
+      },
+    ];
   }
   if (item.tipo === "portinhola") {
     const qtd = Number(cfg.qtd) || 1;
     const modelo = String(cfg.modelo || "CENTRO").toUpperCase();
     const p = await precoEstoque(`portinhola ${modelo}`);
-    return [{ sku: p?.sku || "PORTINHOLA", descricao: p?.nome || `Portinhola ${modelo}`, und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+    return [
+      {
+        sku: p?.sku || "PORTINHOLA",
+        descricao: p?.nome || `Portinhola ${modelo}`,
+        und: "UN",
+        qtd,
+        valor_unit: p?.preco || 0,
+        total: (p?.preco || 0) * qtd,
+        sob_consulta: !p,
+      },
+    ];
   }
   if (item.tipo === "alcapao") {
     const qtd = Number(cfg.qtd) || 1;
     const p = await precoEstoque("alcapao");
-    return [{ sku: p?.sku || "ALCAPAO", descricao: p?.nome || "Alçapão emergencial", und: "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+    return [
+      {
+        sku: p?.sku || "ALCAPAO",
+        descricao: p?.nome || "Alçapão emergencial",
+        und: "UN",
+        qtd,
+        valor_unit: p?.preco || 0,
+        total: (p?.preco || 0) * qtd,
+        sob_consulta: !p,
+      },
+    ];
   }
   if (item.tipo === "pintura") {
     const area = Number(cfg.area_m2) || 0;
     const cor = cfg.cor || "branca";
     const p = await precoEstoque(`pintura eletrostatica ${cor}`);
     const qtd = area || 1;
-    return [{ sku: p?.sku || "PINTURA", descricao: p?.nome || `Pintura eletrostática ${cor}${area ? ` ${area}m²` : ""}`, und: p?.und || "M2", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+    return [
+      {
+        sku: p?.sku || "PINTURA",
+        descricao:
+          p?.nome || `Pintura eletrostática ${cor}${area ? ` ${area}m²` : ""}`,
+        und: p?.und || "M2",
+        qtd,
+        valor_unit: p?.preco || 0,
+        total: (p?.preco || 0) * qtd,
+        sob_consulta: !p,
+      },
+    ];
   }
   if (item.tipo === "acessorio") {
     const qtd = Number(cfg.qtd) || 1;
     const desc = String(cfg.descricao || "acessorio");
     const p = await precoEstoque(desc);
-    return [{ sku: p?.sku || "ACESS", descricao: p?.nome || desc, und: p?.und || "UN", qtd, valor_unit: p?.preco || 0, total: (p?.preco || 0) * qtd, sob_consulta: !p }];
+    return [
+      {
+        sku: p?.sku || "ACESS",
+        descricao: p?.nome || desc,
+        und: p?.und || "UN",
+        qtd,
+        valor_unit: p?.preco || 0,
+        total: (p?.preco || 0) * qtd,
+        sob_consulta: !p,
+      },
+    ];
   }
   return [];
 }
 
-async function cfgRecalcular(pedido: CfgPedido, opts: { explodir?: boolean } = {}): Promise<CfgPedido> {
+async function cfgRecalcular(
+  pedido: CfgPedido,
+  opts: { explodir?: boolean } = {},
+): Promise<CfgPedido> {
   let total = 0;
   let sob = false;
   for (const it of pedido.itens) {
@@ -3563,7 +4904,7 @@ async function cfgRecalcular(pedido: CfgPedido, opts: { explodir?: boolean } = {
       // Mantém a explosão anterior se houver, mas não recalcula a cada turno
       it.explosao = it.explosao || [];
     }
-    it.subtotal = +(it.explosao.reduce((s, l) => s + l.total, 0)).toFixed(2);
+    it.subtotal = +it.explosao.reduce((s, l) => s + l.total, 0).toFixed(2);
     total += it.subtotal;
     if (it.explosao.some((l) => l.sob_consulta)) sob = true;
   }
@@ -3579,21 +4920,34 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       const c = it.config || {};
       // Fluxo: MEDIDA → LÂMINA → PINTURA → AUTOMATIZAÇÃO (AC/DC) → OPCIONAIS (portinhola/alçapão)
       //        → MEDIDA DE CORTE → [auto: INSTALAÇÃO → TRAVA → guia auto] → CÁLCULOS
-      if (!c.largura || !c.altura) return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
-      if (!c?.lamina?.modelo) return "Qual o *modelo principal da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
-      if (c.quer_pintura === undefined) return "Deseja *pintura eletrostática*?\n• *Sim*\n• *Não*";
-      if (c.quer_pintura === true && !c?.lamina?.cor && !c?.cor_pendente) return "Qual a *cor da pintura*?";
+      if (!c.largura || !c.altura)
+        return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
+      if (!c?.lamina?.modelo)
+        return "Qual o *modelo principal da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
+      if (c.quer_pintura === undefined)
+        return "Deseja *pintura eletrostática*?\n• *Sim*\n• *Não*";
+      if (c.quer_pintura === true && !c?.lamina?.cor && !c?.cor_pendente)
+        return "Qual a *cor da pintura*?";
       // Motor: apenas AC/DC — a capacidade (kg) é SEMPRE automática pelo padrão técnico.
-      if (!c?.motor?.ac_dc) return "Qual *automatização* deseja?\n• *AC*\n• *DC*\n\n_A capacidade (kg), eixo, rolo e segurança são calculados automaticamente._";
+      if (!c?.motor?.ac_dc)
+        return "Qual *automatização* deseja?\n• *AC*\n• *DC*\n\n_A capacidade (kg), eixo, rolo e segurança são calculados automaticamente._";
       // OPCIONAIS — antes da medida de corte (afetam cortes, soleira, lâminas).
       if (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao) {
         return "Deseja algum *opcional*?\n• *Portinhola*\n• *Alçapão*\n• *Nenhum*";
       }
-      if (c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()))) {
+      if (
+        c.portinhola === true ||
+        (typeof c.portinhola === "string" &&
+          !["VILD", "VILE", "CENTRO"].includes(c.portinhola.toUpperCase()))
+      ) {
         return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
       }
-      const port = typeof c.portinhola === "string" ? c.portinhola.toUpperCase() : "";
-      if ((port === "VILD" || port === "VILE") && c.portinhola_cortada === undefined) {
+      const port =
+        typeof c.portinhola === "string" ? c.portinhola.toUpperCase() : "";
+      if (
+        (port === "VILD" || port === "VILE") &&
+        c.portinhola_cortada === undefined
+      ) {
         return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
       }
       if (!c.medida_corte_modo) {
@@ -3601,14 +4955,23 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       }
       if (c.medida_corte_modo === "manual") {
         if (!c.medida_eixo_m) return "Informe a *medida do eixo* (em metros).";
-        if (!c.medida_lamina_m) return "Informe a *medida das lâminas* (em metros).";
-        if (!c.medida_soleira_m) return "Informe a *medida da soleira* (em metros).";
+        if (!c.medida_lamina_m)
+          return "Informe a *medida das lâminas* (em metros).";
+        if (!c.medida_soleira_m)
+          return "Informe a *medida da soleira* (em metros).";
       }
       if (c.medida_corte_modo === "auto") {
-        if (!c.instalacao) return "Qual o *tipo de instalação*?\n• *Entre testeiras*\n• *Vão + 1 guia*\n• *Vão + guias*\n• *Entre paredes*";
-        if (c.trava_lamina === undefined) return "A porta possui *trava de lâminas*?\n• *Sim*\n• *Não*";
+        if (!c.instalacao)
+          return "Qual o *tipo de instalação*?\n• *Entre testeiras*\n• *Vão + 1 guia*\n• *Vão + guias*\n• *Entre paredes*";
+        if (c.trava_lamina === undefined)
+          return "A porta possui *trava de lâminas*?\n• *Sim*\n• *Não*";
         // Guia: auto-sugerida pela largura (≤4m→50, ≤7m→70, >7m→100). Cliente pode sobrescrever dizendo "guia 70mm".
-        if ((c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") && !c.guia_mm && !c.guia_mm_esq && !c.guia_mm_dir) {
+        if (
+          (c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") &&
+          !c.guia_mm &&
+          !c.guia_mm_esq &&
+          !c.guia_mm_dir
+        ) {
           c.guia_mm = escolherGuiaAuto(Number(c.largura) || 0);
         }
       }
@@ -3617,15 +4980,21 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       const validade = validarCapacidadeMotorConfig(c);
       if (!validade.ok) {
         c.potencia = undefined;
-        return validade.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.";
+        return (
+          validade.erro ||
+          "Capacidade de motor inválida. Informe uma capacidade cadastrada."
+        );
       }
-      if (!c.ac_dc) return "Esse motor você prefere em *AC* ou *DC*?\n• *AC*\n• *DC*";
+      if (!c.ac_dc)
+        return "Esse motor você prefere em *AC* ou *DC*?\n• *AC*\n• *DC*";
       const lista = c.ac_dc === "DC" ? POTENCIAS_DC : POTENCIAS_AC;
       if (c.potencia && !lista.includes(Number(c.potencia))) {
-        const inv = c.potencia; c.potencia = undefined;
+        const inv = c.potencia;
+        c.potencia = undefined;
         return `Motor ${c.ac_dc} ${inv} kg não existe. Capacidades ${c.ac_dc}: ${lista.join("/")} kg. Qual deseja?`;
       }
-      if (!c.potencia) return `Qual a *capacidade* do motor ${c.ac_dc}? (${lista.join(" / ")} kg)`;
+      if (!c.potencia)
+        return `Qual a *capacidade* do motor ${c.ac_dc}? (${lista.join(" / ")} kg)`;
       if (!c.kit_motor && !c.modelo_motor) {
         return "Perfeito. Como você quer esse motor?\n• *Motor avulso*\n• *Motor + testeiras*\n• *Kit automatizador*";
       }
@@ -3633,14 +5002,18 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       const c = it.config || {};
       const qtd = c.qtd ?? c.qtd_pares ?? c.qtd_unidades;
       if (!qtd) return "Quantas *guias* você precisa?";
-      if (!c.mm) return "Qual a *espessura/tipo da guia*? (50 / 60 / 70 / 100 mm)";
+      if (!c.mm)
+        return "Qual a *espessura/tipo da guia*? (50 / 60 / 70 / 100 mm)";
       // Não perguntar par/unidade: assume unidade avulsa quando o cliente não disse "par".
-      if (!c.comprimento_m) return "Qual o *comprimento em metros* de cada guia?";
+      if (!c.comprimento_m)
+        return "Qual o *comprimento em metros* de cada guia?";
     } else if (it.tipo === "lamina") {
       const c = it.config || {};
       if (!c.qtd) return "Quantas *lâminas* você precisa?";
-      if (!c.modelo) return "Qual o *modelo da lâmina*?\n• *Fechada*\n• *Meia cana*\n• *Transvision*\n• *Oblongo*";
-      if (!c.comprimento_m) return "Qual o *tamanho (comprimento em metros)* de cada lâmina? Ex: `3` ou `2,5`.";
+      if (!c.modelo)
+        return "Qual o *modelo da lâmina*?\n• *Fechada*\n• *Meia cana*\n• *Transvision*\n• *Oblongo*";
+      if (!c.comprimento_m)
+        return "Qual o *tamanho (comprimento em metros)* de cada lâmina? Ex: `3` ou `2,5`.";
     } else if (it.tipo === "soleira") {
       const c = it.config || {};
       if (!c.qtd) return "Quantas *soleiras*?";
@@ -3648,22 +5021,33 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
     } else if (it.tipo === "eixo") {
       const c = it.config || {};
       if (!c.qtd) return "Quantos *eixos*?";
-      if (!c.polegadas) return "Qual o *diâmetro do eixo* em polegadas? (4.5 / 5.5 / 6 / 6.5 / 8.5)";
+      if (!c.polegadas)
+        return "Qual o *diâmetro do eixo* em polegadas? (4.5 / 5.5 / 6 / 6.5 / 8.5)";
       if (!c.comprimento_m) return "Qual o *comprimento em metros* do eixo?";
     } else if (it.tipo === "portinhola") {
       const c = it.config || {};
-      const modeloOk = typeof c.modelo === "string" && ["VILD","VILE","CENTRO"].includes(String(c.modelo).toUpperCase());
-      if (!modeloOk) return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
+      const modeloOk =
+        typeof c.modelo === "string" &&
+        ["VILD", "VILE", "CENTRO"].includes(String(c.modelo).toUpperCase());
+      if (!modeloOk)
+        return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
       if (!c.qtd) return "Quantas *portinholas*?";
     } else if (it.tipo === "pintura") {
       const c = it.config || {};
       if (!c.area_m2) return "Qual a *área em m²* da pintura?";
       if (!c.cor) return "Qual a *cor* da pintura?";
-    } else if (it.tipo === "controle" || it.tipo === "central" || it.tipo === "trava_lamina" || it.tipo === "alcapao") {
-      if (!it.config?.qtd) return `Quantas unidades de *${String(it.tipo).replace("_", " ")}*?`;
+    } else if (
+      it.tipo === "controle" ||
+      it.tipo === "central" ||
+      it.tipo === "trava_lamina" ||
+      it.tipo === "alcapao"
+    ) {
+      if (!it.config?.qtd)
+        return `Quantas unidades de *${String(it.tipo).replace("_", " ")}*?`;
     } else if (it.tipo === "acessorio") {
       const c = it.config || {};
-      if (!c.descricao) return "Qual *acessório* você precisa? Descreva o item.";
+      if (!c.descricao)
+        return "Qual *acessório* você precisa? Descreva o item.";
       if (!c.qtd) return "Quantas unidades desse acessório?";
     }
   }
@@ -3678,12 +5062,33 @@ function cfgItemIncompleto(it: CfgItem): boolean {
   const c: any = it.config || {};
   switch (it.tipo) {
     case "kit_porta": {
-      const portPend = c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()));
-      const corPend = c.quer_pintura === true && !c?.lamina?.cor && !c?.cor_pendente;
-      const opcPend = c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao;
-      const manualPend = c.medida_corte_modo === "manual" && (!c.medida_eixo_m || !c.medida_lamina_m || !c.medida_soleira_m);
-      const autoPend = c.medida_corte_modo === "auto" && (!c.instalacao || c.trava_lamina === undefined);
-      return !c.largura || !c.altura || !c?.motor?.ac_dc || !c?.lamina?.modelo || c.quer_pintura === undefined || corPend || opcPend || portPend || !c.medida_corte_modo || manualPend || autoPend;
+      const portPend =
+        c.portinhola === true ||
+        (typeof c.portinhola === "string" &&
+          !["VILD", "VILE", "CENTRO"].includes(c.portinhola.toUpperCase()));
+      const corPend =
+        c.quer_pintura === true && !c?.lamina?.cor && !c?.cor_pendente;
+      const opcPend =
+        c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao;
+      const manualPend =
+        c.medida_corte_modo === "manual" &&
+        (!c.medida_eixo_m || !c.medida_lamina_m || !c.medida_soleira_m);
+      const autoPend =
+        c.medida_corte_modo === "auto" &&
+        (!c.instalacao || c.trava_lamina === undefined);
+      return (
+        !c.largura ||
+        !c.altura ||
+        !c?.motor?.ac_dc ||
+        !c?.lamina?.modelo ||
+        c.quer_pintura === undefined ||
+        corPend ||
+        opcPend ||
+        portPend ||
+        !c.medida_corte_modo ||
+        manualPend ||
+        autoPend
+      );
     }
     case "motor":
       return !c.potencia || (!c.kit_motor && !c.modelo_motor) || !c.ac_dc;
@@ -3698,7 +5103,9 @@ function cfgItemIncompleto(it: CfgItem): boolean {
     case "eixo":
       return !c.qtd || !c.polegadas || !c.comprimento_m;
     case "portinhola": {
-      const modeloOk = typeof c.modelo === "string" && ["VILD","VILE","CENTRO"].includes(String(c.modelo).toUpperCase());
+      const modeloOk =
+        typeof c.modelo === "string" &&
+        ["VILD", "VILE", "CENTRO"].includes(String(c.modelo).toUpperCase());
       return !modeloOk || !c.qtd;
     }
     case "pintura":
@@ -3716,7 +5123,10 @@ function cfgItemIncompleto(it: CfgItem): boolean {
 }
 
 // --- Resumo em texto ---
-function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): string {
+function cfgResumo(
+  pedido: CfgPedido,
+  opts: { mostrarTotal?: boolean } = {},
+): string {
   if (!pedido.itens.length) return "_(carrinho vazio)_";
   const linhas: string[] = ["*Itens anotados até agora:*"];
   let n = 1;
@@ -3724,12 +5134,20 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
     const c = it.config || {};
     if (it.tipo === "kit_porta") {
       // Só mostra o rolo definitivo quando o eixo já foi definido (manual ou via motor).
-      const eixoDef = Number(c.eixo_polegadas) || (c?.motor?.potencia ? escolherEixoAuto(Number(c.largura) || 0, Number(c.motor.potencia)) : 0);
+      const eixoDef =
+        Number(c.eixo_polegadas) ||
+        (c?.motor?.potencia
+          ? escolherEixoAuto(Number(c.largura) || 0, Number(c.motor.potencia))
+          : 0);
       const roloDef = calcRolo(eixoDef);
-      linhas.push(`${n++}. Porta de enrolar${c?.motor?.ac_dc ? " automática" : ""}`);
+      linhas.push(
+        `${n++}. Porta de enrolar${c?.motor?.ac_dc ? " automática" : ""}`,
+      );
       if (c.largura && c.altura) {
         if (roloDef !== null) {
-          linhas.push(`   Medida: ${c.largura}m × (${c.altura}m + ${roloDef.toFixed(2)}m de rolo)`);
+          linhas.push(
+            `   Medida: ${c.largura}m × (${c.altura}m + ${roloDef.toFixed(2)}m de rolo)`,
+          );
         } else {
           linhas.push(`   Medida: ${c.largura}m × (${c.altura}m + rolo)`);
         }
@@ -3741,54 +5159,93 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
           vao_guias: "vão + guias",
           entre_paredes: "entre paredes",
         };
-        linhas.push(`   Instalação: ${labelInst[String(c.instalacao)] || String(c.instalacao).replace(/_/g, " ")}${c.trava_lamina ? " (com trava de lâminas)" : ""}`);
+        linhas.push(
+          `   Instalação: ${labelInst[String(c.instalacao)] || String(c.instalacao).replace(/_/g, " ")}${c.trava_lamina ? " (com trava de lâminas)" : ""}`,
+        );
       }
       if (c?.motor?.ac_dc) {
         const km = c.kit_motor || "kit_automatizador";
-        const fmt = km === "kit_automatizador" ? "kit automatizador" : km === "motor_testeiras" ? "com testeiras" : "avulso";
-        linhas.push(`   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + " kg" : ""} (${fmt})`);
+        const fmt =
+          km === "kit_automatizador"
+            ? "kit automatizador"
+            : km === "motor_testeiras"
+              ? "com testeiras"
+              : "avulso";
+        linhas.push(
+          `   Motor: ${c.motor.ac_dc}${c.motor.potencia ? " " + c.motor.potencia + " kg" : ""} (${fmt})`,
+        );
       }
-      if (c?.lamina?.modelo) linhas.push(`   Lâmina principal: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`);
-      const faixas = Array.isArray(c?.lamina?.combinacao) ? c.lamina.combinacao : [];
+      if (c?.lamina?.modelo)
+        linhas.push(
+          `   Lâmina principal: ${String(c.lamina.modelo).replace("_", " ")}${c.lamina.perfil ? " perfil " + c.lamina.perfil : ""}`,
+        );
+      const faixas = Array.isArray(c?.lamina?.combinacao)
+        ? c.lamina.combinacao
+        : [];
       for (const f of faixas) {
         if (!f?.altura_m || !f?.modelo) continue;
-        linhas.push(`   Faixa parcial: ${Number(f.altura_m).toFixed(2).replace(".", ",")} m em lâmina ${String(f.modelo).replace("_", " ")}`);
+        linhas.push(
+          `   Faixa parcial: ${Number(f.altura_m).toFixed(2).replace(".", ",")} m em lâmina ${String(f.modelo).replace("_", " ")}`,
+        );
       }
       // Pintura: linha única (sem repetir cor). "Pintura <cor>" quando há pintura,
       // "Sem pintura" quando o cliente dispensou.
       if (c.quer_pintura === true) {
-        const corP = c?.lamina?.cor ? String(c.lamina.cor).replace(/_/g, " ") : null;
+        const corP = c?.lamina?.cor
+          ? String(c.lamina.cor).replace(/_/g, " ")
+          : null;
         linhas.push(`   Pintura${corP ? " " + corP : " eletrostática"}`);
       } else if (c.quer_pintura === false) {
         linhas.push(`   Sem pintura`);
-        if (c?.lamina?.cor) linhas.push(`   Cor da lâmina: ${String(c.lamina.cor).replace(/_/g, " ")}`);
+        if (c?.lamina?.cor)
+          linhas.push(
+            `   Cor da lâmina: ${String(c.lamina.cor).replace(/_/g, " ")}`,
+          );
       } else if (c?.lamina?.cor) {
-        linhas.push(`   Cor da lâmina: ${String(c.lamina.cor).replace(/_/g, " ")}`);
+        linhas.push(
+          `   Cor da lâmina: ${String(c.lamina.cor).replace(/_/g, " ")}`,
+        );
       }
       if (c.guia_mm) linhas.push(`   Guia: ${c.guia_mm}mm`);
       if (c.portinhola) {
-        const portConf = typeof c.portinhola === "string" && ["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase());
-        linhas.push(`   Portinhola: ${portConf ? c.portinhola.toUpperCase() : "_(posição a definir)_"}`);
+        const portConf =
+          typeof c.portinhola === "string" &&
+          ["VILD", "VILE", "CENTRO"].includes(c.portinhola.toUpperCase());
+        linhas.push(
+          `   Portinhola: ${portConf ? c.portinhola.toUpperCase() : "_(posição a definir)_"}`,
+        );
       }
       if (c.alcapao) linhas.push(`   Alçapão: sim`);
-      if (c.central === true || (c.central !== false && c?.motor?.ac_dc)) linhas.push(`   Central de controle inclusa`);
-      if ((Number(c.controles) || 0) > 0) linhas.push(`   Controles: ${c.controles}`);
+      if (c.central === true || (c.central !== false && c?.motor?.ac_dc))
+        linhas.push(`   Central de controle inclusa`);
+      if ((Number(c.controles) || 0) > 0)
+        linhas.push(`   Controles: ${c.controles}`);
     } else if (it.tipo === "motor") {
       const km = c.kit_motor || "avulso";
-      const fmt = km === "kit_automatizador" ? "Kit automatizador" : km === "motor_testeiras" ? "Motor + testeiras" : "Motor avulso";
-      linhas.push(`${n++}. ${fmt}${c.ac_dc ? " " + c.ac_dc : ""}${c.potencia ? " " + c.potencia + " kg" : ""}`);
+      const fmt =
+        km === "kit_automatizador"
+          ? "Kit automatizador"
+          : km === "motor_testeiras"
+            ? "Motor + testeiras"
+            : "Motor avulso";
+      linhas.push(
+        `${n++}. ${fmt}${c.ac_dc ? " " + c.ac_dc : ""}${c.potencia ? " " + c.potencia + " kg" : ""}`,
+      );
       if (!c.ac_dc) linhas.push(`   • Tipo: _(AC/DC a definir)_`);
       if (!c.potencia) linhas.push(`   • Capacidade: _(a definir)_`);
       linhas.push(`   • Quantidade: ${c.qtd || 1}`);
-      if (km === "kit_automatizador") linhas.push(`   • Inclui: motor, testeiras, central e 2 controles`);
-      else if (km === "motor_testeiras") linhas.push(`   • Inclui: motor e testeiras`);
+      if (km === "kit_automatizador")
+        linhas.push(`   • Inclui: motor, testeiras, central e 2 controles`);
+      else if (km === "motor_testeiras")
+        linhas.push(`   • Inclui: motor e testeiras`);
     } else if (it.tipo === "guia") {
       const isPar = !!c.qtd_pares || c.tipo_unidade === "par";
       const qtdN = Number(c.qtd_pares || c.qtd_unidades || c.qtd || 0);
       const comp = Number(c.comprimento_m || 0);
       const ml = qtdN * (isPar ? 2 : 1) * (comp || 0);
       linhas.push(`${n++}. Guias`);
-      if (qtdN) linhas.push(`   • Quantidade: ${qtdN}${isPar ? " par(es)" : ""}`);
+      if (qtdN)
+        linhas.push(`   • Quantidade: ${qtdN}${isPar ? " par(es)" : ""}`);
       if (c.mm) linhas.push(`   • Modelo: ${c.mm}mm`);
       if (comp) linhas.push(`   • Comprimento: ${comp}m`);
       if (ml) linhas.push(`   • Total: ${ml.toFixed(2)} m lineares`);
@@ -3804,7 +5261,8 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
     } else if (it.tipo === "lamina") {
       linhas.push(`${n++}. Lâminas`);
       if (c.qtd) linhas.push(`   • Quantidade: ${c.qtd}`);
-      if (c.modelo) linhas.push(`   • Modelo: ${String(c.modelo).replace("_", " ")}`);
+      if (c.modelo)
+        linhas.push(`   • Modelo: ${String(c.modelo).replace("_", " ")}`);
       if (c.cor) linhas.push(`   • Cor: ${c.cor}`);
       if (c.comprimento_m) linhas.push(`   • Tamanho: ${c.comprimento_m}m`);
     } else if (it.tipo === "soleira") {
@@ -3817,10 +5275,13 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
       if (c.polegadas) linhas.push(`   • Bitola: ${c.polegadas}"`);
       if (c.comprimento_m) linhas.push(`   • Comprimento: ${c.comprimento_m}m`);
     } else if (it.tipo === "portinhola") {
-      const posDef = typeof c.modelo === "string" && ["VILD","VILE","CENTRO"].includes(String(c.modelo).toUpperCase());
+      const posDef =
+        typeof c.modelo === "string" &&
+        ["VILD", "VILE", "CENTRO"].includes(String(c.modelo).toUpperCase());
       linhas.push(`${n++}. Portinhola`);
       if (c.qtd) linhas.push(`   • Quantidade: ${c.qtd}`);
-      if (posDef) linhas.push(`   • Posição: ${String(c.modelo).toUpperCase()}`);
+      if (posDef)
+        linhas.push(`   • Posição: ${String(c.modelo).toUpperCase()}`);
       else linhas.push(`   • _posição a definir_`);
     } else if (it.tipo === "alcapao") {
       linhas.push(`${n++}. Alçapão`);
@@ -3832,25 +5293,34 @@ function cfgResumo(pedido: CfgPedido, opts: { mostrarTotal?: boolean } = {}): st
     } else if (it.tipo === "acessorio") {
       linhas.push(`${n++}. ${c.descricao || "Acessório"}`);
       if (c.qtd) linhas.push(`   • Quantidade: ${c.qtd}`);
-
     } else {
       linhas.push(`${n++}. ${it.tipo}`);
     }
   }
   // Só mostra total quando o pedido está pronto (sem campos faltando)
   if (opts.mostrarTotal && pedido.total > 0) {
-    linhas.push(`\n*Total:* R$ ${pedido.total.toFixed(2).replace(".", ",")}${pedido.sob_consulta ? " _(alguns itens sob consulta)_" : ""}`);
+    linhas.push(
+      `\n*Total:* R$ ${pedido.total.toFixed(2).replace(".", ",")}${pedido.sob_consulta ? " _(alguns itens sob consulta)_" : ""}`,
+    );
   }
   return linhas.join("\n");
 }
 
 function cfgParecePerguntaOuConversaLivre(mensagem: string): boolean {
   const t = String(mensagem || "").toLowerCase();
-  return /\?|\b(qual|quais|como|onde|quando|porque|por que|pra que|para que|voc[eê]s|trabalha|serve|pode|tem|faz|boa tarde|bom dia|boa noite|ok|obrigado|valeu)\b/.test(t);
+  return /\?|\b(qual|quais|como|onde|quando|porque|por que|pra que|para que|voc[eê]s|trabalha|serve|pode|tem|faz|boa tarde|bom dia|boa noite|ok|obrigado|valeu)\b/.test(
+    t,
+  );
 }
 
-async function cfgResponderComLLM(args: { mensagemCliente: string; pedido: CfgPedido; proxima: string | null }): Promise<string> {
-  const resumo = args.pedido.itens.length ? cfgResumo(args.pedido, { mostrarTotal: !args.proxima }) : "Sem item técnico fechado ainda.";
+async function cfgResponderComLLM(args: {
+  mensagemCliente: string;
+  pedido: CfgPedido;
+  proxima: string | null;
+}): Promise<string> {
+  const resumo = args.pedido.itens.length
+    ? cfgResumo(args.pedido, { mostrarTotal: !args.proxima })
+    : "Sem item técnico fechado ainda.";
   const system = `Você é o Leo, consultor técnico humano da Eletroportas no WhatsApp.
 Responda em português brasileiro, curto e natural (1 a 4 frases), sem dizer que é IA/robô.
 OBRIGATÓRIO: responda primeiro exatamente a dúvida/comentário do cliente. Depois, se houver campo pendente, conduza com uma única pergunta.
@@ -3868,10 +5338,16 @@ PRÓXIMA PERGUNTA TÉCNICA, se fizer sentido continuar o orçamento: ${args.prox
     const timeoutId = setTimeout(() => controller.abort(), 12_000);
     const resp = await fetch(AI_GATEWAY_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${LOVABLE_API_KEY || OPENAI_API_KEY}` },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${LOVABLE_API_KEY || OPENAI_API_KEY}`,
+      },
       body: JSON.stringify({
         model: AI_MODEL,
-        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
         temperature: 0.25,
         max_tokens: 900,
       }),
@@ -3891,9 +5367,14 @@ PRÓXIMA PERGUNTA TÉCNICA, se fizer sentido continuar o orçamento: ${args.prox
 }
 
 // --- Gerador de PDF (itens explodidos) ---
-function cfgGerarHtml(pedido: CfgPedido, cliente: { nome?: string; telefone?: string }) {
-  const linhasHtml = pedido.itens.flatMap((it, idx) =>
-    it.explosao.map((l, j) => `
+function cfgGerarHtml(
+  pedido: CfgPedido,
+  cliente: { nome?: string; telefone?: string },
+) {
+  const linhasHtml = pedido.itens
+    .flatMap((it, idx) =>
+      it.explosao.map(
+        (l, j) => `
       <tr>
         <td>${idx + 1}.${j + 1}</td>
         <td>${escapeHtml(l.sku)}</td>
@@ -3902,9 +5383,13 @@ function cfgGerarHtml(pedido: CfgPedido, cliente: { nome?: string; telefone?: st
         <td style="text-align:right">${Number(l.qtd).toFixed(2)}</td>
         <td style="text-align:right">${l.sob_consulta ? "—" : "R$ " + Number(l.valor_unit).toFixed(2)}</td>
         <td style="text-align:right">${l.sob_consulta ? "<i>sob consulta</i>" : "R$ " + Number(l.total).toFixed(2)}</td>
-      </tr>`)
-  ).join("");
-  const dataStr = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Bahia" });
+      </tr>`,
+      ),
+    )
+    .join("");
+  const dataStr = new Date().toLocaleDateString("pt-BR", {
+    timeZone: "America/Bahia",
+  });
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     body{font-family:Arial,sans-serif;font-size:11pt;color:#222;margin:30px}
     h1{color:#0f3a6e;margin:0 0 4px}
@@ -3928,55 +5413,89 @@ function cfgGerarHtml(pedido: CfgPedido, cliente: { nome?: string; telefone?: st
     <div class="total">Total: <strong>R$ ${pedido.total.toFixed(2).replace(".", ",")}</strong></div>
     <div class="footer">
       Validade: 7 dias · Pagamento: a combinar · Entrega: a combinar.
-      ${pedido.sob_consulta ? "<br><b>Itens marcados como \"sob consulta\" serão confirmados pela equipe.</b>" : ""}
+      ${pedido.sob_consulta ? '<br><b>Itens marcados como "sob consulta" serão confirmados pela equipe.</b>' : ""}
     </div>
   </body></html>`;
 }
 
 // --- Gerador de resposta humanizada ---
-async function cfgGerarResposta(args: { mensagemCliente: string; pedido: CfgPedido; proxima: string | null; duvidas: string[]; primeiraMsg: boolean }): Promise<string> {
+async function cfgGerarResposta(args: {
+  mensagemCliente: string;
+  pedido: CfgPedido;
+  proxima: string | null;
+  duvidas: string[];
+  primeiraMsg: boolean;
+}): Promise<string> {
   const { mensagemCliente, pedido, proxima, duvidas, primeiraMsg } = args;
   const completo = !proxima && pedido.itens.length > 0;
-  const resumo = pedido.itens.length ? cfgResumo(pedido, { mostrarTotal: completo }) : "";
+  const resumo = pedido.itens.length
+    ? cfgResumo(pedido, { mostrarTotal: completo })
+    : "";
   const partes: string[] = [];
   if (primeiraMsg && !pedido.itens.length) {
     partes.push(
       `Olá! 👋 Você está falando com a Equipe Eletroportas — atendimento *Serralheiro / Parceiro*.\n\n` +
-      `Posso te ajudar com:\n*1.* Kit porta de enrolar\n*2.* Peças avulsas\n*3.* Motores\n*4.* Acessórios\n\n` +
-      `Pode mandar o pedido em texto livre — ex: _"3x4 entre paredes AC meia cana branca portinhola VILD"_ — ou escolher uma opção acima.`
+        `Posso te ajudar com:\n*1.* Kit porta de enrolar\n*2.* Peças avulsas\n*3.* Motores\n*4.* Acessórios\n\n` +
+        `Pode mandar o pedido em texto livre — ex: _"3x4 entre paredes AC meia cana branca portinhola VILD"_ — ou escolher uma opção acima.`,
     );
     return partes.join("\n\n");
   }
-  const alertasValidacao = duvidas.filter((d) => /capacidade cadastrada|motor\s+(?:AC|DC)?\s*\d+\s*kg\s+n[ãa]o existe/i.test(d));
+  const alertasValidacao = duvidas.filter((d) =>
+    /capacidade cadastrada|motor\s+(?:AC|DC)?\s*\d+\s*kg\s+n[ãa]o existe/i.test(
+      d,
+    ),
+  );
   if (alertasValidacao.length) return alertasValidacao.join("\n\n");
   if (duvidas.length || cfgParecePerguntaOuConversaLivre(mensagemCliente)) {
     return await cfgResponderComLLM({ mensagemCliente, pedido, proxima });
   }
   if (resumo) partes.push(resumo);
   if (proxima) partes.push(`👉 ${proxima}`);
-  else if (pedido.itens.length) partes.push(`👉 Deseja *acrescentar mais algum item* ou posso *gerar o orçamento*?`);
-  return partes.join("\n\n") || "Pode me dizer o que precisa? Ex: _\"3x4 entre paredes AC meia cana branca portinhola VILD\"_";
+  else if (pedido.itens.length)
+    partes.push(
+      `👉 Deseja *acrescentar mais algum item* ou posso *gerar o orçamento*?`,
+    );
+  return (
+    partes.join("\n\n") ||
+    'Pode me dizer o que precisa? Ex: _"3x4 entre paredes AC meia cana branca portinhola VILD"_'
+  );
 }
 
 // --- Classificador de intenção da mensagem ---
 // Diferencia: saudação (nova interação humana), pergunta paralela (dúvida fora do orçamento)
 // e continuação do fluxo. Evita que qualquer "oi" seja tratado como continuação do orçamento.
-function classificarIntencaoConversa(mensagem: string): "saudacao" | "pergunta_paralela" | "continuacao" {
+function classificarIntencaoConversa(
+  mensagem: string,
+): "saudacao" | "pergunta_paralela" | "continuacao" {
   const original = String(mensagem || "").trim();
   if (!original) return "continuacao";
-  const t = original.toLowerCase().replace(/[!.\s]+$/g, "").trim();
+  const t = original
+    .toLowerCase()
+    .replace(/[!.\s]+$/g, "")
+    .trim();
 
   // Saudação pura / abertura social
-  if (/^(oi+|ol[áa]+|opa+|eai+|e a[ií]+|hey+|hi+|hello+|al[ôo]+|menu|bom\s*dia|boa\s*tarde|boa\s*noite|tudo\s*bem\??|tudo\s*certo\??|td\s*bem\??|tudo\s*bom\??|como\s*vai\??|blz|beleza|salve|fala|fala\s*a[íi]|e\s*a[íi])$/i.test(t)) {
+  if (
+    /^(oi+|ol[áa]+|opa+|eai+|e a[ií]+|hey+|hi+|hello+|al[ôo]+|menu|bom\s*dia|boa\s*tarde|boa\s*noite|tudo\s*bem\??|tudo\s*certo\??|td\s*bem\??|tudo\s*bom\??|como\s*vai\??|blz|beleza|salve|fala|fala\s*a[íi]|e\s*a[íi])$/i.test(
+      t,
+    )
+  ) {
     return "saudacao";
   }
 
   // Termos técnicos / comandos de carrinho → continuação
-  const temTecnico = /(\d+\s*[x×]\s*\d+|porta|motor|guia|l[âa]mina|kit|or[çc]amento|portinhola|controle|central|eixo|soleira|cortada|inteira|\bac\b|\bdc\b|\bsim\b|\bn[ãa]o\b|gerar|finalizar|fechar|pedido|acrescentar|adicionar|remover|tirar|trocar|sob\s*consulta|pe[çc]as?|avulsa|acess[óo]rio|alç?ap[ãa]o|pintura|transvision|oblongo|meia\s*cana|fechada|revenda|consumidor|parede|testeira|v[ãa]o|entre|sobreposta|continuar|novo|nova|zerar|recome[çc]ar)/i.test(t);
+  const temTecnico =
+    /(\d+\s*[x×]\s*\d+|porta|motor|guia|l[âa]mina|kit|or[çc]amento|portinhola|controle|central|eixo|soleira|cortada|inteira|\bac\b|\bdc\b|\bsim\b|\bn[ãa]o\b|gerar|finalizar|fechar|pedido|acrescentar|adicionar|remover|tirar|trocar|sob\s*consulta|pe[çc]as?|avulsa|acess[óo]rio|alç?ap[ãa]o|pintura|transvision|oblongo|meia\s*cana|fechada|revenda|consumidor|parede|testeira|v[ãa]o|entre|sobreposta|continuar|novo|nova|zerar|recome[çc]ar)/i.test(
+      t,
+    );
   if (temTecnico) return "continuacao";
 
   // Pergunta paralela (info geral) — sem termos técnicos
-  const ehPergunta = /\?/.test(original) || /^(qual|quais|quanto|quando|onde|como|por\s*que|porque|voc[êe]s|t[êe]m\b|tem\b|trabalha|atende|hor[áa]rio|endere[çc]o|funciona|aberto|fechado|frete|entrega|prazo|garantia|whats|telefone|site|email)/i.test(t);
+  const ehPergunta =
+    /\?/.test(original) ||
+    /^(qual|quais|quanto|quando|onde|como|por\s*que|porque|voc[êe]s|t[êe]m\b|tem\b|trabalha|atende|hor[áa]rio|endere[çc]o|funciona|aberto|fechado|frete|entrega|prazo|garantia|whats|telefone|site|email)/i.test(
+      t,
+    );
   if (ehPergunta) return "pergunta_paralela";
 
   return "continuacao";
@@ -3988,42 +5507,68 @@ function classificarIntencaoConversa(mensagem: string): "saudacao" | "pergunta_p
  * acumulando itens incompatíveis (ex: cliente estava em "kit porta" e
  * agora diz "desculpe, quero peças avulsas").
  */
-function detectarTrocaContexto(mensagem: string, pedido: CfgPedido): { trocou: boolean; novoContexto?: string; aviso?: string } {
-  const t = String(mensagem || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+function detectarTrocaContexto(
+  mensagem: string,
+  pedido: CfgPedido,
+): { trocou: boolean; novoContexto?: string; aviso?: string } {
+  const t = String(mensagem || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
   if (!t.trim()) return { trocou: false };
 
   const contextoMsg = detectarContextoAtivoMensagem(mensagem);
-  const contextoAtual = pedido?.contexto_ativo || (pedido?.itens?.some((it) => it.tipo === "motor") ? "motor" : pedido?.itens?.some((it) => it.tipo === "kit_porta") ? "kit_porta" : pedido?.itens?.length ? "pecas_avulsas" : null);
+  const contextoAtual =
+    pedido?.contexto_ativo ||
+    (pedido?.itens?.some((it) => it.tipo === "motor")
+      ? "motor"
+      : pedido?.itens?.some((it) => it.tipo === "kit_porta")
+        ? "kit_porta"
+        : pedido?.itens?.length
+          ? "pecas_avulsas"
+          : null);
   if (contextoMsg && contextoAtual && contextoMsg !== contextoAtual) {
     if (contextoMsg === "motor") {
       return {
         trocou: true,
         novoContexto: "motor",
-        aviso: "Perfeito 👍\n\nVamos falar só de *motor* então.\n\nMe confirme se você quer:\n• *Motor avulso*\n• *Motor + testeiras*\n• *Kit automatizador*",
+        aviso:
+          "Perfeito 👍\n\nVamos falar só de *motor* então.\n\nMe confirme se você quer:\n• *Motor avulso*\n• *Motor + testeiras*\n• *Kit automatizador*",
       };
     }
     if (contextoMsg === "pecas_avulsas") {
       return {
         trocou: true,
         novoContexto: "pecas_avulsas",
-        aviso: "Beleza 👍\n\nVamos seguir só com *peças avulsas*.\n\nMe diga quais peças e quantidades você precisa.",
+        aviso:
+          "Beleza 👍\n\nVamos seguir só com *peças avulsas*.\n\nMe diga quais peças e quantidades você precisa.",
       };
     }
     if (contextoMsg === "kit_porta") {
       return {
         trocou: true,
         novoContexto: "kit_porta",
-        aviso: "Perfeito 👍\n\nVamos montar o *kit da porta* do zero.\n\nMe passe a largura x altura para eu seguir.",
+        aviso:
+          "Perfeito 👍\n\nVamos montar o *kit da porta* do zero.\n\nMe passe a largura x altura para eu seguir.",
       };
     }
   }
 
   if (!pedido?.itens?.length) return { trocou: false };
 
-  const querPecas = /\b(pecas?\s*avuls(a|as)|pecas?\s*soltas?|so\s*pec|apenas\s*pec|somente\s*pec)\b/.test(t)
-    || /\b(quero|preciso|gostaria|prefiro)\s+(de\s+)?(pecas?\s*avuls|avuls)/.test(t);
-  const querKit = /\b(kit\s*porta|porta\s*completa|porta\s*inteira|porta\s*toda|kit\s*completo)\b/.test(t);
-  const querMotores = /\b(motor(?:es)?|automatizador(?:es)?)\b/.test(t) && !/\bporta\b/.test(t);
+  const querPecas =
+    /\b(pecas?\s*avuls(a|as)|pecas?\s*soltas?|so\s*pec|apenas\s*pec|somente\s*pec)\b/.test(
+      t,
+    ) ||
+    /\b(quero|preciso|gostaria|prefiro)\s+(de\s+)?(pecas?\s*avuls|avuls)/.test(
+      t,
+    );
+  const querKit =
+    /\b(kit\s*porta|porta\s*completa|porta\s*inteira|porta\s*toda|kit\s*completo)\b/.test(
+      t,
+    );
+  const querMotores =
+    /\b(motor(?:es)?|automatizador(?:es)?)\b/.test(t) && !/\bporta\b/.test(t);
 
   const temKitPorta = pedido.itens.some((it) => it.tipo === "kit_porta");
   const temAvulsos = pedido.itens.some((it) => it.tipo !== "kit_porta");
@@ -4032,21 +5577,24 @@ function detectarTrocaContexto(mensagem: string, pedido: CfgPedido): { trocou: b
     return {
       trocou: true,
       novoContexto: "pecas_avulsas",
-      aviso: "Beleza, vamos focar em *peças avulsas* então. 👍\n\nMe diga quais peças e quantidades você precisa (ex: _2 motores AC 300kg, 6m de guia 60_).",
+      aviso:
+        "Beleza, vamos focar em *peças avulsas* então. 👍\n\nMe diga quais peças e quantidades você precisa (ex: _2 motores AC 300kg, 6m de guia 60_).",
     };
   }
   if (querKit && temAvulsos && !temKitPorta) {
     return {
       trocou: true,
       novoContexto: "kit_porta",
-      aviso: "Beleza, vamos montar o *kit porta completo*. 👍\n\nMe passe a medida (largura x altura) e o tipo de lâmina (fechada, transvision ou oblongo).",
+      aviso:
+        "Beleza, vamos montar o *kit porta completo*. 👍\n\nMe passe a medida (largura x altura) e o tipo de lâmina (fechada, transvision ou oblongo).",
     };
   }
   if (querMotores && temKitPorta) {
     return {
       trocou: true,
       novoContexto: "motor",
-      aviso: "Perfeito 👍\n\nVamos focar só em *motores*.\n\nVocê quer *motor avulso*, *motor + testeiras* ou *kit automatizador*?",
+      aviso:
+        "Perfeito 👍\n\nVamos focar só em *motores*.\n\nVocê quer *motor avulso*, *motor + testeiras* ou *kit automatizador*?",
     };
   }
   return { trocou: false };
@@ -4077,7 +5625,13 @@ async function rodarConfigurador(args: {
   } else if (ehMensagemNovoAtendimento(mensagem) && pedido.itens.length > 0) {
     const contextoInicial = detectarContextoAtivoMensagem(mensagem);
     pedido = resetPedidoParaNovoContexto(contextoInicial);
-    await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+    await supabase
+      .from("leo_conversations")
+      .update({
+        pedido: pedido as any,
+        ultima_mensagem_at: new Date().toISOString(),
+      })
+      .eq("id", conversa.id);
   }
 
   // ====== TROCA DE CONTEXTO (substituição, não soma) ======
@@ -4087,10 +5641,21 @@ async function rodarConfigurador(args: {
   const trocaCtx = detectarTrocaContexto(mensagem, pedido);
   if (trocaCtx.trocou) {
     console.log("🔄 troca de contexto:", trocaCtx.novoContexto);
-    pedido = resetPedidoParaNovoContexto((trocaCtx.novoContexto as any) || null);
-    await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+    pedido = resetPedidoParaNovoContexto(
+      (trocaCtx.novoContexto as any) || null,
+    );
+    await supabase
+      .from("leo_conversations")
+      .update({
+        pedido: pedido as any,
+        ultima_mensagem_at: new Date().toISOString(),
+      })
+      .eq("id", conversa.id);
     if (trocaCtx.aviso) {
-      await salvarMensagem(conversa.id, "assistant", trocaCtx.aviso, { configurador: true, troca_contexto: trocaCtx.novoContexto });
+      await salvarMensagem(conversa.id, "assistant", trocaCtx.aviso, {
+        configurador: true,
+        troca_contexto: trocaCtx.novoContexto,
+      });
       await enviarTexto(telefone, trocaCtx.aviso);
       return { pdfEnviado: false, texto: trocaCtx.aviso };
     }
@@ -4099,9 +5664,19 @@ async function rodarConfigurador(args: {
   const saneamentoMotor = limparCapacidadesMotorInvalidas(pedido);
   pedido = saneamentoMotor.pedido;
   if (saneamentoMotor.avisos.length) {
-    await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+    await supabase
+      .from("leo_conversations")
+      .update({
+        pedido: pedido as any,
+        ultima_mensagem_at: new Date().toISOString(),
+      })
+      .eq("id", conversa.id);
     const txt = saneamentoMotor.avisos[0];
-    await salvarMensagem(conversa.id, "assistant", txt, { configurador: true, bloqueio_validacao: true, saneamento_motor: true });
+    await salvarMensagem(conversa.id, "assistant", txt, {
+      configurador: true,
+      bloqueio_validacao: true,
+      saneamento_motor: true,
+    });
     await enviarTexto(telefone, txt);
     return { pdfEnviado: false, texto: txt };
   }
@@ -4110,23 +5685,49 @@ async function rodarConfigurador(args: {
   // Se está aguardando o cliente decidir entre continuar/novo
   if (pedido.aguardando_retomada) {
     const t = mensagem.toLowerCase().trim();
-    const querNovo = /\b(novo|nova|come[çc]ar|iniciar|recome[çc]ar|zerar|do\s*zero|outro|outra|2|op[çc]ao\s*2)\b/.test(t);
-    const querContinuar = /\b(continuar|continua|seguir|de\s*onde\s*paramos|anterior|or[çc]amento\s*anterior|mesmo|1|op[çc]ao\s*1|sim|s)\b/.test(t);
+    const querNovo =
+      /\b(novo|nova|come[çc]ar|iniciar|recome[çc]ar|zerar|do\s*zero|outro|outra|2|op[çc]ao\s*2)\b/.test(
+        t,
+      );
+    const querContinuar =
+      /\b(continuar|continua|seguir|de\s*onde\s*paramos|anterior|or[çc]amento\s*anterior|mesmo|1|op[çc]ao\s*1|sim|s)\b/.test(
+        t,
+      );
     if (querNovo) {
       pedido = { itens: [], total: 0, status: "em_andamento" };
-      await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+      await supabase
+        .from("leo_conversations")
+        .update({
+          pedido: pedido as any,
+          ultima_mensagem_at: new Date().toISOString(),
+        })
+        .eq("id", conversa.id);
       const txt = `Beleza! Vamos começar um novo atendimento. 🚀\n\nPode me dizer o que precisa? Ex: _"3x4 entre paredes AC meia cana branca portinhola VILD"_`;
-      await salvarMensagem(conversa.id, "assistant", txt, { configurador: true, retomada: "novo" });
+      await salvarMensagem(conversa.id, "assistant", txt, {
+        configurador: true,
+        retomada: "novo",
+      });
       await enviarTexto(telefone, txt);
       return { pdfEnviado: false, texto: txt };
     }
     if (querContinuar) {
       delete pedido.aguardando_retomada;
-      await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+      await supabase
+        .from("leo_conversations")
+        .update({
+          pedido: pedido as any,
+          ultima_mensagem_at: new Date().toISOString(),
+        })
+        .eq("id", conversa.id);
       const proxima = cfgProximaPergunta(pedido);
-      const resumo = pedido.itens.length ? cfgResumo(pedido, { mostrarTotal: false }) : "";
+      const resumo = pedido.itens.length
+        ? cfgResumo(pedido, { mostrarTotal: false })
+        : "";
       const txt = `Perfeito, vamos continuar de onde paramos.${resumo ? "\n\n" + resumo : ""}\n\n${proxima ? `👉 ${proxima}` : `👉 Deseja *acrescentar mais algum item* ou posso *gerar o orçamento*?`}`;
-      await salvarMensagem(conversa.id, "assistant", txt, { configurador: true, retomada: "continuar" });
+      await salvarMensagem(conversa.id, "assistant", txt, {
+        configurador: true,
+        retomada: "continuar",
+      });
       await enviarTexto(telefone, txt);
       return { pdfEnviado: false, texto: txt };
     }
@@ -4142,11 +5743,20 @@ async function rodarConfigurador(args: {
   // Saudação + carrinho não vazio → pergunta se quer continuar ou iniciar novo
   if (intencaoConversa === "saudacao" && pedido.itens.length > 0) {
     pedido.aguardando_retomada = true;
-    await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+    await supabase
+      .from("leo_conversations")
+      .update({
+        pedido: pedido as any,
+        ultima_mensagem_at: new Date().toISOString(),
+      })
+      .eq("id", conversa.id);
     const primeiro = (nomeCliente || "").trim().split(/\s+/)[0];
     const ola = primeiro ? `Olá, ${primeiro}! 👋` : `Olá! 👋`;
     const txt = `${ola} Vi que temos um orçamento em andamento por aqui.\n\nDeseja *continuar o orçamento anterior* ou *iniciar um novo atendimento*?`;
-    await salvarMensagem(conversa.id, "assistant", txt, { configurador: true, pergunta_retomada: true });
+    await salvarMensagem(conversa.id, "assistant", txt, {
+      configurador: true,
+      pergunta_retomada: true,
+    });
     await enviarTexto(telefone, txt);
     return { pdfEnviado: false, texto: txt };
   }
@@ -4154,8 +5764,15 @@ async function rodarConfigurador(args: {
   // Pergunta paralela → responde sem mexer no carrinho
   if (intencaoConversa === "pergunta_paralela") {
     const proxima = pedido.itens.length ? cfgProximaPergunta(pedido) : null;
-    const texto = await cfgResponderComLLM({ mensagemCliente: mensagem, pedido, proxima });
-    await salvarMensagem(conversa.id, "assistant", texto, { configurador: true, pergunta_paralela: true });
+    const texto = await cfgResponderComLLM({
+      mensagemCliente: mensagem,
+      pedido,
+      proxima,
+    });
+    await salvarMensagem(conversa.id, "assistant", texto, {
+      configurador: true,
+      pergunta_paralela: true,
+    });
     await enviarTexto(telefone, texto);
     return { pdfEnviado: false, texto };
   }
@@ -4163,33 +5780,56 @@ async function rodarConfigurador(args: {
   // 1) Interpreta intenções técnicas
   let intencoes = await cfgInterpretar(mensagem, pedido);
   // Pós-processamento: faixa parcial misturada com kit_porta NUNCA vira lâmina avulsa.
-  const msgLower = String(mensagem || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const parcialRx = /(\d+(?:[\.,]\d+)?)\s*m(?:t|ts|etros?)?\s+(?:de\s+)?(transvision|oblongo|fechad[ao])/i;
+  const msgLower = String(mensagem || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  const parcialRx =
+    /(\d+(?:[\.,]\d+)?)\s*m(?:t|ts|etros?)?\s+(?:de\s+)?(transvision|oblongo|fechad[ao])/i;
   const temParcial = parcialRx.test(msgLower);
-  const temKit = intencoes.some((i: any) => i?.tipo === "kit_porta")
-    || pedido.itens.some((it) => it.tipo === "kit_porta");
+  const temKit =
+    intencoes.some((i: any) => i?.tipo === "kit_porta") ||
+    pedido.itens.some((it) => it.tipo === "kit_porta");
   if (temParcial && temKit) {
     const parc = msgLower.match(parcialRx);
-    const modeloP = parc && parc[2].startsWith("fechad") ? "fechado" : (parc?.[2] || "");
+    const modeloP =
+      parc && parc[2].startsWith("fechad") ? "fechado" : parc?.[2] || "";
     const altP = parc ? Number(parc[1].replace(",", ".")) : 0;
     // remove qualquer add_item lamina que apareça junto
-    intencoes = intencoes.filter((i: any) => !(i?.acao === "add_item" && i?.tipo === "lamina"));
+    intencoes = intencoes.filter(
+      (i: any) => !(i?.acao === "add_item" && i?.tipo === "lamina"),
+    );
     if (modeloP && altP > 0) {
       intencoes.push({
         acao: "update_item",
         ref: "kit_porta",
-        patch: { lamina: { combinacao: [{ modelo: modeloP, altura_m: altP }] } },
+        patch: {
+          lamina: { combinacao: [{ modelo: modeloP, altura_m: altP }] },
+        },
       });
     }
   }
   const respostaCortePortinhola = inferirRespostaPortinholaCorte(msgLower);
   if (respostaCortePortinhola !== undefined) {
     const kit = pedido.itens.find((it) => it.tipo === "kit_porta");
-    const port = typeof kit?.config?.portinhola === "string" ? kit.config.portinhola.toUpperCase() : "";
-    const pendentePortinholaCorte = (port === "VILD" || port === "VILE") && kit?.config?.portinhola_cortada === undefined;
-    const jaInterpretou = intencoes.some((i: any) => i?.patch?.portinhola_cortada !== undefined || i?.config?.portinhola_cortada !== undefined);
+    const port =
+      typeof kit?.config?.portinhola === "string"
+        ? kit.config.portinhola.toUpperCase()
+        : "";
+    const pendentePortinholaCorte =
+      (port === "VILD" || port === "VILE") &&
+      kit?.config?.portinhola_cortada === undefined;
+    const jaInterpretou = intencoes.some(
+      (i: any) =>
+        i?.patch?.portinhola_cortada !== undefined ||
+        i?.config?.portinhola_cortada !== undefined,
+    );
     if (pendentePortinholaCorte && !jaInterpretou) {
-      intencoes.push({ acao: "update_item", ref: "kit_porta", patch: { portinhola_cortada: respostaCortePortinhola } });
+      intencoes.push({
+        acao: "update_item",
+        ref: "kit_porta",
+        patch: { portinhola_cortada: respostaCortePortinhola },
+      });
     }
   }
   console.log("🧠 cfg intencoes:", JSON.stringify(intencoes));
@@ -4198,62 +5838,93 @@ async function rodarConfigurador(args: {
   const r = cfgAplicar(pedido, intencoes);
   // Só explode/consulta estoque quando: cliente pediu orçamento OU pedido está completo
   const proximaCheck = cfgProximaPergunta(r.pedido);
-  const deveExplodir = r.quer_gerar || (!proximaCheck && r.pedido.itens.length > 0);
+  const deveExplodir =
+    r.quer_gerar || (!proximaCheck && r.pedido.itens.length > 0);
   pedido = await cfgRecalcular(r.pedido, { explodir: deveExplodir });
   const proxima = cfgProximaPergunta(pedido);
   pedido.etapa_ativa = proxima || null;
   pedido.campos_pendentes = proxima ? [proxima] : [];
   pedido.orcamento_incompleto = Boolean(proxima);
-  if (!pedido.contexto_ativo) pedido.contexto_ativo = detectarContextoAtivoMensagem(mensagem) || pedido.contexto_ativo || null;
+  if (!pedido.contexto_ativo)
+    pedido.contexto_ativo =
+      detectarContextoAtivoMensagem(mensagem) || pedido.contexto_ativo || null;
   pedido.intencao_ativa = r.duvidas.length ? "duvida" : "cotacao";
 
   // 3) Persiste
   await supabase
     .from("leo_conversations")
-    .update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() })
+    .update({
+      pedido: pedido as any,
+      ultima_mensagem_at: new Date().toISOString(),
+    })
     .eq("id", conversa.id);
 
   // 4) Geração de orçamento? — só se TODOS os itens estiverem completos
   const faltaAlgo = proxima;
   if (r.quer_gerar && pedido.itens.length && faltaAlgo) {
-    console.warn("🚫 gerar_orcamento bloqueado (configurador) — item incompleto:", faltaAlgo);
+    console.warn(
+      "🚫 gerar_orcamento bloqueado (configurador) — item incompleto:",
+      faltaAlgo,
+    );
     const itemFaltando = pedido.itens.find((it) => cfgItemIncompleto(it));
-    const tipoNome = itemFaltando ? String(itemFaltando.tipo).replace("_", " ") : "item";
+    const tipoNome = itemFaltando
+      ? String(itemFaltando.tipo).replace("_", " ")
+      : "item";
     const txt = `Antes de gerar o orçamento, preciso completar os dados de *${tipoNome}*.\n\n👉 ${faltaAlgo}`;
-    await salvarMensagem(conversa.id, "assistant", txt, { configurador: true, bloqueio_validacao: true });
+    await salvarMensagem(conversa.id, "assistant", txt, {
+      configurador: true,
+      bloqueio_validacao: true,
+    });
     await enviarTexto(telefone, txt);
     return { pdfEnviado: false, texto: txt };
   }
   if (r.quer_gerar && pedido.itens.length) {
-
     const html = cfgGerarHtml(pedido, { nome: nomeCliente, telefone });
     const filename = `orcamento_${Date.now()}.pdf`;
     const pdfBase64 = await gerarPdfPdfShift(html, filename);
     if (pdfBase64) {
-      const caption = `Segue seu orçamento em PDF 📄${pedido.sob_consulta ? "\n_Alguns itens entraram como \"sob consulta\" e serão confirmados pela equipe._" : ""}`;
+      const caption = `Segue seu orçamento em PDF 📄${pedido.sob_consulta ? '\n_Alguns itens entraram como "sob consulta" e serão confirmados pela equipe._' : ""}`;
       await enviarPdfBase64(telefone, pdfBase64, filename, caption);
-      await salvarMensagem(conversa.id, "assistant", caption, { pdf_enviado: true, configurador: true });
+      await salvarMensagem(conversa.id, "assistant", caption, {
+        pdf_enviado: true,
+        configurador: true,
+      });
       // funnel
       try {
         await registrarOrcamentoEAvancarFunil({
-          telefone, nome: nomeCliente,
+          telefone,
+          nome: nomeCliente,
           orcamento: {
             total_geral: pedido.total,
-            itens: pedido.itens.flatMap((it) => it.explosao.map((l) => ({
-              code: l.sku, description: l.descricao, qty: l.qtd, unit: l.und, unit_price: l.valor_unit, subtotal: l.total,
-            }))),
+            itens: pedido.itens.flatMap((it) =>
+              it.explosao.map((l) => ({
+                code: l.sku,
+                description: l.descricao,
+                qty: l.qtd,
+                unit: l.und,
+                unit_price: l.valor_unit,
+                subtotal: l.total,
+              })),
+            ),
             cliente_nome: nomeCliente,
           } as any,
-          pdfBase64, filename,
+          pdfBase64,
+          filename,
         });
-      } catch (e) { console.error("funil cfg erro:", (e as Error).message); }
+      } catch (e) {
+        console.error("funil cfg erro:", (e as Error).message);
+      }
       return { pdfEnviado: true };
     }
   }
 
   // 5) Resposta textual
   const texto = await cfgGerarResposta({
-    mensagemCliente: mensagem, pedido, proxima, duvidas: r.duvidas, primeiraMsg: isNova,
+    mensagemCliente: mensagem,
+    pedido,
+    proxima,
+    duvidas: r.duvidas,
+    primeiraMsg: isNova,
   });
   await salvarMensagem(conversa.id, "assistant", texto, { configurador: true });
   await enviarTexto(telefone, texto);
@@ -4264,7 +5935,8 @@ async function rodarConfigurador(args: {
 // Handler principal
 // ===========================
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   // Permite GET para health check
   if (req.method === "GET") {
@@ -4291,7 +5963,8 @@ Deno.serve(async (req) => {
 
     // Só processa texto por enquanto
     const mediaType = body?.mediaType || "chat";
-    const isAudio = mediaType === "audio" || mediaType === "ptt" || mediaType === "voice";
+    const isAudio =
+      mediaType === "audio" || mediaType === "ptt" || mediaType === "voice";
     if (mediaType !== "chat" && mediaType !== "text" && !isAudio) {
       console.log("⏭️ Ignorado: mediaType=", mediaType);
       return new Response(JSON.stringify({ ignored: "media" }), {
@@ -4309,11 +5982,17 @@ Deno.serve(async (req) => {
 
     // Se for áudio, baixa e transcreve via Whisper antes de seguir
     if (isAudio) {
-      const audioUrl: string = body?.mediaUrl || body?.media?.url || body?.url || "";
+      const audioUrl: string =
+        body?.mediaUrl || body?.media?.url || body?.url || "";
       if (!audioUrl) {
-        console.warn("🎙️ Áudio recebido sem mediaUrl — pedindo texto ao cliente");
+        console.warn(
+          "🎙️ Áudio recebido sem mediaUrl — pedindo texto ao cliente",
+        );
         if (telefone) {
-          await enviarTexto(telefone, "Desculpa, não consegui ouvir esse áudio agora. Pode me mandar por texto, por favor?");
+          await enviarTexto(
+            telefone,
+            "Desculpa, não consegui ouvir esse áudio agora. Pode me mandar por texto, por favor?",
+          );
         }
         return new Response(JSON.stringify({ ignored: "audio_no_url" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -4325,29 +6004,53 @@ Deno.serve(async (req) => {
         if (!audioResp.ok) throw new Error(`download ${audioResp.status}`);
         const audioBuf = await audioResp.arrayBuffer();
         const ct = audioResp.headers.get("content-type") || "audio/ogg";
-        const ext = /mp3/.test(ct) ? "mp3" : /mp4|m4a/.test(ct) ? "m4a" : /wav/.test(ct) ? "wav" : "ogg";
+        const ext = /mp3/.test(ct)
+          ? "mp3"
+          : /mp4|m4a/.test(ct)
+            ? "m4a"
+            : /wav/.test(ct)
+              ? "wav"
+              : "ogg";
         const audioBlob = new Blob([audioBuf], { type: ct });
         const formAudio = new FormData();
         formAudio.append("file", audioBlob, `audio.${ext}`);
         formAudio.append("model", "whisper-1");
         formAudio.append("language", "pt");
-        const trResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
-          body: formAudio,
-        });
+        const trResp = await fetch(
+          "https://api.openai.com/v1/audio/transcriptions",
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+            body: formAudio,
+          },
+        );
         const trJson = await trResp.json();
         if (!trResp.ok) {
-          console.error("🎙️ Whisper erro:", trResp.status, JSON.stringify(trJson).substring(0, 300));
-          if (telefone) await enviarTexto(telefone, "Desculpa, não consegui ouvir esse áudio agora. Pode me mandar por texto?");
-          return new Response(JSON.stringify({ ignored: "audio_transcription_failed" }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          console.error(
+            "🎙️ Whisper erro:",
+            trResp.status,
+            JSON.stringify(trJson).substring(0, 300),
+          );
+          if (telefone)
+            await enviarTexto(
+              telefone,
+              "Desculpa, não consegui ouvir esse áudio agora. Pode me mandar por texto?",
+            );
+          return new Response(
+            JSON.stringify({ ignored: "audio_transcription_failed" }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
         const transcricao = String(trJson?.text || "").trim();
         console.log("🎙️ Transcrição:", transcricao);
         if (!transcricao) {
-          if (telefone) await enviarTexto(telefone, "Não consegui entender o áudio. Pode repetir por texto?");
+          if (telefone)
+            await enviarTexto(
+              telefone,
+              "Não consegui entender o áudio. Pode repetir por texto?",
+            );
           return new Response(JSON.stringify({ ignored: "audio_empty" }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -4355,7 +6058,11 @@ Deno.serve(async (req) => {
         messageBody = transcricao;
       } catch (e) {
         console.error("🎙️ Falha ao processar áudio:", e);
-        if (telefone) await enviarTexto(telefone, "Tive um probleminha pra ouvir o áudio aqui. Pode mandar por texto?");
+        if (telefone)
+          await enviarTexto(
+            telefone,
+            "Tive um probleminha pra ouvir o áudio aqui. Pode mandar por texto?",
+          );
         return new Response(JSON.stringify({ ignored: "audio_error" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -4388,7 +6095,10 @@ Deno.serve(async (req) => {
     }
 
     if (await mensagemForaDeOrdem(conversa.id, body?.timestamp || null)) {
-      console.warn("⏭️ Ignorado: webhook antigo/fora de ordem", { messageId, timestamp: body?.timestamp });
+      console.warn("⏭️ Ignorado: webhook antigo/fora de ordem", {
+        messageId,
+        timestamp: body?.timestamp,
+      });
       return new Response(JSON.stringify({ ignored: "stale_out_of_order" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -4401,17 +6111,39 @@ Deno.serve(async (req) => {
     // pré-popula o estado da conversa para PULAR a pergunta "porta instalada ou revenda".
     // "Pendente Serralheiro" NÃO conta como definido — ainda aguarda aprovação humana.
     {
-      const tipoSalvoLegado = String((clienteExistente as any)?.tipo_cliente || "").trim().toLowerCase();
-      const ehRevendaLegado = tipoSalvoLegado === "revenda" || (tipoSalvoLegado.includes("revenda") && !tipoSalvoLegado.includes("pendente"));
-      const ehInstaladaLegado = tipoSalvoLegado.includes("instalada") || tipoSalvoLegado === "porta_instalada";
-      const tipoNormalizado: "revenda" | "porta_instalada" | null = ehRevendaLegado ? "revenda" : ehInstaladaLegado ? "porta_instalada" : null;
-      if (tipoNormalizado && (!conversa.tipo_cliente || conversa.tipo_cliente === "indefinido")) {
+      const tipoSalvoLegado = String(
+        (clienteExistente as any)?.tipo_cliente || "",
+      )
+        .trim()
+        .toLowerCase();
+      const ehRevendaLegado =
+        tipoSalvoLegado === "revenda" ||
+        (tipoSalvoLegado.includes("revenda") &&
+          !tipoSalvoLegado.includes("pendente"));
+      const ehInstaladaLegado =
+        tipoSalvoLegado.includes("instalada") ||
+        tipoSalvoLegado === "porta_instalada";
+      const tipoNormalizado: "revenda" | "porta_instalada" | null =
+        ehRevendaLegado
+          ? "revenda"
+          : ehInstaladaLegado
+            ? "porta_instalada"
+            : null;
+      if (
+        tipoNormalizado &&
+        (!conversa.tipo_cliente || conversa.tipo_cliente === "indefinido")
+      ) {
         await supabase
           .from("leo_conversations")
-          .update({ tipo_cliente: tipoNormalizado, ultima_mensagem_at: new Date().toISOString() })
+          .update({
+            tipo_cliente: tipoNormalizado,
+            ultima_mensagem_at: new Date().toISOString(),
+          })
           .eq("id", conversa.id);
         (conversa as any).tipo_cliente = tipoNormalizado;
-        console.log(`🎯 tipo_cliente pré-definido a partir do legado: ${tipoNormalizado}`);
+        console.log(
+          `🎯 tipo_cliente pré-definido a partir do legado: ${tipoNormalizado}`,
+        );
       }
     }
 
@@ -4420,15 +6152,24 @@ Deno.serve(async (req) => {
     // A IA agora cumprimenta E responde ao cliente em UMA mensagem coesa.
     if (isNova) {
       // ➕ DASHBOARD: cria lead em "Contato Inicial" assim que a conversa começa
-      await registrarLeadContatoInicial(telefone, conversa.nome_cliente || nome || "");
+      await registrarLeadContatoInicial(
+        telefone,
+        conversa.nome_cliente || nome || "",
+      );
     }
 
-    await salvarMensagem(conversa.id, "user", messageBody, { message_id: messageId || null, raw_timestamp: body?.timestamp || null });
+    await salvarMensagem(conversa.id, "user", messageBody, {
+      message_id: messageId || null,
+      raw_timestamp: body?.timestamp || null,
+    });
     // Captura o timestamp APÓS salvar a própria mensagem, para não contá-la no buffer
     const userMsgSavedAt = new Date().toISOString();
     await supabase
       .from("leo_conversations")
-      .update({ ultima_mensagem_at: new Date().toISOString(), nome_cliente: conversa.nome_cliente || nome || null })
+      .update({
+        ultima_mensagem_at: new Date().toISOString(),
+        nome_cliente: conversa.nome_cliente || nome || null,
+      })
       .eq("id", conversa.id);
 
     // ===== BUFFER DE 10s =====
@@ -4437,35 +6178,59 @@ Deno.serve(async (req) => {
     // Isso evita respostas fragmentadas quando o cliente envia mensagens em sequência.
     const BUFFER_MS = 10000;
     await new Promise((r) => setTimeout(r, BUFFER_MS));
-    const novasMsgs = await contarMensagensUserApos(conversa.id, userMsgSavedAt);
+    const novasMsgs = await contarMensagensUserApos(
+      conversa.id,
+      userMsgSavedAt,
+    );
     if (novasMsgs > 0) {
-      console.log(`⏸️ Buffer: chegaram ${novasMsgs} mensagem(ns) novas em ${BUFFER_MS}ms — abortando este turno (último webhook responde).`);
-      return new Response(JSON.stringify({ ok: true, buffered: true, novas_mensagens: novasMsgs }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.log(
+        `⏸️ Buffer: chegaram ${novasMsgs} mensagem(ns) novas em ${BUFFER_MS}ms — abortando este turno (último webhook responde).`,
+      );
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          buffered: true,
+          novas_mensagens: novasMsgs,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Recarrega a conversa após o buffer (pode ter sido atualizada pelas mensagens em sequência)
     const conversaAtual = await supabase
       .from("leo_conversations")
-      .select("id, nome_cliente, status, tipo_cliente, largura, altura, tipo_perfil, cep, frete")
+      .select(
+        "id, nome_cliente, status, tipo_cliente, largura, altura, tipo_perfil, cep, frete",
+      )
       .eq("id", conversa.id)
       .maybeSingle();
     if (conversaAtual.data?.status === "encerrada") {
-      return new Response(JSON.stringify({ ignored: "encerrada_apos_buffer" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ ignored: "encerrada_apos_buffer" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // 🛑 Cliente com cadastro PENDENTE de aprovação como serralheiro: NÃO segue o fluxo de orçamento.
     {
       if (ehPendenteSerralheiro((clienteExistente as any)?.tipo_cliente)) {
-        const msgPend = montarMensagemPendenteSerralheiro(clienteExistente?.CLI_NOME || conversa.nome_cliente || nome || "");
+        const msgPend = montarMensagemPendenteSerralheiro(
+          clienteExistente?.CLI_NOME || conversa.nome_cliente || nome || "",
+        );
         await enviarTexto(telefone, msgPend);
-        await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true });
-        return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        await salvarMensagem(conversa.id, "assistant", msgPend, {
+          pendente_serralheiro: true,
         });
+        return new Response(
+          JSON.stringify({ ok: true, pendente_serralheiro: true }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
     }
 
@@ -4473,63 +6238,94 @@ Deno.serve(async (req) => {
     // 🚀 ROTEAMENTO: SERRALHEIRO (revenda) → CONFIGURADOR Leo 2.0
     // Consumidor final / porta_instalada continua no fluxo legado
     // ============================================================
-    const tipoClienteAtual = String(conversaAtual.data?.tipo_cliente || conversa.tipo_cliente || "").toLowerCase();
+    const tipoClienteAtual = String(
+      conversaAtual.data?.tipo_cliente || conversa.tipo_cliente || "",
+    ).toLowerCase();
     if (tipoClienteAtual === "revenda") {
       try {
         await rodarConfigurador({
           conversa: conversaAtual.data || conversa,
           telefone,
           mensagem: messageBody,
-          nomeCliente: conversa.nome_cliente || nome || clienteExistente?.CLI_NOME || "",
+          nomeCliente:
+            conversa.nome_cliente || nome || clienteExistente?.CLI_NOME || "",
           isNova,
         });
         return new Response(JSON.stringify({ ok: true, configurador: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch (e: any) {
-        console.error("❌ Configurador falhou — caindo para fluxo legado:", e?.message);
+        console.error(
+          "❌ Configurador falhou — caindo para fluxo legado:",
+          e?.message,
+        );
       }
     }
 
     const estadoAntesAceite = await carregarEstadoConversa(conversa.id);
 
-
     // ➕ DASHBOARD: detecta aceite explícito do orçamento → gera pedido_venda e fecha o lead
     // Só aceita depois que o orçamento já foi enviado nesta conversa. Antes disso,
     // respostas como "fechada" são tratadas como tipo de lâmina, nunca como aceite.
     const historicoParaAceite = await carregarHistorico(conversa.id);
-    const aceiteContextual = estadoProntoParaOrcamento(estadoAntesAceite) &&
-      await pdfJaEnviadoConversa(conversa.id) &&
-      await interpretarAceiteContextual({ texto: messageBody, historico: historicoParaAceite, estado: estadoAntesAceite });
+    const aceiteContextual =
+      estadoProntoParaOrcamento(estadoAntesAceite) &&
+      (await pdfJaEnviadoConversa(conversa.id)) &&
+      (await interpretarAceiteContextual({
+        texto: messageBody,
+        historico: historicoParaAceite,
+        estado: estadoAntesAceite,
+      }));
     if (aceiteContextual) {
       const r = await aceitarOrcamentoEGerarPedido(telefone);
       if (r?.pedido_numero) {
         const msg = `Perfeito! ✅ Orçamento ${r.orcamento_numero} aceito e pedido ${r.pedido_numero} aberto. Em breve um atendente confirma os próximos passos.`;
-        await salvarMensagem(conversa.id, "assistant", msg, { pedido_gerado: r.pedido_numero });
-        await enviarTexto(telefone, msg);
-        return new Response(JSON.stringify({ ok: true, pedido_gerado: r.pedido_numero }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        await salvarMensagem(conversa.id, "assistant", msg, {
+          pedido_gerado: r.pedido_numero,
         });
+        await enviarTexto(telefone, msg);
+        return new Response(
+          JSON.stringify({ ok: true, pedido_gerado: r.pedido_numero }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
     }
 
-    const estadoLocalInferido = await aplicarExtracaoDeterministica(conversa.id, telefone, messageBody);
+    const estadoLocalInferido = await aplicarExtracaoDeterministica(
+      conversa.id,
+      telefone,
+      messageBody,
+    );
 
     // Se esta própria mensagem classificou como REVENDA, o legado acabou de virar
     // "Pendente Serralheiro". Bloqueia imediatamente, antes de perguntar KIT/PEÇAS.
     if (clienteExistente && estadoLocalInferido?.tipo_cliente === "revenda") {
       const clienteAtual = await buscarClientePorTelefone(telefone);
       if (ehPendenteSerralheiro((clienteAtual as any)?.tipo_cliente)) {
-        const msgPend = montarMensagemPendenteSerralheiro((clienteAtual as any)?.CLI_NOME || conversa.nome_cliente || nome || "");
+        const msgPend = montarMensagemPendenteSerralheiro(
+          (clienteAtual as any)?.CLI_NOME ||
+            conversa.nome_cliente ||
+            nome ||
+            "",
+        );
         await enviarTexto(telefone, msgPend);
-        await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true, bloqueio_pos_inferencia: true });
-        return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        await salvarMensagem(conversa.id, "assistant", msgPend, {
+          pendente_serralheiro: true,
+          bloqueio_pos_inferencia: true,
         });
+        return new Response(
+          JSON.stringify({ ok: true, pendente_serralheiro: true }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
     }
 
-    const estadoAposExtracao = (await carregarEstadoConversa(conversa.id)) || estadoLocalInferido;
+    const estadoAposExtracao =
+      (await carregarEstadoConversa(conversa.id)) || estadoLocalInferido;
     // Se o cliente NÃO está cadastrado no banco legado, NÃO dispara o fluxo determinístico
     // (tipo/medidas/perfil/etc) — deixa a IA conduzir o Passo 1 (cadastro: nome, e-mail, CNPJ/CPF) primeiro.
     // ⚠️ BYPASS DETERMINÍSTICO REMOVIDO: enviar uma pergunta hardcoded ignora COMPLETAMENTE
@@ -4543,15 +6339,33 @@ Deno.serve(async (req) => {
     if (clienteExistente && estadoProntoParaOrcamento(estadoAposExtracao)) {
       const jaEnviouPdf = await pdfJaEnviadoConversa(conversa.id);
       // CONTEXTO (não palavras-chave): se as medidas/perfil/cep mudaram desde o último PDF, é OUTRO orçamento.
-      const medidasMudaram = jaEnviouPdf ? await medidasMudaramDesdeUltimoPdf(conversa.id) : true;
+      const medidasMudaram = jaEnviouPdf
+        ? await medidasMudaramDesdeUltimoPdf(conversa.id)
+        : true;
 
       if (jaEnviouPdf && !medidasMudaram) {
-        console.log("💬 PDF já enviado e medidas IGUAIS — IA responde sem gerar duplicado");
+        console.log(
+          "💬 PDF já enviado e medidas IGUAIS — IA responde sem gerar duplicado",
+        );
       } else {
-        const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
+        const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(
+          conversa.id,
+          telefone,
+          conversa.nome_cliente || nome || "",
+        );
         if (resultadoPdf.pdf_enviado) {
-          const snapDet = await supabase.from("leo_conversations").select("tipo_cliente, subtipo_revenda, largura, altura, tipo_perfil, cep, adicionais, pecas_avulsas").eq("id", conversa.id).maybeSingle();
-          await salvarMensagem(conversa.id, "assistant", resultadoPdf.caption, { pdf_enviado: true, deterministic_flow: true, snapshot: snapDet.data || null });
+          const snapDet = await supabase
+            .from("leo_conversations")
+            .select(
+              "tipo_cliente, subtipo_revenda, largura, altura, tipo_perfil, cep, adicionais, pecas_avulsas",
+            )
+            .eq("id", conversa.id)
+            .maybeSingle();
+          await salvarMensagem(conversa.id, "assistant", resultadoPdf.caption, {
+            pdf_enviado: true,
+            deterministic_flow: true,
+            snapshot: snapDet.data || null,
+          });
           if (resultadoPdf.pdfBase64 && resultadoPdf.orcamento) {
             await registrarOrcamentoEAvancarFunil({
               telefone,
@@ -4561,27 +6375,41 @@ Deno.serve(async (req) => {
               filename: resultadoPdf.filename || `orcamento_${Date.now()}.pdf`,
             });
           }
-          return new Response(JSON.stringify({ ok: true, deterministic_pdf: true, pdf_enviado: true }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              deterministic_pdf: true,
+              pdf_enviado: true,
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         } else {
           // ❌ NÃO devolve mensagem hardcoded e NÃO faz return.
           // Em vez disso injeta o erro como contexto pro LLM responder de forma natural,
           // levando em conta o que o cliente acabou de dizer (pergunta, saudação, ajuste de peça, etc.)
-          const faltando = Array.isArray(resultadoPdf.faltando) ? resultadoPdf.faltando : [];
+          const faltando = Array.isArray(resultadoPdf.faltando)
+            ? resultadoPdf.faltando
+            : [];
           if (faltando.includes("preco_estoque") && resultadoPdf.error) {
             avisoFalhaPdf = `[FALHA INTERNA AO GERAR PDF — não repita literalmente este texto] ${resultadoPdf.error}. Antes de qualquer coisa, RESPONDA o que o cliente acabou de dizer na última mensagem (saudação, pergunta, etc.). Em seguida, de forma natural e em UMA mensagem só, peça que ele confirme o nome exato/referência/medida da peça que ficou sem preço para você buscar de novo. NÃO chame gerar_orcamento agora.`;
           } else {
             avisoFalhaPdf = `[FALHA INTERNA AO GERAR PDF — não repita literalmente este texto] ${resultadoPdf.error || "erro técnico"}. Antes de qualquer coisa, RESPONDA o que o cliente acabou de dizer. Depois, peça desculpas brevemente e diga que vai verificar e retornar. NÃO chame gerar_orcamento agora.`;
           }
-          console.log("⚠️ PDF determinístico falhou — delegando para o LLM responder. Motivo:", resultadoPdf.error);
+          console.log(
+            "⚠️ PDF determinístico falhou — delegando para o LLM responder. Motivo:",
+            resultadoPdf.error,
+          );
         }
       }
     }
 
     const historicoDb = await carregarHistorico(conversa.id);
     const historicoTemMensagemAtual = historicoDb.some(
-      (m) => m.role === "user" && m.content.trim().toLowerCase() === messageBody.trim().toLowerCase()
+      (m) =>
+        m.role === "user" &&
+        m.content.trim().toLowerCase() === messageBody.trim().toLowerCase(),
     );
     const historico = historicoTemMensagemAtual
       ? historicoDb
@@ -4594,7 +6422,8 @@ Deno.serve(async (req) => {
       const tipoNorm = tipoSalvo ? String(tipoSalvo).trim().toLowerCase() : "";
       const ehPendente = tipoNorm.includes("pendente");
       const ehRevenda = !ehPendente && tipoNorm.includes("revenda");
-      const ehInstalada = tipoNorm.includes("instalada") || tipoNorm === "porta_instalada";
+      const ehInstalada =
+        tipoNorm.includes("instalada") || tipoNorm === "porta_instalada";
       let blocoTipo = "";
       if (ehRevenda) {
         blocoTipo = ` Esse cliente já é classificado como **REVENDA** no nosso sistema. NÃO pergunte se é cliente final ou serralheiro — siga DIRETO o fluxo de REVENDA (Passo 2.1: KIT ou PEÇAS AVULSAS).`;
@@ -4612,12 +6441,18 @@ Deno.serve(async (req) => {
     const montarEstado = async (): Promise<string> => {
       const { data: c } = await supabase
         .from("leo_conversations")
-        .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
+        .select(
+          "tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega",
+        )
         .eq("id", conversa.id)
         .maybeSingle();
-      const v = (x: any) => (x === null || x === undefined || x === "" || x === "indefinido") ? "PENDENTE" : String(x);
+      const v = (x: any) =>
+        x === null || x === undefined || x === "" || x === "indefinido"
+          ? "PENDENTE"
+          : String(x);
       const tc = v(c?.tipo_cliente);
-      const tipoValido = c?.tipo_cliente === "revenda" || c?.tipo_cliente === "porta_instalada";
+      const tipoValido =
+        c?.tipo_cliente === "revenda" || c?.tipo_cliente === "porta_instalada";
       const ehPecas = c?.subtipo_revenda === "pecas";
       const ehPorta = c?.tipo_cliente === "porta_instalada";
 
@@ -4628,11 +6463,17 @@ Deno.serve(async (req) => {
       }
 
       if (ehPecas) {
-        const pecas = Array.isArray((c as any)?.pecas_avulsas) ? (c as any).pecas_avulsas : [];
-        linhas.push(`pecas_avulsas=${pecas.length === 0 ? "PENDENTE" : `${pecas.length} item(ns)`}`);
+        const pecas = Array.isArray((c as any)?.pecas_avulsas)
+          ? (c as any).pecas_avulsas
+          : [];
+        linhas.push(
+          `pecas_avulsas=${pecas.length === 0 ? "PENDENTE" : `${pecas.length} item(ns)`}`,
+        );
       } else if (c?.subtipo_revenda === "kit") {
         const pinturaStr = c?.pintura_perguntado
-          ? (c?.quer_pintura ? `cor=${c?.tipo_pintura || "PENDENTE_COR"}` : "dispensou")
+          ? c?.quer_pintura
+            ? `cor=${c?.tipo_pintura || "PENDENTE_COR"}`
+            : "dispensou"
           : "PENDENTE";
         const adicionaisStr = c?.adicionais_perguntado
           ? `portinhola=${Boolean((c?.adicionais as any)?.portinhola)}, alcapao=${Boolean((c?.adicionais as any)?.alcapao)}`
@@ -4648,29 +6489,41 @@ Deno.serve(async (req) => {
 
       if (ehPorta) {
         const entregaStr = c?.entrega_perguntado
-          ? (c?.quer_entrega ? `quer_entrega=true (CEP=${v(c?.cep)})` : "quer_entrega=false (cliente vai BUSCAR — sem frete)")
+          ? c?.quer_entrega
+            ? `quer_entrega=true (CEP=${v(c?.cep)})`
+            : "quer_entrega=false (cliente vai BUSCAR — sem frete)"
           : "PENDENTE";
         linhas.push(`entrega=${entregaStr}`);
       }
 
-      const pendentes = linhas.filter((l) => l.endsWith("=PENDENTE")).map((l) => l.split("=")[0]);
+      const pendentes = linhas
+        .filter((l) => l.endsWith("=PENDENTE"))
+        .map((l) => l.split("=")[0]);
       const proximo = pendentes[0] || "TODOS_OK_CHAMAR_GERAR_ORCAMENTO";
-      const proximoTxt = proximo === "TODOS_OK_CHAMAR_GERAR_ORCAMENTO"
-        ? "TODOS os dados prontos — quando fizer sentido na conversa, chame gerar_orcamento (sem argumentos)."
-        : `próximo dado pendente para coletar (quando a conversa permitir): "${proximo}".`;
+      const proximoTxt =
+        proximo === "TODOS_OK_CHAMAR_GERAR_ORCAMENTO"
+          ? "TODOS os dados prontos — quando fizer sentido na conversa, chame gerar_orcamento (sem argumentos)."
+          : `próximo dado pendente para coletar (quando a conversa permitir): "${proximo}".`;
       return `[ESTADO ATUAL DA CONVERSA — fonte de verdade, USO INTERNO]\n${linhas.join("\n")}\nDADO_PENDENTE: ${proximoTxt}\n\n⚠️ LEMBRETE OBRIGATÓRIO: Antes de pedir o próximo dado, RESPONDA primeiro o que o cliente disse na última mensagem. Se ele fez uma pergunta (ex: "onde vocês ficam?", "vocês trabalham com madeira?", "qual o site?"), RESPONDA a pergunta com a informação real (use o bloco DADOS DA EMPRESA do prompt) e SÓ DEPOIS retome o pedido do dado pendente. NUNCA repita uma pergunta do fluxo ignorando o que o cliente acabou de dizer.`;
     };
 
-    console.log(`🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"}`);
+    console.log(
+      `🧭 Histórico: ${historico.length} msgs | Cliente: ${clienteExistente ? "cadastrado" : "novo"}`,
+    );
 
     // Catálogo do estoque (fonte de verdade pra responder "vocês têm X?")
     const { data: estoqueRows } = await dashboardDb
       .from("estoque")
-      .select("produto_nome, codigo_sku, preco_venda, unidade_medida, quantidade")
+      .select(
+        "produto_nome, codigo_sku, preco_venda, unidade_medida, quantidade",
+      )
       .gt("quantidade", 0)
       .order("produto_nome");
     const catalogoTxt = (estoqueRows || [])
-      .map((r: any) => `- ${r.produto_nome} | R$ ${Number(r.preco_venda).toFixed(2)}/${r.unidade_medida || "UN"} | SKU ${r.codigo_sku}`)
+      .map(
+        (r: any) =>
+          `- ${r.produto_nome} | R$ ${Number(r.preco_venda).toFixed(2)}/${r.unidade_medida || "UN"} | SKU ${r.codigo_sku}`,
+      )
       .join("\n");
     const catalogoMsg = catalogoTxt
       ? `[CATÁLOGO DE ESTOQUE — fonte de verdade]\nResponda perguntas do tipo "vocês têm X?" / "qual o preço de Y?" SEMPRE consultando esta lista. Se o item solicitado pelo cliente NÃO estiver aqui (mesmo que parecido), diga claramente que não temos no estoque atual e ofereça a alternativa mais próxima da lista. NUNCA invente um produto que não esteja listado abaixo.\n\n${catalogoTxt}`
@@ -4687,7 +6540,8 @@ Deno.serve(async (req) => {
       messages.push({ role: "system", content: avisoFalhaPdf });
     }
     if (isNova) {
-      const primeiroNome = (clienteExistente?.CLI_NOME || "").trim().split(/\s+/)[0] || "";
+      const primeiroNome =
+        (clienteExistente?.CLI_NOME || "").trim().split(/\s+/)[0] || "";
       messages.push({
         role: "system",
         content: `[PRIMEIRA MENSAGEM DESTA SESSÃO] Esta é a primeira mensagem de uma nova sessão${primeiroNome ? ` com ${primeiroNome}` : ""}. Em UMA ÚNICA mensagem coesa: (1) cumprimente naturalmente ("Oi${primeiroNome ? ` ${primeiroNome}` : ""}! ${saudacaoHorario()} 😊" ou similar — varie), (2) RESPONDA/RECONHEÇA o que o cliente acabou de dizer (mesmo que seja "oi", "maravilha então", uma pergunta, qualquer coisa — NUNCA ignore), e (3) só DEPOIS, se fizer sentido, conduza pro próximo passo. NÃO mande 2 mensagens separadas (saudação + pergunta). NÃO use "Olá, sou o Leo da Eletroportas" formal — fale como humano no WhatsApp.`,
@@ -4696,7 +6550,8 @@ Deno.serve(async (req) => {
     if (await pdfJaEnviadoConversa(conversa.id)) {
       messages.push({
         role: "system",
-        content: "O orçamento em PDF já foi enviado nesta conversa. Responda normalmente qualquer dúvida do cliente e oriente próximos passos. NÃO chame gerar_orcamento, a menos que o cliente peça explicitamente um novo orçamento, alteração de medida, troca de lâmina ou atualização de dados.",
+        content:
+          "O orçamento em PDF já foi enviado nesta conversa. Responda normalmente qualquer dúvida do cliente e oriente próximos passos. NÃO chame gerar_orcamento, a menos que o cliente peça explicitamente um novo orçamento, alteração de medida, troca de lâmina ou atualização de dados.",
       });
     }
     let respostaFinal = "";
@@ -4715,10 +6570,13 @@ Deno.serve(async (req) => {
         respostaFinal = (choice.content || "").trim();
         if (!respostaFinal) {
           // IA retornou vazio — força uma nova chamada pedindo resposta textual
-          console.warn("⚠️ IA retornou content vazio sem tool_calls — solicitando retry");
+          console.warn(
+            "⚠️ IA retornou content vazio sem tool_calls — solicitando retry",
+          );
           messages.push({
             role: "system",
-            content: "Sua última resposta veio vazia. Responda agora ao cliente em UMA mensagem curta em português, seguindo o fluxo. NÃO use tool_calls nesta resposta.",
+            content:
+              "Sua última resposta veio vazia. Responda agora ao cliente em UMA mensagem curta em português, seguindo o fluxo. NÃO use tool_calls nesta resposta.",
           });
           const retry = await chamarIA(messages);
           respostaFinal = (retry.choices?.[0]?.message?.content || "").trim();
@@ -4728,10 +6586,13 @@ Deno.serve(async (req) => {
 
       // Se na última iteração permitida ainda houver tool_calls, abortamos e forçamos resposta textual
       if (i === MAX_ITER - 1) {
-        console.warn("⚠️ Loop atingiu MAX_ITER ainda chamando tools — forçando resposta textual");
+        console.warn(
+          "⚠️ Loop atingiu MAX_ITER ainda chamando tools — forçando resposta textual",
+        );
         messages.push({
           role: "system",
-          content: "PARE de chamar ferramentas. Responda ao cliente AGORA em UMA mensagem curta em português, perguntando UMA pergunta sobre o próximo dado que falta no fluxo (medidas → lâmina → CEP). NÃO use tool_calls.",
+          content:
+            "PARE de chamar ferramentas. Responda ao cliente AGORA em UMA mensagem curta em português, perguntando UMA pergunta sobre o próximo dado que falta no fluxo (medidas → lâmina → CEP). NÃO use tool_calls.",
         });
         const forced = await chamarIA(messages);
         respostaFinal = (forced.choices?.[0]?.message?.content || "").trim();
@@ -4744,25 +6605,37 @@ Deno.serve(async (req) => {
       for (const tc of toolCalls) {
         const fnName = tc.function?.name;
         let args: any = {};
-        try { args = JSON.parse(tc.function?.arguments || "{}"); } catch {}
+        try {
+          args = JSON.parse(tc.function?.arguments || "{}");
+        } catch {}
 
         let toolResult: any = {};
 
         if (fnName === "gerar_orcamento") {
           const jaExistePdf = await pdfJaEnviadoConversa(conversa.id);
           // Bloqueio CONTEXTUAL: só bloqueia se PDF já existe E as medidas/perfil/cep continuam IGUAIS.
-          const medidasMudaramTool = jaExistePdf ? await medidasMudaramDesdeUltimoPdf(conversa.id) : true;
+          const medidasMudaramTool = jaExistePdf
+            ? await medidasMudaramDesdeUltimoPdf(conversa.id)
+            : true;
           if (jaExistePdf && !medidasMudaramTool) {
-            console.warn("🚫 gerar_orcamento bloqueado — PDF já enviado e medidas inalteradas");
+            console.warn(
+              "🚫 gerar_orcamento bloqueado — PDF já enviado e medidas inalteradas",
+            );
             toolResult = {
               ok: false,
               erro: "PDF_JA_ENVIADO_DUVIDA_GERAL",
-              instrucao: "O PDF já foi enviado com estes mesmos dados. Responda em texto, de forma útil e consultiva. NÃO chame gerar_orcamento e NÃO reenvie PDF.",
+              instrucao:
+                "O PDF já foi enviado com estes mesmos dados. Responda em texto, de forma útil e consultiva. NÃO chame gerar_orcamento e NÃO reenvie PDF.",
             };
-            messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
+            messages.push({
+              role: "tool",
+              tool_call_id: tc.id,
+              content: JSON.stringify(toolResult),
+            });
             messages.push({
               role: "system",
-              content: "STOP. Responda a dúvida do cliente em texto agora. Se a dúvida for prazo de entrega/instalação, explique que depende da confirmação do pedido, agenda de produção/instalação e disponibilidade, e que um atendente confirma o prazo exato após aprovação. NÃO gere PDF.",
+              content:
+                "STOP. Responda a dúvida do cliente em texto agora. Se a dúvida for prazo de entrega/instalação, explique que depende da confirmação do pedido, agenda de produção/instalação e disponibilidade, e que um atendente confirma o prazo exato após aprovação. NÃO gere PDF.",
             });
             continue;
           }
@@ -4770,32 +6643,48 @@ Deno.serve(async (req) => {
           // ===== LÊ ESTADO DO BANCO (fonte de verdade) =====
           const { data: estado } = await supabase
             .from("leo_conversations")
-            .select("tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega")
+            .select(
+              "tipo_cliente, subtipo_revenda, pecas_avulsas, largura, altura, tipo_perfil, cep, frete, endereco_instalacao, adicionais, adicionais_perguntado, pintura_perguntado, quer_pintura, tipo_pintura, entrega_perguntado, quer_entrega",
+            )
             .eq("id", conversa.id)
             .maybeSingle();
 
-          const tcRawV = String(estado?.tipo_cliente || "").toLowerCase().trim();
+          const tcRawV = String(estado?.tipo_cliente || "")
+            .toLowerCase()
+            .trim();
           const tcValid = tcRawV === "porta_instalada" || tcRawV === "revenda";
           const ehPecasAvulsas = estado?.subtipo_revenda === "pecas";
 
           const faltando: string[] = [];
           if (!tcValid) faltando.push("tipo_cliente");
-          if (tcValid && !estado?.subtipo_revenda) faltando.push("subtipo_revenda");
+          if (tcValid && !estado?.subtipo_revenda)
+            faltando.push("subtipo_revenda");
 
           if (ehPecasAvulsas) {
-            const pecas = Array.isArray((estado as any)?.pecas_avulsas) ? (estado as any).pecas_avulsas : [];
+            const pecas = Array.isArray((estado as any)?.pecas_avulsas)
+              ? (estado as any).pecas_avulsas
+              : [];
             if (pecas.length === 0) faltando.push("pecas_avulsas");
           } else if (estado?.subtipo_revenda === "kit") {
             const larguraNum = Number(estado?.largura);
             const alturaNum = Number(estado?.altura);
             const perfilRaw = String(estado?.tipo_perfil || "").toLowerCase();
-            const perfilValid = ["fechado", "transvision", "oblongo"].includes(perfilRaw);
+            const perfilValid = ["fechado", "transvision", "oblongo"].includes(
+              perfilRaw,
+            );
 
-            if (!Number.isFinite(larguraNum) || larguraNum <= 0 || larguraNum > 20) faltando.push("largura");
-            if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20) faltando.push("altura");
+            if (
+              !Number.isFinite(larguraNum) ||
+              larguraNum <= 0 ||
+              larguraNum > 20
+            )
+              faltando.push("largura");
+            if (!Number.isFinite(alturaNum) || alturaNum <= 0 || alturaNum > 20)
+              faltando.push("altura");
             if (!perfilValid) faltando.push("tipo_perfil");
             if (!estado?.pintura_perguntado) faltando.push("pintura");
-            if (estado?.quer_pintura && !estado?.tipo_pintura) faltando.push("tipo_pintura");
+            if (estado?.quer_pintura && !estado?.tipo_pintura)
+              faltando.push("tipo_pintura");
             if (!estado?.adicionais_perguntado) faltando.push("adicionais");
           }
 
@@ -4806,25 +6695,29 @@ Deno.serve(async (req) => {
 
           if (faltando.length > 0) {
             gerarOrcamentoFalhas++;
-            console.warn(`🚫 gerar_orcamento BLOQUEADO (tentativa ${gerarOrcamentoFalhas}) — [ESTADO] faltando:`, faltando.join(", "));
+            console.warn(
+              `🚫 gerar_orcamento BLOQUEADO (tentativa ${gerarOrcamentoFalhas}) — [ESTADO] faltando:`,
+              faltando.join(", "),
+            );
             const proximo = faltando[0];
-            const proximaPergunta = proximo === "entrega"
-              ? "Pergunte AGORA: 'Você prefere que a gente **entregue** no local, ou prefere **buscar/retirar** com a gente?' Quando responder, chame definir_entrega. NÃO chame nenhuma outra tool."
-              : proximo === "cep"
-                ? "Pergunte AGORA: 'Qual o **CEP do local da entrega**?' Quando responder, chame calcular_frete_cep. NÃO chame nenhuma outra tool."
-                : proximo === "adicionais"
-                  ? "Pergunte AGORA, de forma natural, se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando ele responder, chame definir_adicionais. NÃO chame gerar_orcamento agora."
-                  : (proximo === "largura" || proximo === "altura")
-                    ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
-                    : proximo === "tipo_perfil"
-                      ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
-                      : proximo === "tipo_cliente"
-                        ? "Pergunte AGORA, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'. NÃO chame nenhuma tool."
-                        : proximo === "subtipo_revenda"
-                          ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
-                        : proximo === "pecas_avulsas"
-                          ? "Se o cliente AINDA NÃO listou peças, pergunte AGORA quais peças e quantidades. Se ELE JÁ listou (ex: '5 motores 200kg'), chame definir_pecas_avulsas IMEDIATAMENTE com o array de itens — sem pedir confirmação extra. NÃO chame gerar_orcamento agora."
-                            : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
+            const proximaPergunta =
+              proximo === "entrega"
+                ? "Pergunte AGORA: 'Você prefere que a gente **entregue** no local, ou prefere **buscar/retirar** com a gente?' Quando responder, chame definir_entrega. NÃO chame nenhuma outra tool."
+                : proximo === "cep"
+                  ? "Pergunte AGORA: 'Qual o **CEP do local da entrega**?' Quando responder, chame calcular_frete_cep. NÃO chame nenhuma outra tool."
+                  : proximo === "adicionais"
+                    ? "Pergunte AGORA, de forma natural, se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando ele responder, chame definir_adicionais. NÃO chame gerar_orcamento agora."
+                    : proximo === "largura" || proximo === "altura"
+                      ? "Pergunte AGORA a largura e altura da porta em metros (ex: 4x3). NÃO chame nenhuma tool."
+                      : proximo === "tipo_perfil"
+                        ? "Pergunte AGORA o tipo de lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO). NÃO chame nenhuma tool."
+                        : proximo === "tipo_cliente"
+                          ? "Pergunte AGORA, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'. NÃO chame nenhuma tool."
+                          : proximo === "subtipo_revenda"
+                            ? "Pergunte AGORA se o cliente quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS. Quando responder, chame definir_subtipo_revenda."
+                            : proximo === "pecas_avulsas"
+                              ? "Se o cliente AINDA NÃO listou peças, pergunte AGORA quais peças e quantidades. Se ELE JÁ listou (ex: '5 motores 200kg'), chame definir_pecas_avulsas IMEDIATAMENTE com o array de itens — sem pedir confirmação extra. NÃO chame gerar_orcamento agora."
+                              : "Pergunte ao cliente o próximo dado faltante. NÃO chame nenhuma tool.";
             toolResult = {
               ok: false,
               erro: "DADOS_INSUFICIENTES",
@@ -4832,7 +6725,11 @@ Deno.serve(async (req) => {
               estado_atual: estado,
               instrucao: `O [ESTADO] no banco mostra que falta: ${faltando.join(", ")}. ${proximaPergunta}`,
             };
-            messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
+            messages.push({
+              role: "tool",
+              tool_call_id: tc.id,
+              content: JSON.stringify(toolResult),
+            });
             messages.push({
               role: "system",
               content: `STOP. Tentativa de gerar_orcamento bloqueada — falta no [ESTADO]: ${faltando.join(", ")}. Sua PRÓXIMA resposta DEVE ser texto puro perguntando "${proximo}". NÃO chame gerar_orcamento de novo.`,
@@ -4841,29 +6738,48 @@ Deno.serve(async (req) => {
           }
 
           try {
-            const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(conversa.id, telefone, conversa.nome_cliente || nome || "");
+            const resultadoPdf = await gerarEEnviarOrcamentoDeterministico(
+              conversa.id,
+              telefone,
+              conversa.nome_cliente || nome || "",
+            );
             if (resultadoPdf.pdf_enviado && resultadoPdf.orcamento) {
               pdfEnviadoNesteTurno = true;
-              pdfCaptionEnviada = resultadoPdf.caption || "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
+              pdfCaptionEnviada =
+                resultadoPdf.caption ||
+                "Pronto! Segue seu orçamento em PDF, dá uma olhada por favor. 📄";
               await registrarOrcamentoEAvancarFunil({
                 telefone,
                 nome: conversa.nome_cliente || nome || "",
                 orcamento: resultadoPdf.orcamento,
                 pdfBase64: resultadoPdf.pdfBase64!,
-                filename: resultadoPdf.filename || `orcamento_${Date.now()}.pdf`,
-                observacoes_tecnicas: typeof args?.observacoes_tecnicas === "string" ? args.observacoes_tecnicas : undefined,
+                filename:
+                  resultadoPdf.filename || `orcamento_${Date.now()}.pdf`,
+                observacoes_tecnicas:
+                  typeof args?.observacoes_tecnicas === "string"
+                    ? args.observacoes_tecnicas
+                    : undefined,
               });
               toolResult = {
                 ok: true,
                 pdf_enviado: true,
-                instrucao: "PDF enviado. NÃO envie nova mensagem. NÃO mencione valores.",
+                instrucao:
+                  "PDF enviado. NÃO envie nova mensagem. NÃO mencione valores.",
               };
             } else {
-              toolResult = { ok: false, error: resultadoPdf.error || "Falha ao gerar PDF — informe ao cliente que enviaremos em breve." };
+              toolResult = {
+                ok: false,
+                error:
+                  resultadoPdf.error ||
+                  "Falha ao gerar PDF — informe ao cliente que enviaremos em breve.",
+              };
             }
           } catch (e: any) {
             console.error("❌ Erro em gerar_orcamento:", e?.message, e);
-            toolResult = { ok: false, error: e?.message || "erro ao gerar orçamento" };
+            toolResult = {
+              ok: false,
+              error: e?.message || "erro ao gerar orçamento",
+            };
           }
         } else if (fnName === "cadastrar_cliente") {
           const r = await cadastrarCliente({
@@ -4880,16 +6796,28 @@ Deno.serve(async (req) => {
               .eq("id", conversa.id);
             const cliNovo = await buscarClientePorTelefone(telefone);
             if (ehPendenteSerralheiro((cliNovo as any)?.tipo_cliente)) {
-              const msgPend = montarMensagemPendenteSerralheiro((cliNovo as any)?.CLI_NOME || args.nome || nome || "");
+              const msgPend = montarMensagemPendenteSerralheiro(
+                (cliNovo as any)?.CLI_NOME || args.nome || nome || "",
+              );
               await enviarTexto(telefone, msgPend);
-              await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true, cadastro_novo: true });
-              return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              await salvarMensagem(conversa.id, "assistant", msgPend, {
+                pendente_serralheiro: true,
+                cadastro_novo: true,
               });
+              return new Response(
+                JSON.stringify({ ok: true, pendente_serralheiro: true }),
+                {
+                  headers: {
+                    ...corsHeaders,
+                    "Content-Type": "application/json",
+                  },
+                },
+              );
             }
             toolResult = {
               ok: true,
-              instrucao: "Cliente cadastrado. Agora pergunte, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'.",
+              instrucao:
+                "Cliente cadastrado. Agora pergunte, de forma natural: 'Antes de seguirmos, me diga: qual delas melhor representa você? 🔹 Sou cliente final – desejo instalar a porta no meu estabelecimento 🔹 Sou serralheiro – vou revender para meus clientes'.",
             };
           } else {
             toolResult = { ok: false, error: r.error };
@@ -4897,29 +6825,55 @@ Deno.serve(async (req) => {
         } else if (fnName === "definir_medidas") {
           const lg = Number(args.largura);
           const al = Number(args.altura);
-          if (!Number.isFinite(lg) || lg <= 0 || lg > 20 || !Number.isFinite(al) || al <= 0 || al > 20) {
-            toolResult = { ok: false, error: "Medidas inválidas. Pergunte de novo ao cliente em metros (ex: 4x3)." };
+          if (
+            !Number.isFinite(lg) ||
+            lg <= 0 ||
+            lg > 20 ||
+            !Number.isFinite(al) ||
+            al <= 0 ||
+            al > 20
+          ) {
+            toolResult = {
+              ok: false,
+              error:
+                "Medidas inválidas. Pergunte de novo ao cliente em metros (ex: 4x3).",
+            };
           } else {
             await supabase
               .from("leo_conversations")
-              .update({ largura: lg, altura: al, ultima_mensagem_at: new Date().toISOString() })
+              .update({
+                largura: lg,
+                altura: al,
+                ultima_mensagem_at: new Date().toISOString(),
+              })
               .eq("id", conversa.id);
             toolResult = {
               ok: true,
               largura: lg,
               altura: al,
-              instrucao: "Medidas gravadas no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 4 perguntando o tipo da lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO).",
+              instrucao:
+                "Medidas gravadas no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 4 perguntando o tipo da lâmina (1 FECHADA / 2 TRANSVISION / 3 OBLONGO).",
             };
           }
         } else if (fnName === "definir_lamina") {
           const p = String(args.tipo_perfil || "").toLowerCase();
-          const pNorm = p === "fechado" || p === "transvision" || p === "oblongo" ? p : null;
+          const pNorm =
+            p === "fechado" || p === "transvision" || p === "oblongo"
+              ? p
+              : null;
           if (!pNorm) {
-            toolResult = { ok: false, error: "tipo_perfil inválido. Use fechado, transvision ou oblongo." };
+            toolResult = {
+              ok: false,
+              error:
+                "tipo_perfil inválido. Use fechado, transvision ou oblongo.",
+            };
           } else {
             await supabase
               .from("leo_conversations")
-              .update({ tipo_perfil: pNorm, ultima_mensagem_at: new Date().toISOString() })
+              .update({
+                tipo_perfil: pNorm,
+                ultima_mensagem_at: new Date().toISOString(),
+              })
               .eq("id", conversa.id);
             // Lê o tipo_cliente para decidir o próximo passo
             const { data: cv } = await supabase
@@ -4927,17 +6881,26 @@ Deno.serve(async (req) => {
               .select("tipo_cliente")
               .eq("id", conversa.id)
               .maybeSingle();
-            const proxima = "Lâmina gravada. NÃO confirme. Siga DIRETO ao Passo 5: pergunte de forma natural se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando responder, chame definir_adicionais.";
+            const proxima =
+              "Lâmina gravada. NÃO confirme. Siga DIRETO ao Passo 5: pergunte de forma natural se o cliente quer adicionar Portinhola, Alçapão, os dois, ou nenhum. Quando responder, chame definir_adicionais.";
             toolResult = { ok: true, tipo_perfil: pNorm, instrucao: proxima };
           }
         } else if (fnName === "definir_pintura") {
           const querPintura = Boolean(args.quer_pintura);
           const tipoPint = String(args.tipo_pintura || "").toLowerCase();
-          const tipoValido = ["branco_liso", "preta_fosco", "cinza_texturizado", "cor_especial"].includes(tipoPint) ? tipoPint : null;
+          const tipoValido = [
+            "branco_liso",
+            "preta_fosco",
+            "cinza_texturizado",
+            "cor_especial",
+          ].includes(tipoPint)
+            ? tipoPint
+            : null;
           if (querPintura && !tipoValido) {
             toolResult = {
               ok: false,
-              error: "Cliente quer pintura, mas a cor não foi informada. Pergunte qual cor: branco liso, preta fosco, cinza texturizado ou cor especial. Só chame definir_pintura quando souber a cor.",
+              error:
+                "Cliente quer pintura, mas a cor não foi informada. Pergunte qual cor: branco liso, preta fosco, cinza texturizado ou cor especial. Só chame definir_pintura quando souber a cor.",
             };
           } else {
             await supabase
@@ -4949,8 +6912,14 @@ Deno.serve(async (req) => {
                 ultima_mensagem_at: new Date().toISOString(),
               })
               .eq("id", conversa.id);
-            const proxima = "Pintura gravada. NÃO confirme. Siga DIRETO ao Passo 6: pergunte de forma natural sobre Portinhola/Alçapão (os dois, um ou nenhum).";
-            toolResult = { ok: true, quer_pintura: querPintura, tipo_pintura: querPintura ? tipoValido : null, instrucao: proxima };
+            const proxima =
+              "Pintura gravada. NÃO confirme. Siga DIRETO ao Passo 6: pergunte de forma natural sobre Portinhola/Alçapão (os dois, um ou nenhum).";
+            toolResult = {
+              ok: true,
+              quer_pintura: querPintura,
+              tipo_pintura: querPintura ? tipoValido : null,
+              instrucao: proxima,
+            };
           }
         } else if (fnName === "definir_adicionais") {
           const portinhola = Boolean(args.portinhola);
@@ -4965,14 +6934,18 @@ Deno.serve(async (req) => {
             .limit(6);
           const perguntouAdicionais = (ultimasMsgs || []).some((m: any) => {
             if (m.role !== "assistant") return false;
-            const c = String(m.content || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const c = String(m.content || "")
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "");
             return /portinhola/.test(c) && /alcapao/.test(c);
           });
 
           if (!perguntouAdicionais) {
             toolResult = {
               ok: false,
-              error: "Você ainda NÃO perguntou ao cliente sobre os adicionais. Pergunte AGORA, de forma natural, se ele quer Portinhola, Alçapão, os dois, ou nenhum. Só chame esta tool DEPOIS que o cliente responder.",
+              error:
+                "Você ainda NÃO perguntou ao cliente sobre os adicionais. Pergunte AGORA, de forma natural, se ele quer Portinhola, Alçapão, os dois, ou nenhum. Só chame esta tool DEPOIS que o cliente responder.",
             };
           } else {
             await supabase
@@ -4988,9 +6961,11 @@ Deno.serve(async (req) => {
               .select("tipo_cliente, entrega_perguntado")
               .eq("id", conversa.id)
               .maybeSingle();
-            const proxima = cv2?.tipo_cliente === "porta_instalada" && !cv2?.entrega_perguntado
-              ? "Adicionais gravados. NÃO confirme. Siga DIRETO ao Passo 7: pergunte se o cliente quer ENTREGA no local ou prefere BUSCAR/RETIRAR. Quando responder, chame definir_entrega."
-              : "Adicionais gravados. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
+            const proxima =
+              cv2?.tipo_cliente === "porta_instalada" &&
+              !cv2?.entrega_perguntado
+                ? "Adicionais gravados. NÃO confirme. Siga DIRETO ao Passo 7: pergunte se o cliente quer ENTREGA no local ou prefere BUSCAR/RETIRAR. Quando responder, chame definir_entrega."
+                : "Adicionais gravados. NÃO confirme. Chame gerar_orcamento agora (sem argumentos).";
             toolResult = { ok: true, portinhola, alcapao, instrucao: proxima };
           }
         } else if (fnName === "calcular_frete_cep") {
@@ -5012,60 +6987,104 @@ Deno.serve(async (req) => {
                 ultima_mensagem_at: new Date().toISOString(),
               })
               .eq("id", conversa.id);
-            try { await atualizarTipoClienteLegado(telefone, "porta_instalada"); } catch (_) {}
+            try {
+              await atualizarTipoClienteLegado(telefone, "porta_instalada");
+            } catch (_) {}
             toolResult = {
               ok: true,
-              instrucao: "CEP e frete gravados no [ESTADO]. NÃO mencione o valor do frete ao cliente. Chame IMEDIATAMENTE gerar_orcamento (sem argumentos).",
+              instrucao:
+                "CEP e frete gravados no [ESTADO]. NÃO mencione o valor do frete ao cliente. Chame IMEDIATAMENTE gerar_orcamento (sem argumentos).",
             };
           } else if (r.fora_da_bahia) {
-            toolResult = { ...r, instrucao: "Cliente fora da BA para PORTA INSTALADA. NÃO transfira para humano. Informe educadamente que a instalação é só na BA, ofereça a modalidade REVENDA (envio do kit + instalação por serralheiro local) e siga conduzindo o orçamento nesse formato." };
+            toolResult = {
+              ...r,
+              instrucao:
+                "Cliente fora da BA para PORTA INSTALADA. NÃO transfira para humano. Informe educadamente que a instalação é só na BA, ofereça a modalidade REVENDA (envio do kit + instalação por serralheiro local) e siga conduzindo o orçamento nesse formato.",
+            };
           } else {
             toolResult = r;
           }
         } else if (fnName === "definir_tipo_cliente") {
           const tc = String(args.tipo_cliente || "").toLowerCase();
           const tcNorm: "porta_instalada" | "revenda" | null =
-            tc === "revenda" ? "revenda" : tc === "porta_instalada" ? "porta_instalada" : null;
+            tc === "revenda"
+              ? "revenda"
+              : tc === "porta_instalada"
+                ? "porta_instalada"
+                : null;
           if (!tcNorm) {
-            toolResult = { ok: false, error: "tipo_cliente inválido. Use 'porta_instalada' ou 'revenda'." };
+            toolResult = {
+              ok: false,
+              error:
+                "tipo_cliente inválido. Use 'porta_instalada' ou 'revenda'.",
+            };
           } else {
             await supabase
               .from("leo_conversations")
-              .update({ tipo_cliente: tcNorm, ultima_mensagem_at: new Date().toISOString() })
+              .update({
+                tipo_cliente: tcNorm,
+                ultima_mensagem_at: new Date().toISOString(),
+              })
               .eq("id", conversa.id);
-            try { await atualizarTipoClienteLegado(telefone, tcNorm); } catch (_) {}
+            try {
+              await atualizarTipoClienteLegado(telefone, tcNorm);
+            } catch (_) {}
 
             // 🛑 Se virou REVENDA e o cadastro legado ficou "Pendente Serralheiro",
             // interrompe AQUI antes de seguir ao Passo 2.1 (KIT/PEÇAS).
             if (tcNorm === "revenda") {
               const cliLeg = await buscarClientePorTelefone(telefone);
-              const tipoLeg = String((cliLeg as any)?.tipo_cliente || "").trim().toLowerCase();
-              if (tipoLeg.includes("pendente") && tipoLeg.includes("serralheiro")) {
-                const primeiroNome = (cliLeg?.CLI_NOME || conversa.nome_cliente || nome || "").trim().split(/\s+/)[0] || "";
+              const tipoLeg = String((cliLeg as any)?.tipo_cliente || "")
+                .trim()
+                .toLowerCase();
+              if (
+                tipoLeg.includes("pendente") &&
+                tipoLeg.includes("serralheiro")
+              ) {
+                const primeiroNome =
+                  (cliLeg?.CLI_NOME || conversa.nome_cliente || nome || "")
+                    .trim()
+                    .split(/\s+/)[0] || "";
                 const msgPend = `${primeiroNome ? primeiroNome + ", " : ""}seu cadastro como *Serralheiro* ainda está *pendente de aprovação* pela nossa equipe. ⏳\n\nAssim que for liberado, eu sigo com você normalmente para gerar o orçamento. Obrigado pela paciência! 🙏`;
                 await enviarTexto(telefone, msgPend);
-                await salvarMensagem(conversa.id, "assistant", msgPend, { pendente_serralheiro: true });
-                return new Response(JSON.stringify({ ok: true, pendente_serralheiro: true }), {
-                  headers: { ...corsHeaders, "Content-Type": "application/json" },
+                await salvarMensagem(conversa.id, "assistant", msgPend, {
+                  pendente_serralheiro: true,
                 });
+                return new Response(
+                  JSON.stringify({ ok: true, pendente_serralheiro: true }),
+                  {
+                    headers: {
+                      ...corsHeaders,
+                      "Content-Type": "application/json",
+                    },
+                  },
+                );
               }
             }
 
             toolResult = {
               ok: true,
               tipo_cliente: tcNorm,
-              instrucao: "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 2.1: pergunte se ele quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS.",
+              instrucao:
+                "Tipo gravado no [ESTADO]. NÃO confirme isso ao cliente. Siga DIRETO ao Passo 2.1: pergunte se ele quer um KIT completo de porta de enrolar ou apenas PEÇAS AVULSAS.",
             };
           }
         } else if (fnName === "definir_subtipo_revenda") {
           const sub = String(args.subtipo || "").toLowerCase();
-          const subNorm: "kit" | "pecas" | null = sub === "kit" ? "kit" : sub === "pecas" ? "pecas" : null;
+          const subNorm: "kit" | "pecas" | null =
+            sub === "kit" ? "kit" : sub === "pecas" ? "pecas" : null;
           if (!subNorm) {
-            toolResult = { ok: false, error: "subtipo inválido. Use 'kit' ou 'pecas'." };
+            toolResult = {
+              ok: false,
+              error: "subtipo inválido. Use 'kit' ou 'pecas'.",
+            };
           } else {
             await supabase
               .from("leo_conversations")
-              .update({ subtipo_revenda: subNorm, ultima_mensagem_at: new Date().toISOString() })
+              .update({
+                subtipo_revenda: subNorm,
+                ultima_mensagem_at: new Date().toISOString(),
+              })
               .eq("id", conversa.id);
             // Lê tipo_cliente para decidir próxima orientação
             const { data: cv } = await supabase
@@ -5076,11 +7095,18 @@ Deno.serve(async (req) => {
             const ehPorta = cv?.tipo_cliente === "porta_instalada";
             let instrucao: string;
             if (subNorm === "pecas") {
-              instrucao = "Subtipo PEÇAS AVULSAS gravado. NÃO confirme. Siga DIRETO ao Passo 2.2: pergunte quais peças e quantidades o cliente precisa. Use listar_pecas_disponiveis se precisar consultar o catálogo.";
+              instrucao =
+                "Subtipo PEÇAS AVULSAS gravado. NÃO confirme. Siga DIRETO ao Passo 2.2: pergunte quais peças e quantidades o cliente precisa. Use listar_pecas_disponiveis se precisar consultar o catálogo.";
             } else {
-              instrucao = "Subtipo KIT gravado. NÃO confirme. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.";
+              instrucao =
+                "Subtipo KIT gravado. NÃO confirme. Siga DIRETO ao Passo 3 perguntando largura e altura da porta.";
             }
-            toolResult = { ok: true, subtipo: subNorm, tipo_cliente: cv?.tipo_cliente, instrucao };
+            toolResult = {
+              ok: true,
+              subtipo: subNorm,
+              tipo_cliente: cv?.tipo_cliente,
+              instrucao,
+            };
           }
         } else if (fnName === "definir_entrega") {
           const querEntrega = Boolean(args.quer_entrega);
@@ -5095,7 +7121,10 @@ Deno.serve(async (req) => {
             update.cep = null;
             update.endereco_instalacao = null;
           }
-          await supabase.from("leo_conversations").update(update).eq("id", conversa.id);
+          await supabase
+            .from("leo_conversations")
+            .update(update)
+            .eq("id", conversa.id);
           toolResult = {
             ok: true,
             quer_entrega: querEntrega,
@@ -5105,7 +7134,12 @@ Deno.serve(async (req) => {
           };
         } else if (fnName === "listar_pecas_disponiveis") {
           const busca = String(args.busca || "").trim();
-          let q = dashboardDb.from("estoque").select("codigo_sku, produto_nome, descricao, preco_venda, unidade_medida, quantidade").limit(50);
+          let q = dashboardDb
+            .from("estoque")
+            .select(
+              "codigo_sku, produto_nome, descricao, preco_venda, unidade_medida, quantidade",
+            )
+            .limit(50);
           if (busca) q = q.ilike("produto_nome", `%${busca}%`);
           const { data, error } = await q;
           if (error) {
@@ -5115,32 +7149,50 @@ Deno.serve(async (req) => {
               ok: true,
               total: data?.length || 0,
               itens: data || [],
-              instrucao: "Catálogo retornado. Use estes códigos/preços para confirmar com o cliente. NÃO invente itens fora desta lista.",
+              instrucao:
+                "Catálogo retornado. Use estes códigos/preços para confirmar com o cliente. NÃO invente itens fora desta lista.",
             };
           }
         } else if (fnName === "definir_pecas_avulsas") {
           const itensRaw = Array.isArray(args.itens) ? args.itens : [];
           if (itensRaw.length === 0) {
-            toolResult = { ok: false, error: "Lista de peças vazia. Pergunte ao cliente quais peças e quantidades." };
+            toolResult = {
+              ok: false,
+              error:
+                "Lista de peças vazia. Pergunte ao cliente quais peças e quantidades.",
+            };
           } else {
             const enriquecidas = await enriquecerPecasComEstoque(itensRaw);
             await supabase
               .from("leo_conversations")
-              .update({ pecas_avulsas: enriquecidas, ultima_mensagem_at: new Date().toISOString() })
+              .update({
+                pecas_avulsas: enriquecidas,
+                ultima_mensagem_at: new Date().toISOString(),
+              })
               .eq("id", conversa.id);
             const { data: cv3 } = await supabase
               .from("leo_conversations")
               .select("tipo_cliente, entrega_perguntado")
               .eq("id", conversa.id)
               .maybeSingle();
-            const proxima = cv3?.tipo_cliente === "porta_instalada" && !cv3?.entrega_perguntado
-              ? "Peças gravadas. NÃO confirme nem liste valores. Pergunte AGORA se o cliente quer ENTREGA no local ou prefere BUSCAR/RETIRAR. Quando responder, chame definir_entrega."
-              : "Peças gravadas. NÃO liste valores ao cliente. Chame gerar_orcamento agora (sem argumentos).";
-            toolResult = { ok: true, total: enriquecidas.length, itens: enriquecidas, instrucao: proxima };
+            const proxima =
+              cv3?.tipo_cliente === "porta_instalada" &&
+              !cv3?.entrega_perguntado
+                ? "Peças gravadas. NÃO confirme nem liste valores. Pergunte AGORA se o cliente quer ENTREGA no local ou prefere BUSCAR/RETIRAR. Quando responder, chame definir_entrega."
+                : "Peças gravadas. NÃO liste valores ao cliente. Chame gerar_orcamento agora (sem argumentos).";
+            toolResult = {
+              ok: true,
+              total: enriquecidas.length,
+              itens: enriquecidas,
+              instrucao: proxima,
+            };
           }
         } else if (fnName === "transferir_humano") {
           if (ticketId) await transferirParaHumano(ticketId);
-          await supabase.from("leo_conversations").update({ status: "encerrada" }).eq("id", conversa.id);
+          await supabase
+            .from("leo_conversations")
+            .update({ status: "encerrada" })
+            .eq("id", conversa.id);
           toolResult = { ok: true, transferido: true };
         }
 
@@ -5157,10 +7209,20 @@ Deno.serve(async (req) => {
 
     try {
       if (pdfEnviadoNesteTurno) {
-        const snapAg = await supabase.from("leo_conversations").select("tipo_cliente, subtipo_revenda, largura, altura, tipo_perfil, cep, adicionais, pecas_avulsas").eq("id", conversa.id).maybeSingle();
-        await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, { pdf_enviado: true, snapshot: snapAg.data || null });
+        const snapAg = await supabase
+          .from("leo_conversations")
+          .select(
+            "tipo_cliente, subtipo_revenda, largura, altura, tipo_perfil, cep, adicionais, pecas_avulsas",
+          )
+          .eq("id", conversa.id)
+          .maybeSingle();
+        await salvarMensagem(conversa.id, "assistant", pdfCaptionEnviada, {
+          pdf_enviado: true,
+          snapshot: snapAg.data || null,
+        });
       } else {
-        const textoFinal = (respostaFinal || "").trim() ||
+        const textoFinal =
+          (respostaFinal || "").trim() ||
           "Desculpe, tive uma instabilidade aqui. Pode repetir sua última mensagem, por favor? 🙏";
         await salvarMensagem(conversa.id, "assistant", textoFinal);
         await enviarTexto(telefone, textoFinal);
@@ -5168,12 +7230,19 @@ Deno.serve(async (req) => {
           try {
             await enviarImagemUrl(telefone, LAMINAS_IMAGE_URL);
           } catch (e) {
-            console.error("⚠️ Falha ao enviar imagem de lâminas (não fatal):", e);
+            console.error(
+              "⚠️ Falha ao enviar imagem de lâminas (não fatal):",
+              e,
+            );
           }
         }
       }
     } catch (e: any) {
-      console.error("⚠️ Falha ao persistir/enviar resposta final (não fatal):", e?.message, JSON.stringify(e));
+      console.error(
+        "⚠️ Falha ao persistir/enviar resposta final (não fatal):",
+        e?.message,
+        JSON.stringify(e),
+      );
     }
 
     try {
@@ -5182,7 +7251,10 @@ Deno.serve(async (req) => {
         .update({ ultima_mensagem_at: new Date().toISOString() })
         .eq("id", conversa.id);
     } catch (e: any) {
-      console.error("⚠️ Falha ao atualizar ultima_mensagem_at (não fatal):", e?.message);
+      console.error(
+        "⚠️ Falha ao atualizar ultima_mensagem_at (não fatal):",
+        e?.message,
+      );
     }
 
     return new Response(JSON.stringify({ ok: true }), {
@@ -5201,15 +7273,36 @@ Deno.serve(async (req) => {
       e?.statusText,
       e?.name,
     ].filter(Boolean);
-    const errMsg = partes.join(" | ") || (typeof e === "string" ? e : "") || "erro desconhecido (objeto vazio)";
+    const errMsg =
+      partes.join(" | ") ||
+      (typeof e === "string" ? e : "") ||
+      "erro desconhecido (objeto vazio)";
     let raw = "";
-    try { raw = JSON.stringify(e, Object.getOwnPropertyNames(e || {})); } catch { raw = String(e); }
-    console.error("leo-webhook erro:", errMsg, "| stack:", e?.stack || "n/a", "| raw:", raw, "| typeof:", typeof e, "| ctor:", e?.constructor?.name);
+    try {
+      raw = JSON.stringify(e, Object.getOwnPropertyNames(e || {}));
+    } catch {
+      raw = String(e);
+    }
+    console.error(
+      "leo-webhook erro:",
+      errMsg,
+      "| stack:",
+      e?.stack || "n/a",
+      "| raw:",
+      raw,
+      "| typeof:",
+      typeof e,
+      "| ctor:",
+      e?.constructor?.name,
+    );
     // Não retorna 500 nem envia texto genérico: isso fazia o provedor reentregar webhooks antigos
     // e o cliente recebia "instabilidade" duplicada mesmo quando o próximo passo já tinha sido enviado.
-    return new Response(JSON.stringify({ ok: false, handled: true, error: errMsg }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ ok: false, handled: true, error: errMsg }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

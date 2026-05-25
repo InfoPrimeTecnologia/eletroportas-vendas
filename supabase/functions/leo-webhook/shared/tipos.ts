@@ -47,7 +47,12 @@ export interface CfgPedido {
   sob_consulta?: boolean;
   aguardando_retomada?: boolean;
   contexto_ativo?: "kit_porta" | "motor" | "pecas_avulsas" | "acessorio" | null;
-  intencao_ativa?: "cotacao" | "duvida" | "continuacao" | "novo_contexto" | null;
+  intencao_ativa?:
+    | "cotacao"
+    | "duvida"
+    | "continuacao"
+    | "novo_contexto"
+    | null;
   etapa_ativa?: string | null;
   campos_pendentes?: string[];
   orcamento_incompleto?: boolean;
