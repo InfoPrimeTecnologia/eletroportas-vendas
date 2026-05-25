@@ -4066,6 +4066,15 @@ async function rodarConfigurador(args: {
     .maybeSingle();
   let pedido = carregarPedido((row as any)?.pedido);
 
+  if (isNova) {
+    const contextoInicial = detectarContextoAtivoMensagem(mensagem);
+    pedido = resetPedidoParaNovoContexto(contextoInicial);
+  } else if (ehMensagemNovoAtendimento(mensagem) && pedido.itens.length > 0) {
+    const contextoInicial = detectarContextoAtivoMensagem(mensagem);
+    pedido = resetPedidoParaNovoContexto(contextoInicial);
+    await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+  }
+
   // ====== TROCA DE CONTEXTO (substituição, não soma) ======
   // Se cliente sinaliza claramente mudança de intenção ("desculpe, quero peças avulsas",
   // "na verdade prefiro kit completo", etc.), removemos os itens incompatíveis em vez
@@ -4073,7 +4082,7 @@ async function rodarConfigurador(args: {
   const trocaCtx = detectarTrocaContexto(mensagem, pedido);
   if (trocaCtx.trocou) {
     console.log("🔄 troca de contexto:", trocaCtx.novoContexto);
-    pedido = { itens: [], total: 0, status: "em_andamento" };
+    pedido = resetPedidoParaNovoContexto((trocaCtx.novoContexto as any) || null);
     await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
     if (trocaCtx.aviso) {
       await salvarMensagem(conversa.id, "assistant", trocaCtx.aviso, { configurador: true, troca_contexto: trocaCtx.novoContexto });
@@ -4186,6 +4195,12 @@ async function rodarConfigurador(args: {
   const proximaCheck = cfgProximaPergunta(r.pedido);
   const deveExplodir = r.quer_gerar || (!proximaCheck && r.pedido.itens.length > 0);
   pedido = await cfgRecalcular(r.pedido, { explodir: deveExplodir });
+  const proxima = cfgProximaPergunta(pedido);
+  pedido.etapa_ativa = proxima || null;
+  pedido.campos_pendentes = proxima ? [proxima] : [];
+  pedido.orcamento_incompleto = Boolean(proxima);
+  if (!pedido.contexto_ativo) pedido.contexto_ativo = detectarContextoAtivoMensagem(mensagem) || pedido.contexto_ativo || null;
+  pedido.intencao_ativa = r.duvidas.length ? "duvida" : "cotacao";
 
   // 3) Persiste
   await supabase
@@ -4194,7 +4209,7 @@ async function rodarConfigurador(args: {
     .eq("id", conversa.id);
 
   // 4) Geração de orçamento? — só se TODOS os itens estiverem completos
-  const faltaAlgo = cfgProximaPergunta(pedido);
+  const faltaAlgo = proxima;
   if (r.quer_gerar && pedido.itens.length && faltaAlgo) {
     console.warn("🚫 gerar_orcamento bloqueado (configurador) — item incompleto:", faltaAlgo);
     const itemFaltando = pedido.itens.find((it) => cfgItemIncompleto(it));
@@ -4232,7 +4247,6 @@ async function rodarConfigurador(args: {
   }
 
   // 5) Resposta textual
-  const proxima = cfgProximaPergunta(pedido);
   const texto = await cfgGerarResposta({
     mensagemCliente: mensagem, pedido, proxima, duvidas: r.duvidas, primeiraMsg: isNova,
   });
