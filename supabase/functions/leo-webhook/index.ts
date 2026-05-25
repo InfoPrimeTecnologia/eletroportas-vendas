@@ -359,7 +359,15 @@ function validarCapacidadeMotorConfig(config: any): { ok: boolean; erro?: string
   if (lista.includes(pot)) return { ok: true };
   const sugestao = lista.reduce((a, b) => Math.abs(b - pot) < Math.abs(a - pot) ? b : a, lista[0]);
   const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
-  return { ok: false, erro: `Identifiquei um possível erro 👍\n\nMotor${escopo} ${pot} kg não existe no cadastro.\n\n👉 Deseja corrigir para:\n• *${sugestao} kg*\n• Informar outra capacidade` };
+  const minimo = Math.min(...lista);
+  let msg: string;
+  if (pot < minimo) {
+    msg = `O menor modelo${escopo ? ` de motor${escopo}` : " que trabalhamos"} hoje é o de *${minimo} kg*, que atende com folga essa necessidade. 👍`;
+    if (!escopo) msg += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
+  } else {
+    msg = `Imagino que tenha sido um pequeno engano 👍\n\nVocê quis dizer *${sugestao} kg*?`;
+  }
+  return { ok: false, erro: msg };
 }
 function limparCapacidadesMotorInvalidas(pedido: CfgPedido): { pedido: CfgPedido; avisos: string[] } {
   const avisos: string[] = [];
