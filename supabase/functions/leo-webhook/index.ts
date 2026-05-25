@@ -5603,6 +5603,17 @@ function detectarTrocaContexto(
         : pedido?.itens?.length
           ? "pecas_avulsas"
           : null);
+  if (contextoAtual === "kit_porta") {
+    const kit = pedido.itens.find((it) => it.tipo === "kit_porta");
+    const c = kit?.config || {};
+    const etapa = normTextoLeo(String(pedido?.etapa_ativa || ""));
+    const respostaOpcional = /\b(portinhola|alcapao|nenhum|nenhuma)\b/.test(t);
+    const aguardandoOpcional =
+      /opcional|portinhola|alcapao/.test(etapa) ||
+      (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao) ||
+      c.portinhola === true;
+    if (aguardandoOpcional && respostaOpcional) return { trocou: false };
+  }
   if (contextoMsg && contextoAtual && contextoMsg !== contextoAtual) {
     if (contextoMsg === "motor") {
       return {
