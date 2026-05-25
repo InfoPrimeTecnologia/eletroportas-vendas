@@ -2779,6 +2779,12 @@ function carregarPedido(raw: any): CfgPedido {
     total: Number(raw.total) || 0,
     status: (raw.status || "em_andamento") as CfgPedido["status"],
     sob_consulta: Boolean(raw.sob_consulta),
+    aguardando_retomada: Boolean(raw.aguardando_retomada),
+    contexto_ativo: raw.contexto_ativo || null,
+    intencao_ativa: raw.intencao_ativa || null,
+    etapa_ativa: raw.etapa_ativa || null,
+    campos_pendentes: Array.isArray(raw.campos_pendentes) ? raw.campos_pendentes : [],
+    orcamento_incompleto: Boolean(raw.orcamento_incompleto),
   };
 }
 
