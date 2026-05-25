@@ -449,8 +449,12 @@ function validarCapacidadeMotorConfig(config: any): {
         );
   const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
   let msg = `Consigo te ajudar 👍\n\nO menor modelo${escopo ? ` de motor${escopo}` : " que trabalhamos"} hoje é o de *${sugestao} kg*, que atende com folga essa necessidade.`;
-  if (!escopo) msg += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
+  if (!escopo) msg += `\n\n${textoPerguntaTipoMotor(true)}`;
   return { ok: false, erro: msg };
+}
+
+function textoPerguntaTipoMotor(comSeta = false): string {
+  return `${comSeta ? "👉 " : ""}Qual tipo de motor deseja?\n\n• *AC* — Corrente Alternada 220V\n• *DC* — Motor com nobreak integrado`;
 }
 
 function ehMensagemNovoAtendimento(mensagem: string): boolean {
@@ -3350,7 +3354,98 @@ function cfgPedidoLeve(pedido: CfgPedido) {
   };
 }
 
-function cfgFallbackInterpretar(mensagem: string): any[] {
+function normTextoLeo(mensagem: string): string {
+  return String(mensagem || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function cfgInterpretarPorEtapaAtiva(
+  mensagem: string,
+  pedido: CfgPedido,
+): any[] | null {
+  const t = normTextoLeo(mensagem);
+  if (!t) return null;
+  const etapa = normTextoLeo(String(pedido?.etapa_ativa || ""));
+  const numeroSimples = t.match(/^(\d+(?:[\.,]\d+)?)(?:\s*m(?:etros?)?)?$/);
+  const kit = pedido.itens.find((it) => it.tipo === "kit_porta");
+  const guiaPendente = pedido.itens.find((it) => {
+    if (it.tipo !== "guia") return false;
+    const c = it.config || {};
+    const qtd = c.qtd ?? c.qtd_pares ?? c.qtd_unidades;
+    return Boolean(qtd && c.mm && !c.comprimento_m);
+  });
+
+  if (guiaPendente && numeroSimples) {
+    return [
+      {
+        acao: "update_item",
+        ref: guiaPendente.id,
+        patch: { comprimento_m: Number(numeroSimples[1].replace(",", ".")) },
+      },
+    ];
+  }
+
+  if (kit) {
+    const c = kit.config || {};
+    const aguardandoOpcionais =
+      /opcional|portinhola|alcapao/.test(etapa) ||
+      (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao);
+    if (aguardandoOpcionais) {
+      if (/^portinhola\b|\bportinhola\b/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { portinhola: true, alcapao: false, opcionais_perguntado: true },
+          },
+        ];
+      }
+      if (/\balcapao\b|\balcapao\b/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { alcapao: true, portinhola: false, opcionais_perguntado: true },
+          },
+        ];
+      }
+      if (/\b(nenhum|nenhuma|nao|sem)\b/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { portinhola: false, alcapao: false, opcionais_perguntado: true },
+          },
+        ];
+      }
+    }
+
+    if (c.portinhola === true) {
+      const pos = t.match(/\b(vild|vile|centro)\b/)?.[1]?.toUpperCase();
+      if (pos) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola: pos } }];
+    }
+
+    if (!c?.motor?.ac_dc) {
+      const acdc = t.match(/\b(ac|dc)\b/)?.[1]?.toUpperCase();
+      if (acdc) return [{ acao: "update_item", ref: "kit_porta", patch: { motor: { ac_dc: acdc } } }];
+    }
+  }
+
+  const motorPendente = pedido.itens.find((it) => it.tipo === "motor" && !it.config?.ac_dc);
+  if (motorPendente) {
+    const acdc = t.match(/\b(ac|dc)\b/)?.[1]?.toUpperCase();
+    if (acdc) return [{ acao: "update_item", ref: motorPendente.id, patch: { ac_dc: acdc } }];
+  }
+
+  return null;
+}
+
+function cfgFallbackInterpretar(mensagem: string, pedido?: CfgPedido): any[] {
+  const porEtapa = pedido ? cfgInterpretarPorEtapaAtiva(mensagem, pedido) : null;
+  if (porEtapa) return porEtapa;
   const original = mensagem || "";
   const t = original
     .toLowerCase()
@@ -3511,7 +3606,7 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
           );
     const escopoAcDc = acdc ? ` ${acdc}` : "";
     let texto = `Consigo te ajudar 👍\n\nO menor modelo${escopoAcDc ? ` de motor${escopoAcDc}` : " que trabalhamos"} hoje é o de *${sugestao} kg*, que atende com folga essa necessidade.`;
-    if (!acdc) texto += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
+    if (!acdc) texto += `\n\n${textoPerguntaTipoMotor(true)}`;
     intencoes.push({ acao: "duvida", texto });
     return intencoes;
   } else if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
@@ -3831,6 +3926,9 @@ async function cfgInterpretar(
   mensagem: string,
   pedido: CfgPedido,
 ): Promise<any[]> {
+  const porEtapa = cfgInterpretarPorEtapaAtiva(mensagem, pedido);
+  if (porEtapa) return porEtapa;
+
   const sys = `Você é um interpretador de pedidos para uma fábrica de portas de enrolar.
 Receba a MENSAGEM do cliente serralheiro + o PEDIDO_ATUAL e devolva SOMENTE JSON:
 { "intencoes": [...] }
@@ -3926,7 +4024,7 @@ PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
     });
     if (!resp.ok) {
       console.error("cfgInterpretar falhou:", resp.status, await resp.text());
-      return cfgFallbackInterpretar(mensagem);
+      return cfgFallbackInterpretar(mensagem, pedido);
     }
     const j = await resp.json();
     if (
@@ -3936,16 +4034,16 @@ PEDIDO_ATUAL: ${JSON.stringify(cfgPedidoLeve(pedido))}`;
       console.warn(
         "cfgInterpretar truncado por limite de tokens — usando fallback determinístico",
       );
-      return cfgFallbackInterpretar(mensagem);
+      return cfgFallbackInterpretar(mensagem, pedido);
     }
     const content = j?.choices?.[0]?.message?.content || "{}";
     const parsed = JSON.parse(content);
     return Array.isArray(parsed?.intencoes)
       ? parsed.intencoes
-      : cfgFallbackInterpretar(mensagem);
+      : cfgFallbackInterpretar(mensagem, pedido);
   } catch (e) {
     console.error("cfgInterpretar erro:", (e as Error)?.message);
-    return cfgFallbackInterpretar(mensagem);
+    return cfgFallbackInterpretar(mensagem, pedido);
   }
 }
 
@@ -4909,7 +5007,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
         return "Qual a *cor da pintura*?";
       // Motor: apenas AC/DC — a capacidade (kg) é SEMPRE automática pelo padrão técnico.
       if (!c?.motor?.ac_dc)
-        return "Qual *automatização* deseja?\n• *AC*\n• *DC*\n\n_A capacidade (kg), eixo, rolo e segurança são calculados automaticamente._";
+        return `${textoPerguntaTipoMotor(false)}\n\n_A capacidade (kg), eixo, rolo e segurança são calculados automaticamente._`;
       // OPCIONAIS — antes da medida de corte (afetam cortes, soleira, lâminas).
       if (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao) {
         return "Deseja algum *opcional*?\n• *Portinhola*\n• *Alçapão*\n• *Nenhum*";
@@ -4964,8 +5062,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
           "Capacidade de motor inválida. Informe uma capacidade cadastrada."
         );
       }
-      if (!c.ac_dc)
-        return "Esse motor você prefere em *AC* ou *DC*?\n• *AC*\n• *DC*";
+      if (!c.ac_dc) return textoPerguntaTipoMotor(false);
       const lista = c.ac_dc === "DC" ? POTENCIAS_DC : POTENCIAS_AC;
       if (c.potencia && !lista.includes(Number(c.potencia))) {
         const inv = c.potencia;
@@ -5506,6 +5603,17 @@ function detectarTrocaContexto(
         : pedido?.itens?.length
           ? "pecas_avulsas"
           : null);
+  if (contextoAtual === "kit_porta") {
+    const kit = pedido.itens.find((it) => it.tipo === "kit_porta");
+    const c = kit?.config || {};
+    const etapa = normTextoLeo(String(pedido?.etapa_ativa || ""));
+    const respostaOpcional = /\b(portinhola|alcapao|nenhum|nenhuma)\b/.test(t);
+    const aguardandoOpcional =
+      /opcional|portinhola|alcapao/.test(etapa) ||
+      (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao) ||
+      c.portinhola === true;
+    if (aguardandoOpcional && respostaOpcional) return { trocou: false };
+  }
   if (contextoMsg && contextoAtual && contextoMsg !== contextoAtual) {
     if (contextoMsg === "motor") {
       return {
