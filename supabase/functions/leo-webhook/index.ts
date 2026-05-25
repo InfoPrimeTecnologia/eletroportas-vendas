@@ -3606,7 +3606,7 @@ function cfgFallbackInterpretar(mensagem: string, pedido?: CfgPedido): any[] {
           );
     const escopoAcDc = acdc ? ` ${acdc}` : "";
     let texto = `Consigo te ajudar 👍\n\nO menor modelo${escopoAcDc ? ` de motor${escopoAcDc}` : " que trabalhamos"} hoje é o de *${sugestao} kg*, que atende com folga essa necessidade.`;
-    if (!acdc) texto += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
+    if (!acdc) texto += `\n\n${textoPerguntaTipoMotor(true)}`;
     intencoes.push({ acao: "duvida", texto });
     return intencoes;
   } else if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
@@ -5007,7 +5007,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
         return "Qual a *cor da pintura*?";
       // Motor: apenas AC/DC — a capacidade (kg) é SEMPRE automática pelo padrão técnico.
       if (!c?.motor?.ac_dc)
-        return "Qual *automatização* deseja?\n• *AC*\n• *DC*\n\n_A capacidade (kg), eixo, rolo e segurança são calculados automaticamente._";
+        return `${textoPerguntaTipoMotor(false)}\n\n_A capacidade (kg), eixo, rolo e segurança são calculados automaticamente._`;
       // OPCIONAIS — antes da medida de corte (afetam cortes, soleira, lâminas).
       if (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao) {
         return "Deseja algum *opcional*?\n• *Portinhola*\n• *Alçapão*\n• *Nenhum*";
@@ -5062,8 +5062,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
           "Capacidade de motor inválida. Informe uma capacidade cadastrada."
         );
       }
-      if (!c.ac_dc)
-        return "Esse motor você prefere em *AC* ou *DC*?\n• *AC*\n• *DC*";
+      if (!c.ac_dc) return textoPerguntaTipoMotor(false);
       const lista = c.ac_dc === "DC" ? POTENCIAS_DC : POTENCIAS_AC;
       if (c.potencia && !lista.includes(Number(c.potencia))) {
         const inv = c.potencia;
