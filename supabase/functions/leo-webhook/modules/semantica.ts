@@ -28,6 +28,7 @@ export function inferirMedidasTexto(texto: string): { largura: number; altura: n
 export function inferirLaminaTexto(texto: string): "fechado" | "transvision" | "oblongo" | null {
   const t = norm(texto).trim();
   if (!t) return null;
+  if (/\b(tradicional|convencional|padrao|padr[aã]o)\b/.test(t)) return null;
   if (/(^|\s)(1|fechad\w*|lis[ao]|meia\s*cana)(\s|$|[.,!?])/.test(t)) return "fechado";
   if (/(^|\s)(2|transv\w*|visor\w*|visao|visores)(\s|$|[.,!?])/.test(t)) return "transvision";
   if (/(^|\s)(3|oblong\w*|oblog\w*|perfurad\w*|perfurac\w*)(\s|$|[.,!?])/.test(t)) return "oblongo";
@@ -58,6 +59,9 @@ export function inferirAdicionaisTexto(texto: string, permitirNegacaoGenerica = 
 export function inferirPinturaTexto(texto: string): { quer_pintura: boolean; tipo_pintura?: string } | null {
   const t = norm(texto);
   if (!t.trim()) return null;
+  if (/\b(ainda\s+nao\s+sei|ainda\s+não\s+sei|nao\s+sei\s+a\s+cor|não\s+sei\s+a\s+cor|depois\s+vejo\s+a\s+cor|cor\s+depois|deixo\s+a\s+cor\s+pra\s+depois)\b/.test(t)) {
+    return { quer_pintura: true };
+  }
   const negacaoPintura = /\b(nao|sem pintura|sem pint|sem cor|sem tinta|nao quero|nao precisa|nao precis|dispens|negativo|nada|natural|galvanizad[ao]|cru|sem acabamento|nenhuma|nenhum)\b/;
   const afirmacaoPintura = /\b(sim|quero|pode|incluir|coloca|pinta|pintad[ao])\b/;
   if (negacaoPintura.test(t) && !afirmacaoPintura.test(t)) {
