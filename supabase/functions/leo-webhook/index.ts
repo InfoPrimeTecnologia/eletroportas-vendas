@@ -357,16 +357,13 @@ function validarCapacidadeMotorConfig(config: any): { ok: boolean; erro?: string
   const acdc = String(config?.ac_dc || "").toUpperCase();
   const lista = acdc === "DC" ? POTENCIAS_DC : acdc === "AC" ? POTENCIAS_AC : Array.from(new Set([...POTENCIAS_AC, ...POTENCIAS_DC]));
   if (lista.includes(pot)) return { ok: true };
-  const sugestao = lista.reduce((a, b) => Math.abs(b - pot) < Math.abs(a - pot) ? b : a, lista[0]);
-  const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
   const minimo = Math.min(...lista);
-  let msg: string;
-  if (pot < minimo) {
-    msg = `O menor modelo${escopo ? ` de motor${escopo}` : " que trabalhamos"} hoje é o de *${minimo} kg*, que atende com folga essa necessidade. 👍`;
-    if (!escopo) msg += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
-  } else {
-    msg = `Imagino que tenha sido um pequeno engano 👍\n\nVocê quis dizer *${sugestao} kg*?`;
-  }
+  const sugestao = pot < minimo
+    ? minimo
+    : lista.reduce((a, b) => Math.abs(b - pot) < Math.abs(a - pot) ? b : a, lista[0]);
+  const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
+  let msg = `Consigo te ajudar 👍\n\nO menor modelo${escopo ? ` de motor${escopo}` : " que trabalhamos"} hoje é o de *${sugestao} kg*, que atende com folga essa necessidade.`;
+  if (!escopo) msg += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
   return { ok: false, erro: msg };
 }
 function limparCapacidadesMotorInvalidas(pedido: CfgPedido): { pedido: CfgPedido; avisos: string[] } {
@@ -2607,20 +2604,16 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
 
   if (kgInvalido !== null) {
     const minimo = Math.min(...capacidadesValidas);
-    let texto: string;
-    if (kgInvalido < minimo) {
-      texto =
-        `O menor modelo de motor que trabalhamos hoje é o de *${minimo} kg*, ` +
-        `que atende com folga essa necessidade. 👍\n\n` +
-        `👉 Você deseja:\n• Motor AC\n• Motor DC`;
-    } else {
-      const sugestao = capacidadesValidas.reduce((a, b) => Math.abs(b - kgInvalido!) < Math.abs(a - kgInvalido!) ? b : a);
-      texto = `Imagino que tenha sido um pequeno engano 👍\n\nVocê quis dizer *${sugestao} kg*?`;
-    }
+    const sugestao = kgInvalido < minimo
+      ? minimo
+      : capacidadesValidas.reduce((a, b) => Math.abs(b - kgInvalido!) < Math.abs(a - kgInvalido!) ? b : a);
+    const escopoAcDc = acdc ? ` ${acdc}` : "";
+    let texto = `Consigo te ajudar 👍\n\nO menor modelo${escopoAcDc ? ` de motor${escopoAcDc}` : " que trabalhamos"} hoje é o de *${sugestao} kg*, que atende com folga essa necessidade.`;
+    if (!acdc) texto += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
     intencoes.push({ acao: "duvida", texto });
   } else if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
     const sugDC = POTENCIAS_DC.reduce((a, b) => Math.abs(b - potN) < Math.abs(a - potN) ? b : a);
-    intencoes.push({ acao: "duvida", texto: `Em DC, o mais próximo que temos é *${sugDC} kg* 👍\n\nPosso seguir com ele, ou prefere *AC ${potN} kg*?` });
+    intencoes.push({ acao: "duvida", texto: `Consigo te ajudar 👍\n\nEm DC o mais próximo que temos é *${sugDC} kg*. Posso seguir com ele, ou prefere *AC ${potN} kg*?` });
   } else if ((pot || acdc) && !/\bavulso\b/.test(t)) {
     patch.motor = { ...(patch.motor || {}), ...(potN ? { potencia: potN } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
   }
@@ -3905,7 +3898,42 @@ function classificarIntencaoConversa(mensagem: string): "saudacao" | "pergunta_p
   return "continuacao";
 }
 
+/**
+ * Detecta mudança CLARA de intenção do cliente no meio do atendimento.
+ * Quando isso acontece, substituímos o contexto ativo em vez de continuar
+ * acumulando itens incompatíveis (ex: cliente estava em "kit porta" e
+ * agora diz "desculpe, quero peças avulsas").
+ */
+function detectarTrocaContexto(mensagem: string, pedido: CfgPedido): { trocou: boolean; novoContexto?: string; aviso?: string } {
+  const t = String(mensagem || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!t.trim() || !pedido?.itens?.length) return { trocou: false };
+
+  const querPecas = /\b(pecas?\s*avuls(a|as)|pecas?\s*soltas?|so\s*pec|apenas\s*pec|somente\s*pec)\b/.test(t)
+    || /\b(quero|preciso|gostaria|prefiro)\s+(de\s+)?(pecas?\s*avuls|avuls)/.test(t);
+  const querKit = /\b(kit\s*porta|porta\s*completa|porta\s*inteira|porta\s*toda|kit\s*completo)\b/.test(t);
+
+  const temKitPorta = pedido.itens.some((it) => it.tipo === "kit_porta");
+  const temAvulsos = pedido.itens.some((it) => it.tipo !== "kit_porta");
+
+  if (querPecas && temKitPorta) {
+    return {
+      trocou: true,
+      novoContexto: "pecas_avulsas",
+      aviso: "Beleza, vamos focar em *peças avulsas* então. 👍\n\nMe diga quais peças e quantidades você precisa (ex: _2 motores AC 300kg, 6m de guia 60_).",
+    };
+  }
+  if (querKit && temAvulsos && !temKitPorta) {
+    return {
+      trocou: true,
+      novoContexto: "kit_porta",
+      aviso: "Beleza, vamos montar o *kit porta completo*. 👍\n\nMe passe a medida (largura x altura) e o tipo de lâmina (fechada, transvision ou oblongo).",
+    };
+  }
+  return { trocou: false };
+}
+
 // --- Orquestrador ---
+
 async function rodarConfigurador(args: {
   conversa: any;
   telefone: string;
@@ -3922,6 +3950,23 @@ async function rodarConfigurador(args: {
     .eq("id", conversa.id)
     .maybeSingle();
   let pedido = carregarPedido((row as any)?.pedido);
+
+  // ====== TROCA DE CONTEXTO (substituição, não soma) ======
+  // Se cliente sinaliza claramente mudança de intenção ("desculpe, quero peças avulsas",
+  // "na verdade prefiro kit completo", etc.), removemos os itens incompatíveis em vez
+  // de continuar acumulando perguntas do fluxo antigo.
+  const trocaCtx = detectarTrocaContexto(mensagem, pedido);
+  if (trocaCtx.trocou) {
+    console.log("🔄 troca de contexto:", trocaCtx.novoContexto);
+    pedido = { itens: [], total: 0, status: "em_andamento" };
+    await supabase.from("leo_conversations").update({ pedido: pedido as any, ultima_mensagem_at: new Date().toISOString() }).eq("id", conversa.id);
+    if (trocaCtx.aviso) {
+      await salvarMensagem(conversa.id, "assistant", trocaCtx.aviso, { configurador: true, troca_contexto: trocaCtx.novoContexto });
+      await enviarTexto(telefone, trocaCtx.aviso);
+      return { pdfEnviado: false, texto: trocaCtx.aviso };
+    }
+  }
+
   const saneamentoMotor = limparCapacidadesMotorInvalidas(pedido);
   pedido = saneamentoMotor.pedido;
   if (saneamentoMotor.avisos.length) {
