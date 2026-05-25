@@ -453,27 +453,6 @@ function validarCapacidadeMotorConfig(config: any): {
   return { ok: false, erro: msg };
 }
 
-function resumoEstadoPedido(
-  pedido: CfgPedido,
-): Pick<
-  CfgPedido,
-  | "contexto_ativo"
-  | "intencao_ativa"
-  | "etapa_ativa"
-  | "campos_pendentes"
-  | "orcamento_incompleto"
-> {
-  return {
-    contexto_ativo: pedido.contexto_ativo || null,
-    intencao_ativa: pedido.intencao_ativa || null,
-    etapa_ativa: pedido.etapa_ativa || null,
-    campos_pendentes: Array.isArray(pedido.campos_pendentes)
-      ? pedido.campos_pendentes
-      : [],
-    orcamento_incompleto: Boolean(pedido.orcamento_incompleto),
-  };
-}
-
 function ehMensagemNovoAtendimento(mensagem: string): boolean {
   const t = String(mensagem || "")
     .toLowerCase()
