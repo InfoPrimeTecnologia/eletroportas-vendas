@@ -449,8 +449,12 @@ function validarCapacidadeMotorConfig(config: any): {
         );
   const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
   let msg = `Consigo te ajudar 👍\n\nO menor modelo${escopo ? ` de motor${escopo}` : " que trabalhamos"} hoje é o de *${sugestao} kg*, que atende com folga essa necessidade.`;
-  if (!escopo) msg += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
+  if (!escopo) msg += `\n\n${textoPerguntaTipoMotor(true)}`;
   return { ok: false, erro: msg };
+}
+
+function textoPerguntaTipoMotor(comSeta = false): string {
+  return `${comSeta ? "👉 " : ""}Qual tipo de motor deseja?\n\n• *AC* — Corrente Alternada 220V\n• *DC* — Motor com nobreak integrado`;
 }
 
 function ehMensagemNovoAtendimento(mensagem: string): boolean {
