@@ -3354,7 +3354,98 @@ function cfgPedidoLeve(pedido: CfgPedido) {
   };
 }
 
-function cfgFallbackInterpretar(mensagem: string): any[] {
+function normTextoLeo(mensagem: string): string {
+  return String(mensagem || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function cfgInterpretarPorEtapaAtiva(
+  mensagem: string,
+  pedido: CfgPedido,
+): any[] | null {
+  const t = normTextoLeo(mensagem);
+  if (!t) return null;
+  const etapa = normTextoLeo(String(pedido?.etapa_ativa || ""));
+  const numeroSimples = t.match(/^(\d+(?:[\.,]\d+)?)(?:\s*m(?:etros?)?)?$/);
+  const kit = pedido.itens.find((it) => it.tipo === "kit_porta");
+  const guiaPendente = pedido.itens.find((it) => {
+    if (it.tipo !== "guia") return false;
+    const c = it.config || {};
+    const qtd = c.qtd ?? c.qtd_pares ?? c.qtd_unidades;
+    return Boolean(qtd && c.mm && !c.comprimento_m);
+  });
+
+  if (guiaPendente && numeroSimples && /comprimento.*guia|guia/.test(etapa)) {
+    return [
+      {
+        acao: "update_item",
+        ref: guiaPendente.id,
+        patch: { comprimento_m: Number(numeroSimples[1].replace(",", ".")) },
+      },
+    ];
+  }
+
+  if (kit) {
+    const c = kit.config || {};
+    const aguardandoOpcionais =
+      /opcional|portinhola|alcapao/.test(etapa) ||
+      (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao);
+    if (aguardandoOpcionais) {
+      if (/^portinhola\b|\bportinhola\b/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { portinhola: true, alcapao: false, opcionais_perguntado: true },
+          },
+        ];
+      }
+      if (/\balcapao\b|\balcapao\b/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { alcapao: true, portinhola: false, opcionais_perguntado: true },
+          },
+        ];
+      }
+      if (/\b(nenhum|nenhuma|nao|sem)\b/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { portinhola: false, alcapao: false, opcionais_perguntado: true },
+          },
+        ];
+      }
+    }
+
+    if (c.portinhola === true) {
+      const pos = t.match(/\b(vild|vile|centro)\b/)?.[1]?.toUpperCase();
+      if (pos) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola: pos } }];
+    }
+
+    if (!c?.motor?.ac_dc) {
+      const acdc = t.match(/\b(ac|dc)\b/)?.[1]?.toUpperCase();
+      if (acdc) return [{ acao: "update_item", ref: "kit_porta", patch: { motor: { ac_dc: acdc } } }];
+    }
+  }
+
+  const motorPendente = pedido.itens.find((it) => it.tipo === "motor" && !it.config?.ac_dc);
+  if (motorPendente) {
+    const acdc = t.match(/\b(ac|dc)\b/)?.[1]?.toUpperCase();
+    if (acdc) return [{ acao: "update_item", ref: motorPendente.id, patch: { ac_dc: acdc } }];
+  }
+
+  return null;
+}
+
+function cfgFallbackInterpretar(mensagem: string, pedido?: CfgPedido): any[] {
+  const porEtapa = pedido ? cfgInterpretarPorEtapaAtiva(mensagem, pedido) : null;
+  if (porEtapa) return porEtapa;
   const original = mensagem || "";
   const t = original
     .toLowerCase()
