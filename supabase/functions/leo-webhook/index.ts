@@ -2966,11 +2966,13 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
   let quer_gerar = false;
   let quer_resumo = false;
   const duvidas: string[] = [];
+  let ultimoTipoTocado: CfgItemTipo | null = null;
 
   for (const ix of intencoes) {
     const acao = String(ix?.acao || "");
     if (acao === "add_item") {
       const tipo = (ix.tipo || "acessorio") as CfgItemTipo;
+      ultimoTipoTocado = tipo;
       if (tipo === "motor") {
         const validacao = validarCapacidadeMotorConfig(ix.config || {});
         if (!validacao.ok) {
@@ -2999,6 +3001,7 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
     } else if (acao === "update_item") {
       const it = acharItem(p, ix.ref);
       if (it) {
+        ultimoTipoTocado = it.tipo;
         const novaConfig = mergeDeep(it.config, ix.patch || {});
         if (it.tipo === "motor") {
           const validacao = validarCapacidadeMotorConfig(novaConfig);
@@ -3031,9 +3034,17 @@ function cfgAplicar(pedido: CfgPedido, intencoes: any[]): { pedido: CfgPedido; q
       const t = tipoMap[op];
       if (t && !p.itens.find((i) => i.tipo === t)) {
         p.itens.push({ id: novoId(), tipo: t, config: {}, explosao: [], subtotal: 0 });
+        ultimoTipoTocado = t;
       }
     }
   }
+
+  if (ultimoTipoTocado === "motor") p.contexto_ativo = "motor";
+  else if (p.itens.some((it) => it.tipo === "kit_porta")) p.contexto_ativo = "kit_porta";
+  else if (p.itens.some((it) => it.tipo !== "kit_porta")) p.contexto_ativo = "pecas_avulsas";
+  else p.contexto_ativo = p.contexto_ativo || null;
+
+  p.intencao_ativa = duvidas.length ? "duvida" : (p.contexto_ativo ? "cotacao" : p.intencao_ativa || null);
   return { pedido: p, quer_gerar, quer_resumo, duvidas };
 }
 
