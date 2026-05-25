@@ -2860,6 +2860,11 @@ Avulsos (cada um vira um item separado no carrinho):
 
 
 REGRAS:
+- CONTEXTO ATIVO: se a mensagem atual mudar claramente o assunto (ex.: antes era kit/porta e agora o cliente fala só de motor, peças avulsas ou acessórios), siga a mensagem ATUAL. NÃO herde produto, kit, porta, automatização, medida ou etapa antiga sem confirmação explícita do cliente.
+- Se o cliente disser apenas "motor" ou pedir um motor com peso/capacidade, trate como fluxo de MOTOR AVULSO/FORMATO DE VENDA. NUNCA assuma kit porta e NUNCA responda "incluir no kit" se ele não falou kit/porta.
+- Se o contexto atual for motor/automatização e o cliente disser "tradicional", interprete como preferência por *motor AC*. NÃO troque o modelo da lâmina por causa disso.
+- Se o cliente responder "nenhum" quando a pendência for opcionais, devolva update_item no kit_porta com {"opcionais_perguntado":true,"portinhola":false,"alcapao":false}. Isso encerra a etapa.
+- Se o cliente disser que ainda não sabe a cor, pode seguir com orçamento parcial: use {"quer_pintura":true,"pintura":"eletrostatica","cor_pendente":true} e NÃO bloqueie o restante do fluxo.
 - Extraia TUDO que estiver na mensagem (medida "3x4", "AC", "meia cana", "branca", "portinhola VILD", "guia 70", "+2 controles").
 - NUNCA assuma posição/modelo/cor/medida que o cliente não falou. Ex: "preciso de uma portinhola" → portinhola SEM modelo (não assuma CENTRO). "3x4 entre paredes AC meia cana branca portinhola VILD" → 1 add_item kit_porta com TODA a config.
 - "+ 2 controles e trocar guia para 70" → [add_item controle qtd 2, update_item kit_porta patch guia_mm 70].
