@@ -366,6 +366,44 @@ function validarCapacidadeMotorConfig(config: any): { ok: boolean; erro?: string
   if (!escopo) msg += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
   return { ok: false, erro: msg };
 }
+
+function resumoEstadoPedido(pedido: CfgPedido): Pick<CfgPedido, "contexto_ativo" | "intencao_ativa" | "etapa_ativa" | "campos_pendentes" | "orcamento_incompleto"> {
+  return {
+    contexto_ativo: pedido.contexto_ativo || null,
+    intencao_ativa: pedido.intencao_ativa || null,
+    etapa_ativa: pedido.etapa_ativa || null,
+    campos_pendentes: Array.isArray(pedido.campos_pendentes) ? pedido.campos_pendentes : [],
+    orcamento_incompleto: Boolean(pedido.orcamento_incompleto),
+  };
+}
+
+function ehMensagemNovoAtendimento(mensagem: string): boolean {
+  const t = String(mensagem || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  if (!t) return false;
+  if (/\b(novo atendimento|novo orcamento|novo orcamento|novo pedido|comecar de novo|recomecar|zerar|do zero|reiniciar)\b/.test(t)) return true;
+  if (/^(oi+|ola+|opa+|bom dia|boa tarde|boa noite)$/i.test(t)) return false;
+  return /\b(quero|preciso|gostaria|me passa|me veja|me manda|or[cç]amento)\b/.test(t)
+    && /\b(motor|automatizador|porta|kit|peca|pe[cç]a|acessorio|guia|lamina|controle|central)\b/.test(t)
+    && !/\b(continuar|mesmo orcamento|orcamento anterior|de onde paramos)\b/.test(t);
+}
+
+function detectarContextoAtivoMensagem(mensagem: string): CfgPedido["contexto_ativo"] {
+  const t = String(mensagem || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!t.trim()) return null;
+  if (/\b(motor|automatizador)\b/.test(t) && !/\bporta\b/.test(t)) return "motor";
+  if (/\b(pecas?\s*avuls|guia|lamina|controle|central|eixo|soleira|portinhola|alcapao|acessorio)\b/.test(t) && !/\bporta\b/.test(t)) return "pecas_avulsas";
+  if (/\b(kit\s*porta|porta\s*completa|porta\s*inteira|porta\s*toda|medida\s*\d+(?:[\.,]\d+)?\s*[x×]\s*\d+(?:[\.,]\d+)?)\b/.test(t)) return "kit_porta";
+  if (/\b(acessorio|acessorios)\b/.test(t)) return "acessorio";
+  return null;
+}
+
+function resetPedidoParaNovoContexto(contexto?: CfgPedido["contexto_ativo"] | null): CfgPedido {
+  return {
+    ...JSON.parse(JSON.stringify(PEDIDO_VAZIO)),
+    contexto_ativo: contexto ?? null,
+    intencao_ativa: contexto ? "novo_contexto" : null,
+  };
+}
 function limparCapacidadesMotorInvalidas(pedido: CfgPedido): { pedido: CfgPedido; avisos: string[] } {
   const avisos: string[] = [];
   const itens: CfgItem[] = [];
