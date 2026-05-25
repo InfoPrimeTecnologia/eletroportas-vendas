@@ -3577,7 +3577,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if (!c.largura || !c.altura) return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
       if (!c?.lamina?.modelo) return "Qual o *modelo principal da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
       if (c.quer_pintura === undefined) return "Deseja *pintura eletrostática*?\n• *Sim*\n• *Não*";
-      if (c.quer_pintura === true && !c?.lamina?.cor) return "Qual a *cor da pintura*?";
+      if (c.quer_pintura === true && !c?.lamina?.cor && !c?.cor_pendente) return "Qual a *cor da pintura*?";
       // Motor: apenas AC/DC — a capacidade (kg) é SEMPRE automática pelo padrão técnico.
       if (!c?.motor?.ac_dc) return "Qual *automatização* deseja?\n• *AC*\n• *DC*\n\n_A capacidade (kg), eixo, rolo e segurança são calculados automaticamente._";
       // OPCIONAIS — antes da medida de corte (afetam cortes, soleira, lâminas).
@@ -3614,7 +3614,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
         c.potencia = undefined;
         return validade.erro || "Capacidade de motor inválida. Informe uma capacidade cadastrada.";
       }
-      if (!c.ac_dc) return "Esse motor é *AC* ou *DC*?\n• *AC* — 200/300/400/500/800/1000/1500 kg\n• *DC* — 200/300/400/500/800 kg";
+      if (!c.ac_dc) return "Esse motor você prefere em *AC* ou *DC*?\n• *AC*\n• *DC*";
       const lista = c.ac_dc === "DC" ? POTENCIAS_DC : POTENCIAS_AC;
       if (c.potencia && !lista.includes(Number(c.potencia))) {
         const inv = c.potencia; c.potencia = undefined;
@@ -3622,7 +3622,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       }
       if (!c.potencia) return `Qual a *capacidade* do motor ${c.ac_dc}? (${lista.join(" / ")} kg)`;
       if (!c.kit_motor && !c.modelo_motor) {
-        return "Qual o *formato de venda*?\n• *Motor avulso* — somente o motor\n• *Motor + testeiras*\n• *Kit automatizador* — motor, testeiras, central e 2 controles";
+        return "Perfeito. Como você quer esse motor?\n• *Motor avulso*\n• *Motor + testeiras*\n• *Kit automatizador*";
       }
     } else if (it.tipo === "guia") {
       const c = it.config || {};
@@ -3661,6 +3661,9 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if (!c.descricao) return "Qual *acessório* você precisa? Descreva o item.";
       if (!c.qtd) return "Quantas unidades desse acessório?";
     }
+  }
+  if (pedido.contexto_ativo === "motor" && pedido.itens.length === 0) {
+    return "Perfeito. Você quer *motor avulso*, *motor + testeiras* ou *kit automatizador*?";
   }
   return null;
 }
