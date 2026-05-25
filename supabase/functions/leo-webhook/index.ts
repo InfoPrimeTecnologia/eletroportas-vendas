@@ -359,7 +359,15 @@ function validarCapacidadeMotorConfig(config: any): { ok: boolean; erro?: string
   if (lista.includes(pot)) return { ok: true };
   const sugestao = lista.reduce((a, b) => Math.abs(b - pot) < Math.abs(a - pot) ? b : a, lista[0]);
   const escopo = acdc === "AC" || acdc === "DC" ? ` ${acdc}` : "";
-  return { ok: false, erro: `Identifiquei um possível erro 👍\n\nMotor${escopo} ${pot} kg não existe no cadastro.\n\n👉 Deseja corrigir para:\n• *${sugestao} kg*\n• Informar outra capacidade` };
+  const minimo = Math.min(...lista);
+  let msg: string;
+  if (pot < minimo) {
+    msg = `O menor modelo${escopo ? ` de motor${escopo}` : " que trabalhamos"} hoje é o de *${minimo} kg*, que atende com folga essa necessidade. 👍`;
+    if (!escopo) msg += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
+  } else {
+    msg = `Imagino que tenha sido um pequeno engano 👍\n\nVocê quis dizer *${sugestao} kg*?`;
+  }
+  return { ok: false, erro: msg };
 }
 function limparCapacidadesMotorInvalidas(pedido: CfgPedido): { pedido: CfgPedido; avisos: string[] } {
   const avisos: string[] = [];
@@ -2598,17 +2606,21 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   }
 
   if (kgInvalido !== null) {
-    const sugestao = capacidadesValidas.reduce((a, b) => Math.abs(b - kgInvalido!) < Math.abs(a - kgInvalido!) ? b : a);
-    intencoes.push({
-      acao: "duvida",
-      texto:
-        `Identifiquei um possível erro 👍\n\n` +
-        `Motor ${kgInvalido} kg não existe no cadastro.\n\n` +
-        `👉 Deseja corrigir para:\n• *${sugestao} kg*\n• Informar outra capacidade`,
-    });
+    const minimo = Math.min(...capacidadesValidas);
+    let texto: string;
+    if (kgInvalido < minimo) {
+      texto =
+        `O menor modelo de motor que trabalhamos hoje é o de *${minimo} kg*, ` +
+        `que atende com folga essa necessidade. 👍\n\n` +
+        `👉 Você deseja:\n• Motor AC\n• Motor DC`;
+    } else {
+      const sugestao = capacidadesValidas.reduce((a, b) => Math.abs(b - kgInvalido!) < Math.abs(a - kgInvalido!) ? b : a);
+      texto = `Imagino que tenha sido um pequeno engano 👍\n\nVocê quis dizer *${sugestao} kg*?`;
+    }
+    intencoes.push({ acao: "duvida", texto });
   } else if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
     const sugDC = POTENCIAS_DC.reduce((a, b) => Math.abs(b - potN) < Math.abs(a - potN) ? b : a);
-    intencoes.push({ acao: "duvida", texto: `Identifiquei um possível erro 👍\n\nMotor DC ${potN} kg não existe no cadastro.\n\n👉 Deseja corrigir para:\n• *DC ${sugDC} kg*\n• *AC ${potN} kg*\n• Informar outra capacidade` });
+    intencoes.push({ acao: "duvida", texto: `Em DC, o mais próximo que temos é *${sugDC} kg* 👍\n\nPosso seguir com ele, ou prefere *AC ${potN} kg*?` });
   } else if ((pot || acdc) && !/\bavulso\b/.test(t)) {
     patch.motor = { ...(patch.motor || {}), ...(potN ? { potencia: potN } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
   }
