@@ -2570,6 +2570,8 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
   if (/\b(retirar|remover|tirar)\s+controles?\b/.test(t)) intencoes.push({ acao: "remove_item", ref: "controle" });
 
   const patch: any = {};
+  const contextoMsg = detectarContextoAtivoMensagem(original);
+  const contextoMotor = contextoMsg === "motor" || /\b(motor|automatizador)\b/.test(t);
   const medida = t.match(/(\d+(?:[\.,]\d+)?)\s*(?:m)?\s*[x×]\s*(\d+(?:[\.,]\d+)?)/);
   if (medida) {
     patch.largura = Number(medida[1].replace(",", "."));
@@ -2649,11 +2651,23 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
     let texto = `Consigo te ajudar 👍\n\nO menor modelo${escopoAcDc ? ` de motor${escopoAcDc}` : " que trabalhamos"} hoje é o de *${sugestao} kg*, que atende com folga essa necessidade.`;
     if (!acdc) texto += `\n\n👉 Você deseja:\n• Motor AC\n• Motor DC`;
     intencoes.push({ acao: "duvida", texto });
+    return intencoes;
   } else if (potN && acdc === "DC" && !POTENCIAS_DC.includes(potN)) {
     const sugDC = POTENCIAS_DC.reduce((a, b) => Math.abs(b - potN) < Math.abs(a - potN) ? b : a);
     intencoes.push({ acao: "duvida", texto: `Consigo te ajudar 👍\n\nEm DC o mais próximo que temos é *${sugDC} kg*. Posso seguir com ele, ou prefere *AC ${potN} kg*?` });
-  } else if ((pot || acdc) && !/\bavulso\b/.test(t)) {
+    return intencoes;
+  } else if ((pot || acdc) && !/\bavulso\b/.test(t) && !contextoMotor) {
     patch.motor = { ...(patch.motor || {}), ...(potN ? { potencia: potN } : {}), ...(acdc ? { ac_dc: acdc } : {}) };
+  }
+
+  if (/\btradicional\b/.test(t) && contextoMotor && !acdc) {
+    intencoes.push({ acao: "duvida", texto: "Perfeito 👍\n\nQuando você fala *tradicional*, está pensando em *motor AC*?" });
+    return intencoes;
+  }
+
+  if (/\b(ainda\s+nao\s+sei\s+a\s+cor|ainda\s+não\s+sei\s+a\s+cor|cor\s+depois|deixo\s+a\s+cor\s+pra\s+depois)\b/.test(t)) {
+    patch.quer_pintura = true;
+    patch.cor_pendente = true;
   }
 
   // Formato de venda do motor (avulso | motor+testeiras | kit automatizador)
@@ -2744,6 +2758,10 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
       intencoes.push({ acao: "add_item", tipo: "motor", config: { qtd: q ? Number(q[1]) : 1, ac_dc: acdc || undefined, potencia: potN || undefined, kit_motor: kitMotor } });
     }
   }
+
+  if (contextoMotor && !intencoes.some((i) => i?.tipo === "motor") && !Object.keys(patch).length && !/\b(guia|lamina|porta|medida)\b/.test(t)) {
+    intencoes.push({ acao: "add_item", tipo: "motor", config: { qtd: 1, ...(acdc ? { ac_dc: acdc } : {}), ...(potN ? { potencia: potN } : {}) } });
+  }
   if (/\bsoleiras?\s*avulsa?|avulsa?\s*soleira/.test(t)) {
     const q = t.match(/(\d+)\s*soleiras?/);
     intencoes.push({ acao: "add_item", tipo: "soleira", config: { qtd: q ? Number(q[1]) : 1 } });
@@ -2759,7 +2777,10 @@ function cfgFallbackInterpretar(mensagem: string): any[] {
     intencoes.push({ acao: "add_item", tipo: "eixo", config: { qtd: q ? Number(q[1]) : 1 } });
   }
 
-  if (Object.keys(patch).length) intencoes.unshift({ acao: medida ? "add_item" : "update_item", tipo: "kit_porta", ref: "kit_porta", config: patch, patch });
+  if (Object.keys(patch).length) {
+    const destino = contextoMotor && !medida ? "motor" : "kit_porta";
+    intencoes.unshift({ acao: medida ? "add_item" : "update_item", tipo: destino, ref: destino, config: patch, patch });
+  }
   const parecePergunta = /\?|\b(qual|quais|como|onde|quando|porque|por que|pra que|para que|voc[eê]s|trabalha|serve|pode|tem|faz)\b/.test(t);
   if (!intencoes.length && parecePergunta) intencoes.push({ acao: "duvida", texto: original });
   return intencoes;
