@@ -3674,7 +3674,7 @@ function cfgItemIncompleto(it: CfgItem): boolean {
   switch (it.tipo) {
     case "kit_porta": {
       const portPend = c.portinhola === true || (typeof c.portinhola === "string" && !["VILD","VILE","CENTRO"].includes(c.portinhola.toUpperCase()));
-      const corPend = c.quer_pintura === true && !c?.lamina?.cor;
+      const corPend = c.quer_pintura === true && !c?.lamina?.cor && !c?.cor_pendente;
       const opcPend = c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao;
       const manualPend = c.medida_corte_modo === "manual" && (!c.medida_eixo_m || !c.medida_lamina_m || !c.medida_soleira_m);
       const autoPend = c.medida_corte_modo === "auto" && (!c.instalacao || c.trava_lamina === undefined);
