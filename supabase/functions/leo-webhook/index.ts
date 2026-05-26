@@ -3463,6 +3463,37 @@ function cfgInterpretarPorEtapaAtiva(
       }
     }
 
+    if (c.portinhola === true || /posicao da portinhola|vild|vile|centro/.test(etapa)) {
+      if (/^(1|vild)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola: "VILD" } }];
+      if (/^(2|vile)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola: "VILE" } }];
+      if (/^(3|centro)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola: "CENTRO" } }];
+    }
+
+    if (!c.medida_corte_modo && /medida de corte/.test(etapa)) {
+      if (/^(1|manual|informar|informar manualmente)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_corte_modo: "manual" } }];
+      if (/^(2|auto|automatico|calcular|calcular automaticamente)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_corte_modo: "auto" } }];
+    }
+
+    if (c.medida_corte_modo === "manual" && numeroSimples) {
+      const valor = Number(numeroSimples[1].replace(",", "."));
+      if (!c.medida_eixo_m) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_eixo_m: valor } }];
+      if (!c.medida_lamina_m) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_lamina_m: valor } }];
+      if (!c.medida_soleira_m) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_soleira_m: valor } }];
+    }
+
+    if (c.medida_corte_modo === "auto") {
+      if (!c.instalacao && /tipo de instalacao|entre testeiras|vao|entre paredes/.test(etapa)) {
+        if (/^1$|entre testeiras/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { instalacao: "entre_testeiras" } }];
+        if (/^2$|vao \+ 1 guia|1 guia/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { instalacao: "vao_1guia" } }];
+        if (/^3$|vao \+ guias|2 guias|duas guias/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { instalacao: "vao_guias" } }];
+        if (/^4$|entre paredes/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { instalacao: "entre_paredes" } }];
+      }
+      if (c.trava_lamina === undefined && /trava de laminas/.test(etapa)) {
+        if (/^(1|s|sim|com trava)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { trava_lamina: true } }];
+        if (/^(2|n|nao|não|sem trava)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { trava_lamina: false } }];
+      }
+    }
+
     const aguardandoOpcionais =
       /opcional|portinhola|alcapao/.test(etapa) ||
       (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao);
