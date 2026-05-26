@@ -5100,9 +5100,9 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if (!c.largura || !c.altura)
         return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
       if (!c?.lamina?.modelo)
-        return "Qual o *modelo principal da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
+        return "Qual o *modelo principal da lâmina*?\n*1.* *Fechada*\n*2.* *Transvision*\n*3.* *Oblongo*";
       if (c.quer_pintura === undefined)
-        return "Deseja *pintura eletrostática*?\n• *Sim*\n• *Não*";
+        return "Deseja *pintura eletrostática*?\n*1.* *Sim*\n*2.* *Não*";
       if (c.quer_pintura === true && !c?.lamina?.cor && !c?.cor_pendente)
         return "Qual a *cor da pintura*?";
       // Motor: apenas AC/DC — a capacidade (kg) é SEMPRE automática pelo padrão técnico.
@@ -5110,14 +5110,14 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
         return `${textoPerguntaTipoMotor(false)}\n\n_A capacidade (kg), eixo, rolo e segurança são calculados automaticamente._`;
       // OPCIONAIS — antes da medida de corte (afetam cortes, soleira, lâminas).
       if (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao) {
-        return "Deseja algum *opcional*?\n• *Portinhola*\n• *Alçapão*\n• *Nenhum*";
+        return "Deseja algum *opcional*?\n*1.* *Portinhola*\n*2.* *Alçapão*\n*3.* *Nenhum*";
       }
       if (
         c.portinhola === true ||
         (typeof c.portinhola === "string" &&
           !["VILD", "VILE", "CENTRO"].includes(c.portinhola.toUpperCase()))
       ) {
-        return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
+        return "Qual a *posição da portinhola*?\n*1.* *VILD* — vista interna lado direito\n*2.* *VILE* — vista interna lado esquerdo\n*3.* *CENTRO*";
       }
       const port =
         typeof c.portinhola === "string" ? c.portinhola.toUpperCase() : "";
@@ -5128,7 +5128,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
         return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
       }
       if (!c.medida_corte_modo) {
-        return "Como deseja definir a *medida de corte*?\n• *Informar manualmente*\n• *Calcular automaticamente*";
+        return "Como deseja definir a *medida de corte*?\n*1.* *Informar manualmente*\n*2.* *Calcular automaticamente*";
       }
       if (c.medida_corte_modo === "manual") {
         if (!c.medida_eixo_m) return "Informe a *medida do eixo* (em metros).";
@@ -5139,9 +5139,9 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       }
       if (c.medida_corte_modo === "auto") {
         if (!c.instalacao)
-          return "Qual o *tipo de instalação*?\n• *Entre testeiras*\n• *Vão + 1 guia*\n• *Vão + guias*\n• *Entre paredes*";
+          return "Qual o *tipo de instalação*?\n*1.* *Entre testeiras*\n*2.* *Vão + 1 guia*\n*3.* *Vão + guias*\n*4.* *Entre paredes*";
         if (c.trava_lamina === undefined)
-          return "A porta possui *trava de lâminas*?\n• *Sim*\n• *Não*";
+          return "A porta possui *trava de lâminas*?\n*1.* *Sim*\n*2.* *Não*";
         // Guia: auto-sugerida pela largura (≤4m→50, ≤7m→70, >7m→100). Cliente pode sobrescrever dizendo "guia 70mm".
         if (
           (c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") &&
