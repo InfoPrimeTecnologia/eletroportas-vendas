@@ -3390,10 +3390,110 @@ function cfgInterpretarPorEtapaAtiva(
 
   if (kit) {
     const c = kit.config || {};
+    if (!c?.lamina?.modelo) {
+      if (/\blamina|modelo principal|fechada|transvision|oblongo/.test(etapa)) {
+        const lamina = inferirLaminaTexto(t);
+        if (lamina) {
+          return [
+            {
+              acao: "update_item",
+              ref: "kit_porta",
+              patch: { lamina: { modelo: lamina } },
+            },
+          ];
+        }
+      }
+    }
+
+    if (c.quer_pintura === undefined) {
+      const aguardandoPintura = /pintura|eletrostatica/.test(etapa);
+      if (aguardandoPintura) {
+        if (/^(1|s|sim|ok|quero|pode|com pintura|quero pintura|coloca|incluir)$/i.test(t)) {
+          return [
+            {
+              acao: "update_item",
+              ref: "kit_porta",
+              patch: { quer_pintura: true, pintura: "eletrostatica" },
+            },
+          ];
+        }
+        if (/^(2|n|nao|não|sem pintura|dispenso|nenhum|nenhuma)$/i.test(t)) {
+          return [
+            {
+              acao: "update_item",
+              ref: "kit_porta",
+              patch: { quer_pintura: false, pintura: false },
+            },
+          ];
+        }
+      }
+    }
+
+    if (c.quer_pintura === true && !c?.lamina?.cor && !c?.cor_pendente) {
+      if (/cor da pintura|pintura/.test(etapa)) {
+        const cor = t.match(
+          /\b(branca?|preta?|cinza|bege|azul|verde|vermelha?|amarela?|ral\s*\d+|especial)\b/,
+        );
+        if (cor) {
+          return [
+            {
+              acao: "update_item",
+              ref: "kit_porta",
+              patch: { lamina: { cor: cor[1].replace(/a$/, "o").replace(/\s+/g, "_") } },
+            },
+          ];
+        }
+        if (/ainda nao sei|nao sei|depois|pendente/.test(t)) {
+          return [
+            {
+              acao: "update_item",
+              ref: "kit_porta",
+              patch: { cor_pendente: true },
+            },
+          ];
+        }
+      }
+    }
+
+    if (!c?.motor?.ac_dc) {
+      const aguardandoMotor = /tipo de motor|corrente alternada|nobreak|ac|dc/.test(etapa);
+      if (aguardandoMotor) {
+        if (/^(1|ac)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { motor: { ac_dc: "AC" } } }];
+        if (/^(2|dc)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { motor: { ac_dc: "DC" } } }];
+      }
+    }
+
     const aguardandoOpcionais =
       /opcional|portinhola|alcapao/.test(etapa) ||
       (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao);
     if (aguardandoOpcionais) {
+      if (/^1$/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { portinhola: true, alcapao: false, opcionais_perguntado: true },
+          },
+        ];
+      }
+      if (/^2$/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { alcapao: true, portinhola: false, opcionais_perguntado: true },
+          },
+        ];
+      }
+      if (/^3$/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { portinhola: false, alcapao: false, opcionais_perguntado: true },
+          },
+        ];
+      }
       if (/^portinhola\b|\bportinhola\b/.test(t)) {
         return [
           {
