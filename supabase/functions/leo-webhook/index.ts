@@ -3469,6 +3469,12 @@ function cfgInterpretarPorEtapaAtiva(
       if (/^(3|centro)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola: "CENTRO" } }];
     }
 
+    const port = typeof c.portinhola === "string" ? c.portinhola.toUpperCase() : "";
+    if ((port === "VILD" || port === "VILE") && c.portinhola_cortada === undefined) {
+      if (/^(1|cortada|com corte)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola_cortada: true } }];
+      if (/^(2|inteira|sem corte)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola_cortada: false } }];
+    }
+
     if (!c.medida_corte_modo && /medida de corte/.test(etapa)) {
       if (/^(1|manual|informar|informar manualmente)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_corte_modo: "manual" } }];
       if (/^(2|auto|automatico|calcular|calcular automaticamente)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_corte_modo: "auto" } }];
@@ -5156,7 +5162,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
         (port === "VILD" || port === "VILE") &&
         c.portinhola_cortada === undefined
       ) {
-        return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
+        return "A portinhola é *cortada* ou *inteira para ajuste no local*?\n*1.* *Cortada*\n*2.* *Inteira*";
       }
       if (!c.medida_corte_modo) {
         return "Como deseja definir a *medida de corte*?\n*1.* *Informar manualmente*\n*2.* *Calcular automaticamente*";
