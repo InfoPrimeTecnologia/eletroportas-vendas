@@ -454,7 +454,7 @@ function validarCapacidadeMotorConfig(config: any): {
 }
 
 function textoPerguntaTipoMotor(comSeta = false): string {
-  return `${comSeta ? "👉 " : ""}Qual tipo de motor deseja?\n\n• *AC* — Corrente Alternada 220V\n• *DC* — Motor com nobreak integrado`;
+  return `${comSeta ? "👉 " : ""}Qual tipo de motor deseja?\n\n*1.* *AC* — Corrente Alternada 220V\n*2.* *DC* — Motor com nobreak integrado`;
 }
 
 function ehMensagemNovoAtendimento(mensagem: string): boolean {
@@ -3390,10 +3390,147 @@ function cfgInterpretarPorEtapaAtiva(
 
   if (kit) {
     const c = kit.config || {};
+    if (!c?.lamina?.modelo) {
+      if (/\blamina|modelo principal|fechada|transvision|oblongo/.test(etapa)) {
+        const lamina = inferirLaminaTexto(t);
+        if (lamina) {
+          return [
+            {
+              acao: "update_item",
+              ref: "kit_porta",
+              patch: { lamina: { modelo: lamina } },
+            },
+          ];
+        }
+      }
+    }
+
+    if (c.quer_pintura === undefined) {
+      const aguardandoPintura = /pintura|eletrostatica/.test(etapa);
+      if (aguardandoPintura) {
+        if (/^(1|s|sim|ok|quero|pode|com pintura|quero pintura|coloca|incluir)$/i.test(t)) {
+          return [
+            {
+              acao: "update_item",
+              ref: "kit_porta",
+              patch: { quer_pintura: true, pintura: "eletrostatica" },
+            },
+          ];
+        }
+        if (/^(2|n|nao|não|sem pintura|dispenso|nenhum|nenhuma)$/i.test(t)) {
+          return [
+            {
+              acao: "update_item",
+              ref: "kit_porta",
+              patch: { quer_pintura: false, pintura: false },
+            },
+          ];
+        }
+      }
+    }
+
+    if (c.quer_pintura === true && !c?.lamina?.cor && !c?.cor_pendente) {
+      if (/cor da pintura|pintura/.test(etapa)) {
+        const cor = t.match(
+          /\b(branca?|preta?|cinza|bege|azul|verde|vermelha?|amarela?|ral\s*\d+|especial)\b/,
+        );
+        if (cor) {
+          return [
+            {
+              acao: "update_item",
+              ref: "kit_porta",
+              patch: { lamina: { cor: cor[1].replace(/a$/, "o").replace(/\s+/g, "_") } },
+            },
+          ];
+        }
+        if (/ainda nao sei|nao sei|depois|pendente/.test(t)) {
+          return [
+            {
+              acao: "update_item",
+              ref: "kit_porta",
+              patch: { cor_pendente: true },
+            },
+          ];
+        }
+      }
+    }
+
+    if (!c?.motor?.ac_dc) {
+      const aguardandoMotor = /tipo de motor|corrente alternada|nobreak|ac|dc/.test(etapa);
+      if (aguardandoMotor) {
+        if (/^(1|ac)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { motor: { ac_dc: "AC" } } }];
+        if (/^(2|dc)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { motor: { ac_dc: "DC" } } }];
+      }
+    }
+
+    if (c.portinhola === true || /posicao da portinhola|vild|vile|centro/.test(etapa)) {
+      if (/^(1|vild)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola: "VILD" } }];
+      if (/^(2|vile)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola: "VILE" } }];
+      if (/^(3|centro)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola: "CENTRO" } }];
+    }
+
+    const port = typeof c.portinhola === "string" ? c.portinhola.toUpperCase() : "";
+    if ((port === "VILD" || port === "VILE") && c.portinhola_cortada === undefined) {
+      if (/^(1|cortada|com corte)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola_cortada: true } }];
+      if (/^(2|inteira|sem corte)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { portinhola_cortada: false } }];
+    }
+
+    if (!c.medida_corte_modo && /medida de corte/.test(etapa)) {
+      if (/^(1|manual|informar|informar manualmente)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_corte_modo: "manual" } }];
+      if (/^(2|auto|automatico|calcular|calcular automaticamente)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_corte_modo: "auto" } }];
+    }
+
+    if (c.medida_corte_modo === "manual" && numeroSimples) {
+      const valor = Number(numeroSimples[1].replace(",", "."));
+      if (!c.medida_eixo_m) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_eixo_m: valor } }];
+      if (!c.medida_lamina_m) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_lamina_m: valor } }];
+      if (!c.medida_soleira_m) return [{ acao: "update_item", ref: "kit_porta", patch: { medida_soleira_m: valor } }];
+    }
+
+    if (c.medida_corte_modo === "auto") {
+      if (!c.instalacao && /tipo de instalacao|entre testeiras|vao|entre paredes/.test(etapa)) {
+        if (/^1$|entre testeiras/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { instalacao: "entre_testeiras" } }];
+        if (/^2$|vao \+ 1 guia|1 guia/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { instalacao: "vao_1guia" } }];
+        if (/^3$|vao \+ guias|2 guias|duas guias/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { instalacao: "vao_guias" } }];
+        if (/^4$|entre paredes/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { instalacao: "entre_paredes" } }];
+      }
+      if (c.trava_lamina === undefined && /trava de laminas/.test(etapa)) {
+        if (/^(1|s|sim|com trava)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { trava_lamina: true } }];
+        if (/^(2|n|nao|não|sem trava)$/i.test(t)) return [{ acao: "update_item", ref: "kit_porta", patch: { trava_lamina: false } }];
+      }
+    }
+
     const aguardandoOpcionais =
       /opcional|portinhola|alcapao/.test(etapa) ||
       (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao);
     if (aguardandoOpcionais) {
+      if (/^1$/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { portinhola: true, alcapao: false, opcionais_perguntado: true },
+          },
+        ];
+      }
+      if (/^2$/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { alcapao: true, portinhola: false, opcionais_perguntado: true },
+          },
+        ];
+      }
+      if (/^3$/.test(t)) {
+        return [
+          {
+            acao: "update_item",
+            ref: "kit_porta",
+            patch: { portinhola: false, alcapao: false, opcionais_perguntado: true },
+          },
+        ];
+      }
       if (/^portinhola\b|\bportinhola\b/.test(t)) {
         return [
           {
@@ -5000,9 +5137,9 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       if (!c.largura || !c.altura)
         return "Qual a *largura x altura* da porta (em metros)? Ex: `3x4`.";
       if (!c?.lamina?.modelo)
-        return "Qual o *modelo principal da lâmina*?\n• *Fechada*\n• *Transvision*\n• *Oblongo*";
+        return "Qual o *modelo principal da lâmina*?\n*1.* *Fechada*\n*2.* *Transvision*\n*3.* *Oblongo*";
       if (c.quer_pintura === undefined)
-        return "Deseja *pintura eletrostática*?\n• *Sim*\n• *Não*";
+        return "Deseja *pintura eletrostática*?\n*1.* *Sim*\n*2.* *Não*";
       if (c.quer_pintura === true && !c?.lamina?.cor && !c?.cor_pendente)
         return "Qual a *cor da pintura*?";
       // Motor: apenas AC/DC — a capacidade (kg) é SEMPRE automática pelo padrão técnico.
@@ -5010,14 +5147,14 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
         return `${textoPerguntaTipoMotor(false)}\n\n_A capacidade (kg), eixo, rolo e segurança são calculados automaticamente._`;
       // OPCIONAIS — antes da medida de corte (afetam cortes, soleira, lâminas).
       if (c.opcionais_perguntado !== true && !c.portinhola && !c.alcapao) {
-        return "Deseja algum *opcional*?\n• *Portinhola*\n• *Alçapão*\n• *Nenhum*";
+        return "Deseja algum *opcional*?\n*1.* *Portinhola*\n*2.* *Alçapão*\n*3.* *Nenhum*";
       }
       if (
         c.portinhola === true ||
         (typeof c.portinhola === "string" &&
           !["VILD", "VILE", "CENTRO"].includes(c.portinhola.toUpperCase()))
       ) {
-        return "Qual a *posição da portinhola*?\n• *VILD* — vista interna lado direito\n• *VILE* — vista interna lado esquerdo\n• *CENTRO*";
+        return "Qual a *posição da portinhola*?\n*1.* *VILD* — vista interna lado direito\n*2.* *VILE* — vista interna lado esquerdo\n*3.* *CENTRO*";
       }
       const port =
         typeof c.portinhola === "string" ? c.portinhola.toUpperCase() : "";
@@ -5025,10 +5162,10 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
         (port === "VILD" || port === "VILE") &&
         c.portinhola_cortada === undefined
       ) {
-        return "A portinhola é *cortada* (com lâminas já cortadas) ou *inteira para ajuste no local*?";
+        return "A portinhola é *cortada* ou *inteira para ajuste no local*?\n*1.* *Cortada*\n*2.* *Inteira*";
       }
       if (!c.medida_corte_modo) {
-        return "Como deseja definir a *medida de corte*?\n• *Informar manualmente*\n• *Calcular automaticamente*";
+        return "Como deseja definir a *medida de corte*?\n*1.* *Informar manualmente*\n*2.* *Calcular automaticamente*";
       }
       if (c.medida_corte_modo === "manual") {
         if (!c.medida_eixo_m) return "Informe a *medida do eixo* (em metros).";
@@ -5039,9 +5176,9 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
       }
       if (c.medida_corte_modo === "auto") {
         if (!c.instalacao)
-          return "Qual o *tipo de instalação*?\n• *Entre testeiras*\n• *Vão + 1 guia*\n• *Vão + guias*\n• *Entre paredes*";
+          return "Qual o *tipo de instalação*?\n*1.* *Entre testeiras*\n*2.* *Vão + 1 guia*\n*3.* *Vão + guias*\n*4.* *Entre paredes*";
         if (c.trava_lamina === undefined)
-          return "A porta possui *trava de lâminas*?\n• *Sim*\n• *Não*";
+          return "A porta possui *trava de lâminas*?\n*1.* *Sim*\n*2.* *Não*";
         // Guia: auto-sugerida pela largura (≤4m→50, ≤7m→70, >7m→100). Cliente pode sobrescrever dizendo "guia 70mm".
         if (
           (c.instalacao === "vao_1guia" || c.instalacao === "vao_guias") &&
