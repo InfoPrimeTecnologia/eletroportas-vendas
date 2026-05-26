@@ -454,7 +454,7 @@ function validarCapacidadeMotorConfig(config: any): {
 }
 
 function textoPerguntaTipoMotor(comSeta = false): string {
-  return `${comSeta ? "👉 " : ""}Qual tipo de motor deseja?\n\n• *AC* — Corrente Alternada 220V\n• *DC* — Motor com nobreak integrado`;
+  return `${comSeta ? "👉 " : ""}Qual tipo de motor deseja?\n\n*1.* *AC* — Corrente Alternada 220V\n*2.* *DC* — Motor com nobreak integrado`;
 }
 
 function ehMensagemNovoAtendimento(mensagem: string): boolean {
