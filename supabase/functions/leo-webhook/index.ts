@@ -40,6 +40,9 @@ import {
   inferirPecasAvulsasTexto,
   inferirRespostaPortinholaCorte,
 } from "./modules/semantica.ts";
+import {
+  processarConsumidorFinal,
+} from "./modules/fluxoConsumidorFinal.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6731,6 +6734,105 @@ Deno.serve(async (req) => {
         );
       }
     }
+
+    // ============================================================
+    // 🏠 ROTEAMENTO: CONSUMIDOR FINAL (porta_instalada) → Fluxo simplificado
+    // Linguagem comercial, sem termos técnicos. Apenas coleta + qualificação.
+    // ============================================================
+    if (tipoClienteAtual === "porta_instalada") {
+      try {
+        // Recarrega com colunas do CF
+        const { data: convCF } = await supabase
+          .from("leo_conversations")
+          .select(
+            "id, nome_cliente, tipo_cliente, cf_etapa, cf_dados, cf_score, cf_classificacao, cf_ultima_interacao",
+          )
+          .eq("id", conversa.id)
+          .maybeSingle();
+
+        const conversaCF = convCF || conversa;
+
+        // Fotos recebidas no payload (PrimeSync envia mediaUrl quando mediaType=image)
+        const fotosNovas: string[] = [];
+        const mediaUrl = body?.mediaUrl || body?.media?.url;
+        if (mediaUrl && /image/i.test(String(mediaType || ""))) {
+          fotosNovas.push(String(mediaUrl));
+        }
+
+        const t0 = Date.now();
+        const resultado = processarConsumidorFinal({
+          conversa: conversaCF,
+          mensagem: messageBody,
+          fotosNovas,
+        });
+
+        // Persiste estado
+        await supabase
+          .from("leo_conversations")
+          .update({
+            cf_etapa: resultado.proxima_etapa,
+            cf_dados: resultado.dados as any,
+            cf_score: resultado.score,
+            cf_classificacao: resultado.classificacao,
+            cf_ultima_interacao: new Date().toISOString(),
+            cf_pagamento_pref:
+              (resultado.dados as any)?.pagamento_pref ??
+              (conversaCF as any)?.cf_pagamento_pref ??
+              null,
+            cf_visita_solicitada: (resultado.dados as any)?.visita_solicitada ?? null,
+            cf_prazo_resposta:
+              resultado.dados.urgencia === true
+                ? "urgencia"
+                : resultado.dados.urgencia === false
+                  ? "padrao_15_dias"
+                  : null,
+            ultima_mensagem_at: new Date().toISOString(),
+          })
+          .eq("id", conversa.id);
+
+        // Envia respostas em sequência
+        for (const r of resultado.respostas) {
+          await enviarTexto(telefone, r);
+          await salvarMensagem(conversa.id, "assistant", r, {
+            fluxo: "consumidor_final",
+            etapa: resultado.proxima_etapa,
+          });
+        }
+
+        // Auditoria operacional
+        try {
+          logAuditoriaOperacional(
+            montarAuditoriaOperacional({
+              conversaId: conversa.id,
+              telefone,
+              mensagem: messageBody,
+              intencao: `cf:${resultado.proxima_etapa}`,
+              decisao: `respostas=${resultado.respostas.length} score=${resultado.score} classe=${resultado.classificacao ?? "-"}`,
+              regra: "fluxo_consumidor_final",
+              inicioMs: performance.now() - (Date.now() - t0),
+            }),
+          );
+        } catch (_) { /* não bloqueia */ }
+
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            fluxo: "consumidor_final",
+            etapa: resultado.proxima_etapa,
+            score: resultado.score,
+            classificacao: resultado.classificacao,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      } catch (e: any) {
+        console.error(
+          "❌ Fluxo Consumidor Final falhou — caindo para fluxo legado:",
+          e?.message,
+        );
+      }
+    }
+
+
 
     const estadoAntesAceite = await carregarEstadoConversa(conversa.id);
 

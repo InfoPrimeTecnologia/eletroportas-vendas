@@ -204,6 +204,15 @@ export type Database = {
           altura: number | null
           carrinho: Json
           cep: string | null
+          cf_classificacao: string | null
+          cf_dados: Json
+          cf_etapa: string | null
+          cf_pagamento_pref: string | null
+          cf_prazo_resposta: string | null
+          cf_recuperacao_estagio: number
+          cf_score: number
+          cf_ultima_interacao: string | null
+          cf_visita_solicitada: boolean | null
           created_at: string
           endereco_instalacao: string | null
           entrega_perguntado: boolean
@@ -233,6 +242,15 @@ export type Database = {
           altura?: number | null
           carrinho?: Json
           cep?: string | null
+          cf_classificacao?: string | null
+          cf_dados?: Json
+          cf_etapa?: string | null
+          cf_pagamento_pref?: string | null
+          cf_prazo_resposta?: string | null
+          cf_recuperacao_estagio?: number
+          cf_score?: number
+          cf_ultima_interacao?: string | null
+          cf_visita_solicitada?: boolean | null
           created_at?: string
           endereco_instalacao?: string | null
           entrega_perguntado?: boolean
@@ -262,6 +280,15 @@ export type Database = {
           altura?: number | null
           carrinho?: Json
           cep?: string | null
+          cf_classificacao?: string | null
+          cf_dados?: Json
+          cf_etapa?: string | null
+          cf_pagamento_pref?: string | null
+          cf_prazo_resposta?: string | null
+          cf_recuperacao_estagio?: number
+          cf_score?: number
+          cf_ultima_interacao?: string | null
+          cf_visita_solicitada?: boolean | null
           created_at?: string
           endereco_instalacao?: string | null
           entrega_perguntado?: boolean
