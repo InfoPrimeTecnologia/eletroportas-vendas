@@ -92,6 +92,60 @@ function normalizarTelefone(t: string): string {
   return (t || "").replace(/\D/g, "");
 }
 
+function montarAuditoriaOperacional(input: {
+  conversaId: string;
+  telefone: string;
+  mensagem: string;
+  pedidoAntes?: CfgPedido;
+  pedidoDepois?: CfgPedido;
+  intencao?: string;
+  intencoes?: any[];
+  decisao?: string;
+  regra?: string;
+  conflito?: any;
+  loop?: any;
+  inicioMs: number;
+}) {
+  const antes = input.pedidoAntes ? cfgPedidoLeve(input.pedidoAntes) : null;
+  const depois = input.pedidoDepois ? cfgPedidoLeve(input.pedidoDepois) : null;
+  return {
+    tipo: "leo_auditoria_operacional",
+    conversa_id: input.conversaId,
+    cliente_id: input.telefone,
+    input_cliente: input.mensagem,
+    contexto_ativo_antes: input.pedidoAntes?.contexto_ativo || null,
+    contexto_ativo_depois: input.pedidoDepois?.contexto_ativo || null,
+    etapa_ativa_antes: input.pedidoAntes?.etapa_ativa || null,
+    etapa_ativa_depois: input.pedidoDepois?.etapa_ativa || null,
+    campos_pendentes: input.pedidoDepois?.campos_pendentes || [],
+    intencao_detectada: input.intencao || null,
+    parser: {
+      intencoes: input.intencoes || [],
+      pedido_antes: antes,
+      pedido_depois: depois,
+    },
+    decisao_final: input.decisao || null,
+    regra_aplicada: input.regra || null,
+    conflito_contexto: input.conflito || null,
+    loop: input.loop || null,
+    tempo_processamento_ms: Math.round(performance.now() - input.inicioMs),
+    criado_em: new Date().toISOString(),
+  };
+}
+
+function logAuditoriaOperacional(auditoria: any) {
+  try {
+    console.log("🧾 LEO_AUDIT", JSON.stringify(auditoria));
+  } catch (_) {
+    console.log("🧾 LEO_AUDIT", auditoria);
+  }
+  return auditoria;
+}
+
+function metaComAuditoria(meta: any, auditoria: any) {
+  return { ...(meta || {}), audit_operacional: auditoria };
+}
+
 function ehPendenteSerralheiro(tipo: unknown): boolean {
   const t = String(tipo || "")
     .trim()
