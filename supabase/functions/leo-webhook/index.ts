@@ -40,6 +40,10 @@ import {
   inferirPecasAvulsasTexto,
   inferirRespostaPortinholaCorte,
 } from "./modules/semantica.ts";
+import {
+  processarConsumidorFinal,
+  type CFEtapa,
+} from "./modules/fluxoConsumidorFinal.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
