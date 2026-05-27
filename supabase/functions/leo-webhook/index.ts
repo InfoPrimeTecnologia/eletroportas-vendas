@@ -5216,7 +5216,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
         (port === "VILD" || port === "VILE") &&
         c.portinhola_cortada === undefined
       ) {
-        return "A portinhola é *cortada* ou *inteira para ajuste no local*?\n*1.* *Cortada*\n*2.* *Inteira*";
+        return "Como prefere a portinhola?\n*1.* *Lâminas e soleira cortadas de fábrica*\n*2.* *Lâminas inteiras para ajuste no local*";
       }
       if (!c.medida_corte_modo) {
         return "Como deseja definir a *medida de corte*?\n*1.* *Informar manualmente*\n*2.* *Calcular automaticamente*";
