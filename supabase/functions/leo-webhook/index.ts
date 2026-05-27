@@ -92,6 +92,60 @@ function normalizarTelefone(t: string): string {
   return (t || "").replace(/\D/g, "");
 }
 
+function montarAuditoriaOperacional(input: {
+  conversaId: string;
+  telefone: string;
+  mensagem: string;
+  pedidoAntes?: CfgPedido;
+  pedidoDepois?: CfgPedido;
+  intencao?: string;
+  intencoes?: any[];
+  decisao?: string;
+  regra?: string;
+  conflito?: any;
+  loop?: any;
+  inicioMs: number;
+}) {
+  const antes = input.pedidoAntes ? cfgPedidoLeve(input.pedidoAntes) : null;
+  const depois = input.pedidoDepois ? cfgPedidoLeve(input.pedidoDepois) : null;
+  return {
+    tipo: "leo_auditoria_operacional",
+    conversa_id: input.conversaId,
+    cliente_id: input.telefone,
+    input_cliente: input.mensagem,
+    contexto_ativo_antes: input.pedidoAntes?.contexto_ativo || null,
+    contexto_ativo_depois: input.pedidoDepois?.contexto_ativo || null,
+    etapa_ativa_antes: input.pedidoAntes?.etapa_ativa || null,
+    etapa_ativa_depois: input.pedidoDepois?.etapa_ativa || null,
+    campos_pendentes: input.pedidoDepois?.campos_pendentes || [],
+    intencao_detectada: input.intencao || null,
+    parser: {
+      intencoes: input.intencoes || [],
+      pedido_antes: antes,
+      pedido_depois: depois,
+    },
+    decisao_final: input.decisao || null,
+    regra_aplicada: input.regra || null,
+    conflito_contexto: input.conflito || null,
+    loop: input.loop || null,
+    tempo_processamento_ms: Math.round(performance.now() - input.inicioMs),
+    criado_em: new Date().toISOString(),
+  };
+}
+
+function logAuditoriaOperacional(auditoria: any) {
+  try {
+    console.log("🧾 LEO_AUDIT", JSON.stringify(auditoria));
+  } catch (_) {
+    console.log("🧾 LEO_AUDIT", auditoria);
+  }
+  return auditoria;
+}
+
+function metaComAuditoria(meta: any, auditoria: any) {
+  return { ...(meta || {}), audit_operacional: auditoria };
+}
+
 function ehPendenteSerralheiro(tipo: unknown): boolean {
   const t = String(tipo || "")
     .trim()
@@ -5162,7 +5216,7 @@ function cfgProximaPergunta(pedido: CfgPedido): string | null {
         (port === "VILD" || port === "VILE") &&
         c.portinhola_cortada === undefined
       ) {
-        return "A portinhola é *cortada* ou *inteira para ajuste no local*?\n*1.* *Cortada*\n*2.* *Inteira*";
+        return "Como prefere a portinhola?\n*1.* *Lâminas e soleira cortadas de fábrica*\n*2.* *Lâminas inteiras para ajuste no local*";
       }
       if (!c.medida_corte_modo) {
         return "Como deseja definir a *medida de corte*?\n*1.* *Informar manualmente*\n*2.* *Calcular automaticamente*";
@@ -5824,6 +5878,103 @@ function detectarTrocaContexto(
   return { trocou: false };
 }
 
+function ehPedidoOrcamentoDetalhado(mensagem: string): boolean {
+  const t = normTextoLeo(mensagem);
+  return /\b(gerar|gere|emitir|enviar|mandar|fazer|fechar)\b.*\b(orcamento|orcamento detalhado|pdf)\b|\borcamento\s+detalhado\b/.test(
+    t,
+  );
+}
+
+function ehPedidoItensDoKitAtual(mensagem: string): boolean {
+  const t = normTextoLeo(mensagem);
+  return /\b(quais|qual|o que|oque)\b.*\b(itens|vem|inclui|acompanha|kit)\b|\bo que vem nesse kit\b|\bitens desse kit\b/.test(
+    t,
+  );
+}
+
+function ehPedidoDesconsiderarParcial(mensagem: string): boolean {
+  const t = normTextoLeo(mensagem);
+  return /\b(desconsidere|ignora|ignore|apaga|apague|cancela|cancelar)\b.*\b(acima|ultima|ultimo|mensagem|resposta|que escrevi|isso)\b/.test(
+    t,
+  );
+}
+
+function cfgDescreverCampoFaltante(pergunta: string): string {
+  const p = normTextoLeo(pergunta);
+  if (/guia/.test(p)) return "definir a guia";
+  if (/largura|altura|medida/.test(p)) return "informar a medida da porta";
+  if (/modelo principal|lamina/.test(p)) return "escolher o modelo da lâmina";
+  if (/pintura/.test(p) && /cor/.test(p)) return "definir a cor da pintura";
+  if (/pintura/.test(p)) return "confirmar se deseja pintura";
+  if (/tipo de motor|corrente alternada|nobreak/.test(p)) return "definir o tipo do motor";
+  if (/opcional|portinhola|alcapao/.test(p)) return "confirmar os opcionais";
+  if (/posicao da portinhola/.test(p)) return "definir a posição da portinhola";
+  if (/cortada|inteira/.test(p)) return "definir se as lâminas e soleira vão cortadas de fábrica";
+  if (/instalacao/.test(p)) return "definir o tipo de instalação";
+  if (/trava/.test(p)) return "confirmar se terá trava de lâminas";
+  return "completar uma informação do pedido";
+}
+
+function cfgRespostaCampoFaltanteParaOrcamento(pergunta: string): string {
+  const p = normTextoLeo(pergunta);
+  if (/guia/.test(p)) {
+    const m = pergunta.match(/(50|60|70|100)\s*mm/i)?.[1];
+    if (m) {
+      return `Certo 👍 Antes de gerar, falta apenas definir a guia. Deseja manter a guia sugerida de *${m} mm*?`;
+    }
+  }
+  return `Certo 👍 Antes de gerar, falta apenas ${cfgDescreverCampoFaltante(pergunta)}.\n\n👉 ${pergunta}`;
+}
+
+function cfgValidarSanidadeOrcamento(pedido: CfgPedido): { ok: boolean; motivo?: string } {
+  const total = Number(pedido?.total || 0);
+  if (!Number.isFinite(total) || total <= 0) return { ok: false, motivo: "total inválido" };
+  const linhas = (pedido.itens || []).flatMap((it) => it.explosao || []);
+  if (!linhas.length) return { ok: false, motivo: "pedido sem itens calculados" };
+  for (const l of linhas) {
+    const qtd = Number(l.qtd);
+    const unit = Number(l.valor_unit);
+    const linhaTotal = Number(l.total);
+    if (!Number.isFinite(qtd) || qtd <= 0 || qtd > 10000) {
+      return { ok: false, motivo: `quantidade inválida em ${l.descricao}` };
+    }
+    if (!l.sob_consulta && (!Number.isFinite(unit) || unit <= 0 || unit > 100000)) {
+      return { ok: false, motivo: `preço unitário inválido em ${l.descricao}` };
+    }
+    if (!l.sob_consulta && Math.abs(qtd * unit - linhaTotal) > 0.2) {
+      return { ok: false, motivo: `subtotal divergente em ${l.descricao}` };
+    }
+  }
+  const kit = pedido.itens.find((it) => it.tipo === "kit_porta");
+  if (kit) {
+    const area = Number(kit.config?.largura || 0) * Number(kit.config?.altura || 0);
+    if (area > 0 && total / area > 3500) {
+      return { ok: false, motivo: `total por m² fora da faixa (${(total / area).toFixed(2)})` };
+    }
+  }
+  return { ok: true };
+}
+
+function cfgRespostaItensDoKitAtual(pedido: CfgPedido): string | null {
+  const kit = pedido.itens.find((it) => it.tipo === "kit_porta");
+  if (!kit) return null;
+  const c = kit.config || {};
+  const itens = ["lâminas da porta", "eixo", "soleira"];
+  if (c.instalacao !== "entre_testeiras") itens.push("guias laterais");
+  if (c?.motor?.ac_dc || c.motor !== false) {
+    itens.push("motor/automatizador");
+    const km = c.kit_motor || "kit_automatizador";
+    if (km === "kit_automatizador") itens.push("testeiras", "central de comando", "2 controles");
+    else if (km === "motor_testeiras") itens.push("testeiras");
+  }
+  if (c.portinhola) itens.push("portinhola");
+  if (c.alcapao) itens.push("alçapão");
+  if (c.quer_pintura) itens.push("pintura eletrostática");
+  if (c.trava_lamina) itens.push("trava de lâminas");
+  const proxima = cfgProximaPergunta(pedido);
+  return `Esse kit atual inclui:\n\n${itens.map((i) => `• ${i}`).join("\n")}\n\n${proxima ? `👉 Para seguir, falta só: ${proxima}` : "👉 Posso gerar o orçamento detalhado no modelo padrão?"}`;
+}
+
 // --- Orquestrador ---
 
 async function rodarConfigurador(args: {
@@ -5834,6 +5985,7 @@ async function rodarConfigurador(args: {
   isNova: boolean;
 }): Promise<{ pdfEnviado: boolean; texto?: string }> {
   const { conversa, telefone, mensagem, nomeCliente, isNova } = args;
+  const inicioAuditoriaMs = performance.now();
 
   // Carrega pedido atual
   const { data: row } = await supabase
@@ -5842,6 +5994,7 @@ async function rodarConfigurador(args: {
     .eq("id", conversa.id)
     .maybeSingle();
   let pedido = carregarPedido((row as any)?.pedido);
+  const pedidoAntesTurno: CfgPedido = JSON.parse(JSON.stringify(pedido));
 
   if (isNova) {
     const contextoInicial = detectarContextoAtivoMensagem(mensagem);
@@ -5964,6 +6117,48 @@ async function rodarConfigurador(args: {
   const intencaoConversa = classificarIntencaoConversa(mensagem);
   console.log("🎭 intencao conversa:", intencaoConversa);
 
+  if (ehPedidoDesconsiderarParcial(mensagem)) {
+    const txt = `Certo 👍 Você quer desfazer apenas a *última informação* ou cancelar *todo o orçamento*?\n\n*1.* Desfazer última informação\n*2.* Cancelar todo o orçamento`;
+    const auditoria = logAuditoriaOperacional(
+      montarAuditoriaOperacional({
+        conversaId: conversa.id,
+        telefone,
+        mensagem,
+        pedidoAntes: pedidoAntesTurno,
+        pedidoDepois: pedido,
+        intencao: intencaoConversa,
+        decisao: "pedir_confirmacao_desfazer",
+        regra: "desconsiderar_nao_zera_contexto_sem_confirmacao",
+        inicioMs: inicioAuditoriaMs,
+      }),
+    );
+    await salvarMensagem(conversa.id, "assistant", txt, metaComAuditoria({ configurador: true }, auditoria));
+    await enviarTexto(telefone, txt);
+    return { pdfEnviado: false, texto: txt };
+  }
+
+  if (ehPedidoItensDoKitAtual(mensagem)) {
+    const txt = cfgRespostaItensDoKitAtual(pedido);
+    if (txt) {
+      const auditoria = logAuditoriaOperacional(
+        montarAuditoriaOperacional({
+          conversaId: conversa.id,
+          telefone,
+          mensagem,
+          pedidoAntes: pedidoAntesTurno,
+          pedidoDepois: pedido,
+          intencao: intencaoConversa,
+          decisao: "responder_itens_do_kit_ativo",
+          regra: "pergunta_consultiva_usa_pedido_ativo_sem_reiniciar",
+          inicioMs: inicioAuditoriaMs,
+        }),
+      );
+      await salvarMensagem(conversa.id, "assistant", txt, metaComAuditoria({ configurador: true }, auditoria));
+      await enviarTexto(telefone, txt);
+      return { pdfEnviado: false, texto: txt };
+    }
+  }
+
   // Saudação + carrinho não vazio → pergunta se quer continuar ou iniciar novo
   if (intencaoConversa === "saudacao" && pedido.itens.length > 0) {
     pedido.aguardando_retomada = true;
@@ -6002,7 +6197,9 @@ async function rodarConfigurador(args: {
   }
 
   // 1) Interpreta intenções técnicas
-  let intencoes = await cfgInterpretar(mensagem, pedido);
+  let intencoes = ehPedidoOrcamentoDetalhado(mensagem)
+    ? [{ acao: "gerar_orcamento" }]
+    : await cfgInterpretar(mensagem, pedido);
   // Pós-processamento: faixa parcial misturada com kit_porta NUNCA vira lâmina avulsa.
   const msgLower = String(mensagem || "")
     .toLowerCase()
@@ -6090,28 +6287,77 @@ async function rodarConfigurador(args: {
       "🚫 gerar_orcamento bloqueado (configurador) — item incompleto:",
       faltaAlgo,
     );
-    const itemFaltando = pedido.itens.find((it) => cfgItemIncompleto(it));
-    const tipoNome = itemFaltando
-      ? String(itemFaltando.tipo).replace("_", " ")
-      : "item";
-    const txt = `Antes de gerar o orçamento, preciso completar os dados de *${tipoNome}*.\n\n👉 ${faltaAlgo}`;
-    await salvarMensagem(conversa.id, "assistant", txt, {
+    const txt = cfgRespostaCampoFaltanteParaOrcamento(faltaAlgo);
+    const auditoria = logAuditoriaOperacional(
+      montarAuditoriaOperacional({
+        conversaId: conversa.id,
+        telefone,
+        mensagem,
+        pedidoAntes: pedidoAntesTurno,
+        pedidoDepois: pedido,
+        intencao: intencaoConversa,
+        intencoes,
+        decisao: "bloquear_orcamento_campo_faltante",
+        regra: "pedido_orcamento_usa_pedido_ativo_e_pergunta_apenas_o_campo_faltante",
+        inicioMs: inicioAuditoriaMs,
+      }),
+    );
+    await salvarMensagem(conversa.id, "assistant", txt, metaComAuditoria({
       configurador: true,
       bloqueio_validacao: true,
-    });
+    }, auditoria));
     await enviarTexto(telefone, txt);
     return { pdfEnviado: false, texto: txt };
   }
   if (r.quer_gerar && pedido.itens.length) {
+    const sanidade = cfgValidarSanidadeOrcamento(pedido);
+    if (!sanidade.ok) {
+      const txt = `Certo 👍 Antes de enviar, preciso conferir um item do cálculo com o atendimento para evitar valor errado.`;
+      const auditoria = logAuditoriaOperacional(
+        montarAuditoriaOperacional({
+          conversaId: conversa.id,
+          telefone,
+          mensagem,
+          pedidoAntes: pedidoAntesTurno,
+          pedidoDepois: pedido,
+          intencao: intencaoConversa,
+          intencoes,
+          decisao: "bloquear_orcamento_sanidade_calculo",
+          regra: sanidade.motivo || "validacao_preco_quantidade_total",
+          inicioMs: inicioAuditoriaMs,
+        }),
+      );
+      await salvarMensagem(conversa.id, "assistant", txt, metaComAuditoria({
+        configurador: true,
+        bloqueio_calculo: true,
+      }, auditoria));
+      await enviarTexto(telefone, txt);
+      return { pdfEnviado: false, texto: txt };
+    }
     const html = cfgGerarHtml(pedido, { nome: nomeCliente, telefone });
     const filename = `orcamento_${Date.now()}.pdf`;
     const pdfBase64 = await gerarPdfPdfShift(html, filename);
     if (pdfBase64) {
-      const caption = `Segue seu orçamento em PDF 📄${pedido.sob_consulta ? '\n_Alguns itens entraram como "sob consulta" e serão confirmados pela equipe._' : ""}`;
+      const caption = `Tudo certo 👍 Vou gerar o orçamento detalhado no modelo padrão.\n\nSegue seu orçamento em PDF 📄${pedido.sob_consulta ? '\n_Alguns itens entraram como "sob consulta" e serão confirmados pela equipe._' : ""}`;
       await enviarPdfBase64(telefone, pdfBase64, filename, caption);
+      const auditoria = logAuditoriaOperacional(
+        montarAuditoriaOperacional({
+          conversaId: conversa.id,
+          telefone,
+          mensagem,
+          pedidoAntes: pedidoAntesTurno,
+          pedidoDepois: pedido,
+          intencao: intencaoConversa,
+          intencoes,
+          decisao: "gerar_orcamento_modelo_padrao",
+          regra: "pedido_completo_chama_gerador_oficial_sem_reiniciar_fluxo",
+          inicioMs: inicioAuditoriaMs,
+        }),
+      );
       await salvarMensagem(conversa.id, "assistant", caption, {
         pdf_enviado: true,
         configurador: true,
+        audit_operacional: auditoria,
       });
       // funnel
       try {
