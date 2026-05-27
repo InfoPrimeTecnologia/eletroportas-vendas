@@ -6287,28 +6287,77 @@ async function rodarConfigurador(args: {
       "🚫 gerar_orcamento bloqueado (configurador) — item incompleto:",
       faltaAlgo,
     );
-    const itemFaltando = pedido.itens.find((it) => cfgItemIncompleto(it));
-    const tipoNome = itemFaltando
-      ? String(itemFaltando.tipo).replace("_", " ")
-      : "item";
-    const txt = `Antes de gerar o orçamento, preciso completar os dados de *${tipoNome}*.\n\n👉 ${faltaAlgo}`;
-    await salvarMensagem(conversa.id, "assistant", txt, {
+    const txt = cfgRespostaCampoFaltanteParaOrcamento(faltaAlgo);
+    const auditoria = logAuditoriaOperacional(
+      montarAuditoriaOperacional({
+        conversaId: conversa.id,
+        telefone,
+        mensagem,
+        pedidoAntes: pedidoAntesTurno,
+        pedidoDepois: pedido,
+        intencao: intencaoConversa,
+        intencoes,
+        decisao: "bloquear_orcamento_campo_faltante",
+        regra: "pedido_orcamento_usa_pedido_ativo_e_pergunta_apenas_o_campo_faltante",
+        inicioMs: inicioAuditoriaMs,
+      }),
+    );
+    await salvarMensagem(conversa.id, "assistant", txt, metaComAuditoria({
       configurador: true,
       bloqueio_validacao: true,
-    });
+    }, auditoria));
     await enviarTexto(telefone, txt);
     return { pdfEnviado: false, texto: txt };
   }
   if (r.quer_gerar && pedido.itens.length) {
+    const sanidade = cfgValidarSanidadeOrcamento(pedido);
+    if (!sanidade.ok) {
+      const txt = `Certo 👍 Antes de enviar, preciso conferir um item do cálculo com o atendimento para evitar valor errado.`;
+      const auditoria = logAuditoriaOperacional(
+        montarAuditoriaOperacional({
+          conversaId: conversa.id,
+          telefone,
+          mensagem,
+          pedidoAntes: pedidoAntesTurno,
+          pedidoDepois: pedido,
+          intencao: intencaoConversa,
+          intencoes,
+          decisao: "bloquear_orcamento_sanidade_calculo",
+          regra: sanidade.motivo || "validacao_preco_quantidade_total",
+          inicioMs: inicioAuditoriaMs,
+        }),
+      );
+      await salvarMensagem(conversa.id, "assistant", txt, metaComAuditoria({
+        configurador: true,
+        bloqueio_calculo: true,
+      }, auditoria));
+      await enviarTexto(telefone, txt);
+      return { pdfEnviado: false, texto: txt };
+    }
     const html = cfgGerarHtml(pedido, { nome: nomeCliente, telefone });
     const filename = `orcamento_${Date.now()}.pdf`;
     const pdfBase64 = await gerarPdfPdfShift(html, filename);
     if (pdfBase64) {
-      const caption = `Segue seu orçamento em PDF 📄${pedido.sob_consulta ? '\n_Alguns itens entraram como "sob consulta" e serão confirmados pela equipe._' : ""}`;
+      const caption = `Tudo certo 👍 Vou gerar o orçamento detalhado no modelo padrão.\n\nSegue seu orçamento em PDF 📄${pedido.sob_consulta ? '\n_Alguns itens entraram como "sob consulta" e serão confirmados pela equipe._' : ""}`;
       await enviarPdfBase64(telefone, pdfBase64, filename, caption);
+      const auditoria = logAuditoriaOperacional(
+        montarAuditoriaOperacional({
+          conversaId: conversa.id,
+          telefone,
+          mensagem,
+          pedidoAntes: pedidoAntesTurno,
+          pedidoDepois: pedido,
+          intencao: intencaoConversa,
+          intencoes,
+          decisao: "gerar_orcamento_modelo_padrao",
+          regra: "pedido_completo_chama_gerador_oficial_sem_reiniciar_fluxo",
+          inicioMs: inicioAuditoriaMs,
+        }),
+      );
       await salvarMensagem(conversa.id, "assistant", caption, {
         pdf_enviado: true,
         configurador: true,
+        audit_operacional: auditoria,
       });
       // funnel
       try {
