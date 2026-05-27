@@ -5878,6 +5878,103 @@ function detectarTrocaContexto(
   return { trocou: false };
 }
 
+function ehPedidoOrcamentoDetalhado(mensagem: string): boolean {
+  const t = normTextoLeo(mensagem);
+  return /\b(gerar|gere|emitir|enviar|mandar|fazer|fechar)\b.*\b(orcamento|orcamento detalhado|pdf)\b|\borcamento\s+detalhado\b/.test(
+    t,
+  );
+}
+
+function ehPedidoItensDoKitAtual(mensagem: string): boolean {
+  const t = normTextoLeo(mensagem);
+  return /\b(quais|qual|o que|oque)\b.*\b(itens|vem|inclui|acompanha|kit)\b|\bo que vem nesse kit\b|\bitens desse kit\b/.test(
+    t,
+  );
+}
+
+function ehPedidoDesconsiderarParcial(mensagem: string): boolean {
+  const t = normTextoLeo(mensagem);
+  return /\b(desconsidere|ignora|ignore|apaga|apague|cancela|cancelar)\b.*\b(acima|ultima|ultimo|mensagem|resposta|que escrevi|isso)\b/.test(
+    t,
+  );
+}
+
+function cfgDescreverCampoFaltante(pergunta: string): string {
+  const p = normTextoLeo(pergunta);
+  if (/guia/.test(p)) return "definir a guia";
+  if (/largura|altura|medida/.test(p)) return "informar a medida da porta";
+  if (/modelo principal|lamina/.test(p)) return "escolher o modelo da lâmina";
+  if (/pintura/.test(p) && /cor/.test(p)) return "definir a cor da pintura";
+  if (/pintura/.test(p)) return "confirmar se deseja pintura";
+  if (/tipo de motor|corrente alternada|nobreak/.test(p)) return "definir o tipo do motor";
+  if (/opcional|portinhola|alcapao/.test(p)) return "confirmar os opcionais";
+  if (/posicao da portinhola/.test(p)) return "definir a posição da portinhola";
+  if (/cortada|inteira/.test(p)) return "definir se as lâminas e soleira vão cortadas de fábrica";
+  if (/instalacao/.test(p)) return "definir o tipo de instalação";
+  if (/trava/.test(p)) return "confirmar se terá trava de lâminas";
+  return "completar uma informação do pedido";
+}
+
+function cfgRespostaCampoFaltanteParaOrcamento(pergunta: string): string {
+  const p = normTextoLeo(pergunta);
+  if (/guia/.test(p)) {
+    const m = pergunta.match(/(50|60|70|100)\s*mm/i)?.[1];
+    if (m) {
+      return `Certo 👍 Antes de gerar, falta apenas definir a guia. Deseja manter a guia sugerida de *${m} mm*?`;
+    }
+  }
+  return `Certo 👍 Antes de gerar, falta apenas ${cfgDescreverCampoFaltante(pergunta)}.\n\n👉 ${pergunta}`;
+}
+
+function cfgValidarSanidadeOrcamento(pedido: CfgPedido): { ok: boolean; motivo?: string } {
+  const total = Number(pedido?.total || 0);
+  if (!Number.isFinite(total) || total <= 0) return { ok: false, motivo: "total inválido" };
+  const linhas = (pedido.itens || []).flatMap((it) => it.explosao || []);
+  if (!linhas.length) return { ok: false, motivo: "pedido sem itens calculados" };
+  for (const l of linhas) {
+    const qtd = Number(l.qtd);
+    const unit = Number(l.valor_unit);
+    const linhaTotal = Number(l.total);
+    if (!Number.isFinite(qtd) || qtd <= 0 || qtd > 10000) {
+      return { ok: false, motivo: `quantidade inválida em ${l.descricao}` };
+    }
+    if (!l.sob_consulta && (!Number.isFinite(unit) || unit <= 0 || unit > 100000)) {
+      return { ok: false, motivo: `preço unitário inválido em ${l.descricao}` };
+    }
+    if (!l.sob_consulta && Math.abs(qtd * unit - linhaTotal) > 0.2) {
+      return { ok: false, motivo: `subtotal divergente em ${l.descricao}` };
+    }
+  }
+  const kit = pedido.itens.find((it) => it.tipo === "kit_porta");
+  if (kit) {
+    const area = Number(kit.config?.largura || 0) * Number(kit.config?.altura || 0);
+    if (area > 0 && total / area > 3500) {
+      return { ok: false, motivo: `total por m² fora da faixa (${(total / area).toFixed(2)})` };
+    }
+  }
+  return { ok: true };
+}
+
+function cfgRespostaItensDoKitAtual(pedido: CfgPedido): string | null {
+  const kit = pedido.itens.find((it) => it.tipo === "kit_porta");
+  if (!kit) return null;
+  const c = kit.config || {};
+  const itens = ["lâminas da porta", "eixo", "soleira"];
+  if (c.instalacao !== "entre_testeiras") itens.push("guias laterais");
+  if (c?.motor?.ac_dc || c.motor !== false) {
+    itens.push("motor/automatizador");
+    const km = c.kit_motor || "kit_automatizador";
+    if (km === "kit_automatizador") itens.push("testeiras", "central de comando", "2 controles");
+    else if (km === "motor_testeiras") itens.push("testeiras");
+  }
+  if (c.portinhola) itens.push("portinhola");
+  if (c.alcapao) itens.push("alçapão");
+  if (c.quer_pintura) itens.push("pintura eletrostática");
+  if (c.trava_lamina) itens.push("trava de lâminas");
+  const proxima = cfgProximaPergunta(pedido);
+  return `Esse kit atual inclui:\n\n${itens.map((i) => `• ${i}`).join("\n")}\n\n${proxima ? `👉 Para seguir, falta só: ${proxima}` : "👉 Posso gerar o orçamento detalhado no modelo padrão?"}`;
+}
+
 // --- Orquestrador ---
 
 async function rodarConfigurador(args: {
