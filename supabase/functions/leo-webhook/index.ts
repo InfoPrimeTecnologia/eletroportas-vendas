@@ -5985,6 +5985,7 @@ async function rodarConfigurador(args: {
   isNova: boolean;
 }): Promise<{ pdfEnviado: boolean; texto?: string }> {
   const { conversa, telefone, mensagem, nomeCliente, isNova } = args;
+  const inicioAuditoriaMs = performance.now();
 
   // Carrega pedido atual
   const { data: row } = await supabase
@@ -5993,6 +5994,7 @@ async function rodarConfigurador(args: {
     .eq("id", conversa.id)
     .maybeSingle();
   let pedido = carregarPedido((row as any)?.pedido);
+  const pedidoAntesTurno: CfgPedido = JSON.parse(JSON.stringify(pedido));
 
   if (isNova) {
     const contextoInicial = detectarContextoAtivoMensagem(mensagem);
@@ -6115,6 +6117,48 @@ async function rodarConfigurador(args: {
   const intencaoConversa = classificarIntencaoConversa(mensagem);
   console.log("🎭 intencao conversa:", intencaoConversa);
 
+  if (ehPedidoDesconsiderarParcial(mensagem)) {
+    const txt = `Certo 👍 Você quer desfazer apenas a *última informação* ou cancelar *todo o orçamento*?\n\n*1.* Desfazer última informação\n*2.* Cancelar todo o orçamento`;
+    const auditoria = logAuditoriaOperacional(
+      montarAuditoriaOperacional({
+        conversaId: conversa.id,
+        telefone,
+        mensagem,
+        pedidoAntes: pedidoAntesTurno,
+        pedidoDepois: pedido,
+        intencao: intencaoConversa,
+        decisao: "pedir_confirmacao_desfazer",
+        regra: "desconsiderar_nao_zera_contexto_sem_confirmacao",
+        inicioMs: inicioAuditoriaMs,
+      }),
+    );
+    await salvarMensagem(conversa.id, "assistant", txt, metaComAuditoria({ configurador: true }, auditoria));
+    await enviarTexto(telefone, txt);
+    return { pdfEnviado: false, texto: txt };
+  }
+
+  if (ehPedidoItensDoKitAtual(mensagem)) {
+    const txt = cfgRespostaItensDoKitAtual(pedido);
+    if (txt) {
+      const auditoria = logAuditoriaOperacional(
+        montarAuditoriaOperacional({
+          conversaId: conversa.id,
+          telefone,
+          mensagem,
+          pedidoAntes: pedidoAntesTurno,
+          pedidoDepois: pedido,
+          intencao: intencaoConversa,
+          decisao: "responder_itens_do_kit_ativo",
+          regra: "pergunta_consultiva_usa_pedido_ativo_sem_reiniciar",
+          inicioMs: inicioAuditoriaMs,
+        }),
+      );
+      await salvarMensagem(conversa.id, "assistant", txt, metaComAuditoria({ configurador: true }, auditoria));
+      await enviarTexto(telefone, txt);
+      return { pdfEnviado: false, texto: txt };
+    }
+  }
+
   // Saudação + carrinho não vazio → pergunta se quer continuar ou iniciar novo
   if (intencaoConversa === "saudacao" && pedido.itens.length > 0) {
     pedido.aguardando_retomada = true;
@@ -6153,7 +6197,9 @@ async function rodarConfigurador(args: {
   }
 
   // 1) Interpreta intenções técnicas
-  let intencoes = await cfgInterpretar(mensagem, pedido);
+  let intencoes = ehPedidoOrcamentoDetalhado(mensagem)
+    ? [{ acao: "gerar_orcamento" }]
+    : await cfgInterpretar(mensagem, pedido);
   // Pós-processamento: faixa parcial misturada com kit_porta NUNCA vira lâmina avulsa.
   const msgLower = String(mensagem || "")
     .toLowerCase()
