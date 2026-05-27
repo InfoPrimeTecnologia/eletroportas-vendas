@@ -6804,18 +6804,13 @@ Deno.serve(async (req) => {
         try {
           logAuditoriaOperacional(
             montarAuditoriaOperacional({
-              conversa_id: conversa.id,
+              conversaId: conversa.id,
               telefone,
-              input_cliente: messageBody,
-              interpretacao: `cf:${resultado.proxima_etapa}`,
-              decisao_final: `respostas=${resultado.respostas.length} score=${resultado.score} classe=${resultado.classificacao ?? "-"}`,
-              regra_aplicada: "fluxo_consumidor_final",
-              etapa_atual: (conversaCF as any)?.cf_etapa ?? "inicio",
-              proxima_etapa: resultado.proxima_etapa,
-              tempo_processamento_ms: Date.now() - t0,
-              contexto_ativo: "consumidor_final",
-              pedidoAntes: (conversaCF as any)?.cf_dados ?? {},
-              pedidoDepois: resultado.dados,
+              mensagem: messageBody,
+              intencao: `cf:${resultado.proxima_etapa}`,
+              decisao: `respostas=${resultado.respostas.length} score=${resultado.score} classe=${resultado.classificacao ?? "-"}`,
+              regra: "fluxo_consumidor_final",
+              inicioMs: performance.now() - (Date.now() - t0),
             }),
           );
         } catch (_) { /* não bloqueia */ }
