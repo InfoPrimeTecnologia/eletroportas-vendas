@@ -42,7 +42,6 @@ import {
 } from "./modules/semantica.ts";
 import {
   processarConsumidorFinal,
-  type CFEtapa,
 } from "./modules/fluxoConsumidorFinal.ts";
 
 const corsHeaders = {
