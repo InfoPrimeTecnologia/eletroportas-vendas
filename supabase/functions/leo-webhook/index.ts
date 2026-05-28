@@ -7137,7 +7137,19 @@ Deno.serve(async (req) => {
     let pdfCaptionEnviada = "";
     let gerarOrcamentoFalhas = 0; // contador de DADOS_INSUFICIENTES
     const MAX_ITER = 8;
-    for (let i = 0; i < MAX_ITER; i++) {
+
+    // 🔒 TRAVA: primeira mensagem de sessão nova usa texto FIXO oficial,
+    // sem passar pela IA, para garantir formato padronizado do menu de entrada.
+    if (isNova) {
+      const saud = saudacaoHorario().toLowerCase();
+      respostaFinal =
+        `🤖 Olá, ${saud}! Você está falando com a Equipe Eletroportas 👋\n\n` +
+        `Para agilizar seu atendimento, selecione uma opção:\n\n` +
+        `1️⃣ Sou consumidor final\n` +
+        `2️⃣ Sou serralheiro / parceiro técnico`;
+    }
+
+    for (let i = 0; i < MAX_ITER && !respostaFinal; i++) {
       const ai = await chamarIA(messages);
       const choice = ai.choices?.[0]?.message;
       if (!choice) break;
